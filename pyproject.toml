@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loyverse-manager"
+version = "0.1.0"
+description = "Loyverse automation tools"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+# This tells setuptools that your actual code lives in the project root
+# (because you are *not* using a dedicated `src/` layout)
+packages = ["config", "scripts", "src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md", "*.png", "*.pem", "*.db"]

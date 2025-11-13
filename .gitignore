@@ -1,0 +1,57 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.so
+
+.mypy_cache/
+.pytest_cache/
+.cache/
+
+# --- Environment files ---
+.env
+.env.*
+*.env
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+.envrc
+
+# --- Build / packaging ---
+dist/
+build/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Secrets & keys ---
+keys/
+**/*.pem
+**/*.key
+*.pem
+*.key
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- IDE & editor folders ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Node / JS (if scripts ever use npm) ---
+node_modules/
+
+# --- Local testing artifacts ---
+tmp/
+temp/
