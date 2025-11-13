@@ -1,6 +1,4 @@
 import sys
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from config.constants import (
     CATEGORIES,
@@ -26,10 +24,11 @@ from src.services.inventory import InventoryService
 from src.services.loyverse import LoyverseService
 from src.services.notification import NoticifationService
 from src.services.quicket import QuicketService
+from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
-# TODAY = get_today()
-TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
+TODAY = get_today()
+# TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
 
 
 def main():
