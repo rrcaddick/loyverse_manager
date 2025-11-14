@@ -1,17 +1,39 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "loyverse-manager"
 version = "0.1.0"
 description = "Loyverse automation tools"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{name="Ray Caddick", email="admin@farmyardpark.co.za"}]
 
-[tool.setuptools]
-# This tells setuptools that your actual code lives in the project root
-# (because you are *not* using a dedicated `src/` layout)
-packages = ["config", "scripts", "src"]
+# Runtime dependencies - matching prod.txt
+dependencies = [
+    "python-dotenv>=1.2.0",
+    "requests>=2.32.0",
+    "selenium>=4.38.0",
+    "PyYAML>=6.0.0",
+    "pycryptodome>=3.23.0",
+]
+
+# Optional development dependencies
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.18.0",
+    "types-requests>=2.32.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "config*", "scripts*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.txt", "*.md", "*.png", "*.pem", "*.db"]
+"*" = ["*.md", "*.txt", "*.png", "*.pem", "*.db"]
+
+[project.scripts]
+add-inventory = "scripts.add_inventory:main"
+clear-inventory = "scripts.clear_inventory:main"

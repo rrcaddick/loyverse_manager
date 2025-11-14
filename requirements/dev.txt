@@ -1,0 +1,4 @@
+-r prod.txt
+
+mypy==1.18.2
+types-requests==2.32.4.20250913
