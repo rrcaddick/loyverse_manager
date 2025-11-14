@@ -235,13 +235,11 @@ class QuicketBot:
     ) -> None:
         """Hide event with automatic retry logic."""
         retries = max_retries
-
         while retries > 0:
             try:
                 if retries != max_retries:
                     self.logger.info("Retrying hide event - restarting browser")
                     self.restart_browser()
-
                 self._login()
                 self._navigate_to_event(event_id)
                 self._hide_event(target_date)
@@ -251,9 +249,10 @@ class QuicketBot:
                 retries -= 1
                 if retries == 0:
                     self.logger.error(
-                        f"Failed to hide event after {max_retries} attempts"
+                        f"Failed to hide event after {max_retries} attempts: {type(e).__name__}: {str(e)}",
+                        exc_info=True,  # This adds full stack trace
                     )
                     raise
                 self.logger.warning(
-                    f"Retry {max_retries - retries}/{max_retries} failed: {e}"
+                    f"Retry {max_retries - retries}/{max_retries} failed: {type(e).__name__}: {str(e)}"
                 )
