@@ -29,8 +29,8 @@ from src.services.quicket import QuicketService
 from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
-TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
 TODAY = get_today()
+TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
 
 
 def main():

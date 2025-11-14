@@ -47,6 +47,10 @@ class QuicketBot:
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
 
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.add_argument("--disable-extensions")
+
         # Initialize WebDriver
         self._driver = webdriver.Chrome(options=chrome_options)
         self._wait = WebDriverWait(self.driver, 10)
