@@ -1,12 +1,13 @@
 # config/constants.py
 from datetime import date
 
+from config.settings import BASE_DIR
 from src.utils.date import get_today
 
 # Loyverse Configuration
 LOYVERSE_STORE_ID = "8d44fa8a-4ee6-4a18-a1b3-15ace8a3138c"
 
-ONLINE_ITEM_IMAGE_PATH = "images/product_image_online.png"
+ONLINE_ITEM_IMAGE_PATH = BASE_DIR / "images" / "product_image_online.png"
 
 CATEGORIES = {
     "online_ticket": "6d089f1a-f067-4d10-871c-f2a4724e4c2b",

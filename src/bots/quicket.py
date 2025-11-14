@@ -3,9 +3,12 @@ from typing import Optional
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
+
+from config.settings import ENV, HOME_DIR
 
 
 class QuicketBot:
@@ -47,12 +50,20 @@ class QuicketBot:
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
 
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--remote-debugging-port=9222")
-        chrome_options.add_argument("--disable-extensions")
+        chrome_kwargs = {
+            "options": chrome_options,
+        }
+
+        if ENV == "prod":
+            chrome_options.binary_location = f"{HOME_DIR}/chrome/chrome-linux64/chrome"
+            service = Service(
+                executable_path=f"{HOME_DIR}/chrome/chromedriver-linux64/chromedriver"
+            )
+
+            chrome_kwargs["service"] = service
 
         # Initialize WebDriver
-        self._driver = webdriver.Chrome(options=chrome_options)
+        self._driver = webdriver.Chrome(**chrome_kwargs)
         self._wait = WebDriverWait(self.driver, 10)
 
     def stop_browser(self):

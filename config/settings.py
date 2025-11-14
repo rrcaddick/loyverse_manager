@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Environment
+ENV = os.getenv("ENV", "prod")
+
+HOME_DIR = os.path.expanduser("~")
+
 # Project root directory
 BASE_DIR = Path(__file__).parent.parent
 KEYS_DIR = BASE_DIR / "keys"
