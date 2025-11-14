@@ -1,4 +1,6 @@
 import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from config.constants import (
     CATEGORIES,
@@ -28,7 +30,7 @@ from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
 TODAY = get_today()
-# TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
+TODAY = datetime(2025, 11, 8, tzinfo=ZoneInfo("Africa/Johannesburg")).date()
 
 
 def main():
@@ -77,7 +79,6 @@ def main():
 
         # Hide the event
         with QuicketBot(
-            driver_path="chromedriver.exe",
             email=QUICKET_EMAIL,
             password=QUICKET_PASSWORD,
             logger=setup_logger("quicket_bot"),

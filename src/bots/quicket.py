@@ -9,8 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 class QuicketBot:
-    def __init__(self, driver_path: str, email: str, password: str, logger):
-        self.driver_path = driver_path
+    def __init__(self, email: str, password: str, logger):
         self.email = email
         self.password = password
         self.logger = logger
@@ -42,8 +41,8 @@ class QuicketBot:
 
     def start_browser(self):
         """Initialize the browser and WebDriver."""
-        # Add chrome options
         chrome_options = webdriver.ChromeOptions()
+
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
