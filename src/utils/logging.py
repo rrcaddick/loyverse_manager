@@ -2,7 +2,8 @@ import csv
 import io
 import logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
+
+from config.settings import BASE_DIR
 
 
 class CsvFormatter(logging.Formatter):
@@ -24,7 +25,7 @@ class CsvFormatter(logging.Formatter):
 
 def setup_logger(name: str) -> logging.Logger:
     # Create logs directory if it doesn't exist
-    log_dir = Path("logs")
+    log_dir = BASE_DIR / "logs"
     log_dir.mkdir(exist_ok=True)
 
     # Create logger
