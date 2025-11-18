@@ -7,7 +7,7 @@ For PythonAnywhere:
     Point your WSGI configuration to this file.
 
 For local testing with Gunicorn:
-    gunicorn web_app.wsgi:application
+    gunicorn web.wsgi:application
 """
 
 import sys

@@ -13,7 +13,6 @@ class Config:
     """Base configuration"""
 
     SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-key")
-
     BASE_DIR = PROJECT_ROOT / "web"
 
     # Loyverse
