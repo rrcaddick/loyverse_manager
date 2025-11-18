@@ -39,7 +39,7 @@ def generate_ticket_pdf(booking):
     background_gray = colors.HexColor("#F5F5F5")
 
     # HEADER - Reduced height and improved design
-    header_height = 41 * mm
+    header_height = 44.5 * mm
 
     # Main header background
     c.setFillColor(accent_color)
@@ -90,7 +90,7 @@ def generate_ticket_pdf(booking):
 
     # Title below logo
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 20)
+    c.setFont("Helvetica-Bold", 21)
     c.drawCentredString(
         width / 3, height - header_height + 20 * mm, "GROUP VEHICLE ENTRY TICKET"
     )
@@ -102,7 +102,7 @@ def generate_ticket_pdf(booking):
     # )
 
     # Main content area - starts higher now due to smaller header
-    content_start = height - header_height - 10 * mm
+    content_start = height - header_height - 15 * mm
 
     # Light background for main content
     c.setFillColor(background_gray)
@@ -129,7 +129,7 @@ def generate_ticket_pdf(booking):
 
     # Group Name - CENTERED
     c.setFillColor(text_light)
-    c.setFont("Helvetica", 14)
+    c.setFont("Helvetica", 16)
     c.drawCentredString(width / 2, y_pos, "GROUP NAME")
 
     c.setFillColor(text_dark)
@@ -139,7 +139,7 @@ def generate_ticket_pdf(booking):
     # Visit Date - CENTERED
     y_pos -= 25 * mm
     c.setFillColor(text_light)
-    c.setFont("Helvetica", 14)
+    c.setFont("Helvetica", 16)
     c.drawCentredString(width / 2, y_pos, "VISIT DATE")
 
     c.setFillColor(text_dark)
@@ -165,11 +165,12 @@ def generate_ticket_pdf(booking):
     )
 
     # Barcode label
-    c.setFillColor(text_black)
+    c.setFillColor(text_white)
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2, y_pos - 7 * mm, "SCAN AT ENTRANCE")
 
-    # MUCH LARGER barcode - BLACK on WHITE background
+    # Draw barcode
+    c.setFillColor(text_black)
     barcode_value = booking["barcode"]
 
     # Increased barWidth significantly for wider barcode
@@ -188,8 +189,8 @@ def generate_ticket_pdf(booking):
     barcode.drawOn(c, barcode_x, y_pos - 33 * mm)
 
     # Barcode number below
-    c.setFillColor(text_black)
-    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(text_white)
+    c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width / 2, y_pos - 40 * mm, barcode_value)
 
     # Important notice box
@@ -227,8 +228,8 @@ def generate_ticket_pdf(booking):
     c.setFillColor(accent_color)
     c.rect(0, 0, width, footer_y, fill=1, stroke=0)
 
-    c.setFillColor(text_dark)
-    c.setFont("Helvetica-Bold", 16)
+    c.setFillColor(text_white)
+    c.setFont("Helvetica-Bold", 17)
     c.drawCentredString(width / 2, 27 * mm, "The Farmyard Park (Pty) Ltd")
 
     c.setFillColor(text_white)
@@ -250,7 +251,7 @@ def generate_ticket_pdf(booking):
     c.setFillColor(colors.Color(0.8, 0.8, 0.8, alpha=0.35))
     c.setFont("Helvetica", 60)
     c.saveState()
-    c.translate(width / 2, height - 305)
+    c.translate(width / 2 + 10, height - 330)
     c.rotate(30)
     c.drawCentredString(0, 0, "VALID TICKET")
     c.restoreState()
