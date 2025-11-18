@@ -1,0 +1,169 @@
+{% extends "base.html" %} {% block title %}Group Bookings{% endblock %} {% block page_title %}Group Bookings{% endblock
+%} {% block content %}
+<!-- Add New Group Form - Always Visible -->
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="card card-primary">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-plus"></i>
+          Add New Group Booking
+        </h3>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('groups.manage_bookings') }}" id="groupForm">
+          <div class="row">
+            <div class="col-md-5">
+              <div class="form-group">
+                <label for="group_name">Group Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="group_name"
+                  name="group_name"
+                  placeholder="Enter group name"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="form-group">
+                <label for="visit_date">Visit Date</label>
+                <div class="input-group">
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="visit_date"
+                    name="visit_date"
+                    placeholder="Select visit date"
+                    required
+                    readonly="readonly"
+                  />
+                  <div class="input-group-append">
+                    <span class="input-group-text" style="cursor: pointer" id="calendar-icon">
+                      <i class="fas fa-calendar"></i>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label>&nbsp;</label>
+              <button type="submit" class="btn btn-primary btn-block">
+                <i class="fas fa-save"></i>
+                Create Booking
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bookings Table -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-list"></i>
+          All Group Bookings
+        </h3>
+      </div>
+      <div class="card-body">
+        <table id="bookingsTable" class="table table-bordered table-striped table-hover">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Group Name</th>
+              <th>Visit Date</th>
+              <th>Barcode</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if bookings %} {% for booking in bookings %}
+            <tr>
+              <td>{{ booking.id }}</td>
+              <td><strong>{{ booking.group_name }}</strong></td>
+              <td>{{ booking.visit_date }}</td>
+              <td><code>{{ booking.barcode }}</code></td>
+              <td>
+                <a
+                  href="{{ url_for('groups.download_ticket', barcode=booking.barcode) }}"
+                  class="btn btn-success btn-sm"
+                >
+                  <i class="fas fa-download"></i>
+                  Download
+                </a>
+              </td>
+            </tr>
+            {% endfor %} {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">
+                <i class="fas fa-inbox"></i>
+                No bookings yet. Create your first one above!
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+  // Initialize DataTable
+  $(document).ready(function() {
+      $('#bookingsTable').DataTable({
+          "responsive": true,
+          "lengthChange": false,
+          "autoWidth": false,
+          "pageLength": 10,
+          "order": [[0, "desc"]], // Sort by ID descending (newest first)
+          "language": {
+              "search": "Search bookings:",
+              "lengthMenu": "Show _MENU_ bookings per page",
+              "info": "Showing _START_ to _END_ of _TOTAL_ bookings",
+              "infoEmpty": "No bookings available",
+              "infoFiltered": "(filtered from _MAX_ total bookings)",
+              "zeroRecords": "No matching bookings found"
+          }
+      });
+  });
+
+  // Initialize Flatpickr date picker
+  const datePicker = flatpickr("#visit_date", {
+      dateFormat: "Y-m-d",
+      minDate: "today",
+      altInput: true,
+      altFormat: "F j, Y",
+      allowInput: false  // Prevent manual typing
+  });
+
+  // Make calendar icon clickable
+  document.getElementById('calendar-icon').addEventListener('click', function() {
+      datePicker.open();
+  });
+
+  // Show toast notifications for flash messages
+  {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+          {% for category, message in messages %}
+              toastr.{{ category }}('{{ message }}');
+          {% endfor %}
+      {% endif %}
+  {% endwith %}
+
+  // Configure toastr options
+  toastr.options = {
+      "closeButton": true,
+      "progressBar": true,
+      "positionClass": "toast-top-right",
+      "timeOut": "5000",
+      "extendedTimeOut": "1000"
+  };
+</script>
+{% endblock %}
