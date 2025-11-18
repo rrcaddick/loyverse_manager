@@ -1,21 +1,20 @@
 from flask import (
     Blueprint,
     flash,
-    jsonify,
+    make_response,
     redirect,
     render_template,
     request,
-    send_file,
     url_for,
 )
 
-from web.models.database import (
+from ..models.database import (
     create_group_booking,
     get_all_group_bookings,
     get_booking_by_barcode,
 )
-from web.services.barcode import generate_barcode
-from web.services.pdf import generate_ticket_pdf
+from ..services.barcode import generate_barcode
+from ..services.pdf import generate_ticket_pdf
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/group-bookings")
 
@@ -45,17 +44,43 @@ def manage_bookings():
     return render_template("group_bookings.html", bookings=bookings)
 
 
-@groups_bp.route("/download/<barcode>")
-def download_ticket(barcode):
-    """Generate and download PDF ticket for a group"""
+@groups_bp.route("/ticket/<barcode>")
+def view_ticket(barcode):
+    """View PDF ticket in browser"""
     booking = get_booking_by_barcode(barcode)
 
     if not booking:
-        return jsonify({"error": "Booking not found"}), 404
+        flash("Booking not found", "error")
+        return redirect(url_for("groups.manage_bookings"))
 
-    # Generate PDF
-    pdf_path = generate_ticket_pdf(booking)
+    # Generate PDF in memory
+    pdf_bytes = generate_ticket_pdf(booking)
 
-    return send_file(
-        pdf_path, as_attachment=True, download_name=f"ticket_{barcode}.pdf"
+    # Return PDF for browser viewing
+    response = make_response(pdf_bytes)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = f"inline; filename=ticket_{barcode}.pdf"
+
+    return response
+
+
+@groups_bp.route("/download/<barcode>")
+def download_ticket(barcode):
+    """Download PDF ticket"""
+    booking = get_booking_by_barcode(barcode)
+
+    if not booking:
+        flash("Booking not found", "error")
+        return redirect(url_for("groups.manage_bookings"))
+
+    # Generate PDF in memory
+    pdf_bytes = generate_ticket_pdf(booking)
+
+    # Return PDF for download
+    response = make_response(pdf_bytes)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename=ticket_{barcode}.pdf"
     )
+
+    return response
