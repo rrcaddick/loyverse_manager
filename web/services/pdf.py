@@ -8,7 +8,44 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
+
+
+def fit_font_size(text, font_name, max_width, max_font=24, min_font=8, step=0.5):
+    """
+    Reduce font size until text width <= max_width (using pdfmetrics.stringWidth).
+    Returns the chosen font size (never below min_font).
+    """
+    font_size = max_font
+    while font_size >= min_font:
+        w = pdfmetrics.stringWidth(text, font_name, font_size)
+        if w <= max_width:
+            return font_size
+        font_size -= step
+    return min_font
+
+
+def split_long_text(text):
+    """
+    Split text into two lines as evenly as possible, based on spaces.
+    """
+    parts = text.split()
+    if len(parts) <= 1:
+        return [text]
+
+    # Try all possible split points, pick the most balanced text lengths
+    best = None
+    best_diff = 99999
+    for i in range(1, len(parts)):
+        line1 = " ".join(parts[:i])
+        line2 = " ".join(parts[i:])
+        diff = abs(len(line1) - len(line2))
+        if diff < best_diff:
+            best_diff = diff
+            best = (line1, line2)
+
+    return list(best)
 
 
 def generate_ticket_pdf(booking):
@@ -49,7 +86,7 @@ def generate_ticket_pdf(booking):
     c.setFillColor(primary_color)
 
     # Simple decorative bottom border
-    c.rect(0, height - header_height, width, 3 * mm, fill=1, stroke=0)
+    c.rect(0, height - header_height, width, 3.1 * mm, fill=1, stroke=0)
 
     # Logo section - white circle background FIRST, then logo on top
     logo_size = 75 * mm
@@ -130,17 +167,80 @@ def generate_ticket_pdf(booking):
     # Group Name - CENTERED
     c.setFillColor(text_light)
     c.setFont("Helvetica", 16)
-    c.drawCentredString(width / 2, y_pos, "GROUP NAME")
+    c.drawCentredString(width / 2, y_pos, "GROUP NAME:")
 
-    c.setFillColor(text_dark)
-    c.setFont("Helvetica-Bold", 24)  # 1.4x larger (was 16)
-    c.drawCentredString(width / 2, y_pos - 9 * mm, str(booking["group_name"]))
+    group_name = str(booking["group_name"])
+    font_name = "Helvetica-Bold"
+
+    # Max width inside your white box (same as before with padding)
+    max_text_width = width - 70 * mm - 10 * mm
+
+    max_font = 24
+    min_font = 10
+    step = 0.5
+
+    # 1) Try single-line at max_font first
+    single_width = pdfmetrics.stringWidth(group_name, font_name, max_font)
+    if single_width <= max_text_width:
+        # Fits single line at max size -> draw it
+        c.setFillColor(text_dark)
+        c.setFont(font_name, max_font)
+        c.drawCentredString(width / 2, y_pos - 12 * mm, group_name)
+    else:
+        # 2) Need to wrap/scale: split into two lines then reduce size until both fit
+        parts = group_name.split()
+        if len(parts) <= 1:
+            # no spaces to split — just scale down single line
+            font_size = max_font
+            while font_size >= min_font:
+                if (
+                    pdfmetrics.stringWidth(group_name, font_name, font_size)
+                    <= max_text_width
+                ):
+                    break
+                font_size -= step
+            font_size = max(font_size, min_font)
+            c.setFillColor(text_dark)
+            c.setFont(font_name, font_size)
+            c.drawCentredString(width / 2, y_pos - 12 * mm, group_name)
+        else:
+            # Find best two-line split (balanced by character length)
+            best = None
+            best_diff = float("inf")
+            for i in range(1, len(parts)):
+                line1 = " ".join(parts[:i])
+                line2 = " ".join(parts[i:])
+                diff = abs(len(line1) - len(line2))
+                if diff < best_diff:
+                    best_diff = diff
+                    best = (line1, line2)
+            line1, line2 = best
+
+            # Reduce font size until both lines fit, or hit min_font
+            font_size = max_font
+            while font_size >= min_font:
+                if (
+                    pdfmetrics.stringWidth(line1, font_name, font_size)
+                    <= max_text_width
+                    and pdfmetrics.stringWidth(line2, font_name, font_size)
+                    <= max_text_width
+                ):
+                    break
+                font_size -= step
+            font_size = max(font_size, min_font)
+
+            # Draw the two lines, slightly above/below same position as before
+            c.setFillColor(text_dark)
+            c.setFont(font_name, font_size)
+            # adjust vertical offsets if you want different spacing
+            c.drawCentredString(width / 2, y_pos - 10 * mm, line1)
+            c.drawCentredString(width / 2, y_pos - 18 * mm, line2)
 
     # Visit Date - CENTERED
     y_pos -= 25 * mm
     c.setFillColor(text_light)
     c.setFont("Helvetica", 16)
-    c.drawCentredString(width / 2, y_pos, "VISIT DATE")
+    c.drawCentredString(width / 2, y_pos - 6, "VISIT DATE:")
 
     c.setFillColor(text_dark)
     c.setFont("Helvetica-Bold", 24)  # 1.4x larger (was 16)
@@ -151,10 +251,10 @@ def generate_ticket_pdf(booking):
     try:
         date_obj = datetime.strptime(str(booking["visit_date"]), "%Y-%m-%d")
         formatted_date = date_obj.strftime("%A, %d %B %Y")
-    except:
+    except Exception:
         formatted_date = str(booking["visit_date"])
 
-    c.drawCentredString(width / 2, y_pos - 9 * mm, formatted_date)
+    c.drawCentredString(width / 2, y_pos - 15 * mm, formatted_date)
 
     # Barcode section with accent background
     y_pos -= 30 * mm
@@ -236,7 +336,9 @@ def generate_ticket_pdf(booking):
     c.setFont("Helvetica", 12)
     c.drawCentredString(width / 2, 20 * mm, "Protea Road, Klapmuts, Western Cape 7625")
     c.drawCentredString(
-        width / 2, 13 * mm, "Email: info@farmyardpark.co.za  |  Tel: +27 (0)21 875 5790"
+        width / 2,
+        13 * mm,
+        "Email: thefarmyardpark@gmail.com  |  Tel: 081 461 4246",
     )
 
     c.setFont("Helvetica-Oblique", 12)
