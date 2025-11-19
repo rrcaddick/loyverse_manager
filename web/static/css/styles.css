@@ -1,0 +1,115 @@
+#bookingsTable_wrapper .dataTables_filter label {
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Mobile responsive table styles */
+@media screen and (max-width: 768px) {
+  #bookingsTable {
+    border: 0;
+  }
+
+  #bookingsTable thead {
+    display: none;
+  }
+
+  #bookingsTable tr {
+    display: block;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  #bookingsTable td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border: none;
+    border-bottom: 1px solid #f4f4f4;
+    text-align: right;
+  }
+
+  #bookingsTable td:last-child {
+    border-bottom: none;
+  }
+
+  #bookingsTable td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    text-align: left;
+    flex: 1;
+    color: #495057;
+  }
+
+  #bookingsTable td[data-label="Actions"] {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #bookingsTable td[data-label="Actions"]::before {
+    margin-bottom: 8px;
+  }
+
+  #bookingsTable td[data-label="Actions"] a {
+    width: 100%;
+  }
+
+  /* Empty state for mobile */
+  #bookingsTable tbody tr td[colspan] {
+    display: table-cell;
+    text-align: center;
+    border: 1px solid #ddd;
+  }
+}
+
+/* Ensure buttons wrap nicely on all screen sizes */
+@media screen and (max-width: 576px) {
+  .btn-sm {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.75rem;
+  }
+}
+
+/* Make DataTables search box responsive */
+@media screen and (max-width: 576px) {
+  #bookingsTable_wrapper .dataTables_filter {
+    text-align: left !important;
+  }
+
+  #bookingsTable_wrapper .dataTables_filter label {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  #bookingsTable_wrapper .dataTables_filter input {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-top: 8px;
+  }
+}
+
+/* Make all data labels bold in mobile view */
+@media screen and (max-width: 768px) {
+  #bookingsTable td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    text-align: left;
+    flex: 1;
+    color: #495057;
+  }
+}
+
+#bookingsTable td[data-label="Actions"] .d-flex {
+  gap: 0.25rem;
+}
+
+/* Add spacing between label and value in mobile cards */
+@media screen and (max-width: 768px) {
+  #bookingsTable td {
+    gap: 10px;
+  }
+}

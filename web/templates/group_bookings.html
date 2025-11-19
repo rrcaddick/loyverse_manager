@@ -76,8 +76,8 @@
           <thead>
             <tr>
               <th>ID</th>
-              <th>Group Name</th>
-              <th>Visit Date</th>
+              <th class="text-nowrap">Group Name</th>
+              <th class="text-nowrap">Visit Date</th>
               <th>Barcode</th>
               <th>Actions</th>
             </tr>
@@ -85,26 +85,28 @@
           <tbody>
             {% if bookings %} {% for booking in bookings %}
             <tr>
-              <td>{{ booking.id }}</td>
-              <td><strong>{{ booking.group_name }}</strong></td>
-              <td>{{ booking.visit_date }}</td>
-              <td><code>{{ booking.barcode }}</code></td>
-              <td>
-                <a
-                  href="{{ url_for('groups.view_ticket', barcode=booking.barcode) }}"
-                  class="btn btn-info btn-sm"
-                  target="_blank"
-                >
-                  <i class="fas fa-eye"></i>
-                  View
-                </a>
-                <a
-                  href="{{ url_for('groups.download_ticket', barcode=booking.barcode) }}"
-                  class="btn btn-success btn-sm"
-                >
-                  <i class="fas fa-download"></i>
-                  Download
-                </a>
+              <td data-label="ID">{{ booking.id }}</td>
+              <td data-label="Group Name"><strong>{{ booking.group_name }}</strong></td>
+              <td data-label="Visit Date" class="text-nowrap">{{ booking.visit_date }}</td>
+              <td data-label="Barcode"><code>{{ booking.barcode }}</code></td>
+              <td data-label="Actions" class="text-nowrap">
+                <div class="d-flex flex-wrap gap-1">
+                  <a
+                    href="{{ url_for('groups.view_ticket', barcode=booking.barcode) }}"
+                    class="btn btn-info btn-sm flex-fill"
+                    target="_blank"
+                  >
+                    <i class="fas fa-eye"></i>
+                    View
+                  </a>
+                  <a
+                    href="{{ url_for('groups.download_ticket', barcode=booking.barcode) }}"
+                    class="btn btn-success btn-sm flex-fill"
+                  >
+                    <i class="fas fa-download"></i>
+                    Download
+                  </a>
+                </div>
               </td>
             </tr>
             {% endfor %} {% else %}
