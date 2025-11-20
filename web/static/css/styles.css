@@ -3,6 +3,24 @@
   text-align: center;
 }
 
+/* Action buttons styling */
+.btn-group-actions {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-group-actions .btn {
+  min-width: 32px;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Ensure consistent button sizing */
+.btn-group-actions .btn i {
+  font-size: 0.875rem;
+}
+
 /* Mobile responsive table styles */
 @media screen and (max-width: 768px) {
   #bookingsTable {
@@ -53,8 +71,9 @@
     margin-bottom: 8px;
   }
 
-  #bookingsTable td[data-label="Actions"] a {
+  #bookingsTable td[data-label="Actions"] .btn-group-actions {
     width: 100%;
+    justify-content: center;
   }
 
   /* Empty state for mobile */
@@ -70,6 +89,10 @@
   .btn-sm {
     font-size: 0.875rem;
     padding: 0.375rem 0.75rem;
+  }
+
+  .btn-group-actions {
+    gap: 0.5rem;
   }
 }
 
@@ -103,13 +126,42 @@
   }
 }
 
-#bookingsTable td[data-label="Actions"] .d-flex {
-  gap: 0.25rem;
-}
-
 /* Add spacing between label and value in mobile cards */
 @media screen and (max-width: 768px) {
   #bookingsTable td {
     gap: 10px;
   }
+}
+
+/* Tooltip styling */
+.tooltip {
+  font-size: 0.875rem;
+}
+
+/* Form styling improvements */
+.form-group label .text-danger {
+  font-size: 0.875rem;
+}
+
+/* Modal improvements */
+.modal-header.bg-danger {
+  color: white;
+}
+
+.modal-header.bg-danger .close {
+  color: white;
+  opacity: 0.8;
+}
+
+.modal-header.bg-danger .close:hover {
+  opacity: 1;
+}
+
+/* Button spacing in forms */
+#groupForm button {
+  margin-right: 0.5rem;
+}
+
+#groupForm button:last-child {
+  margin-right: 0;
 }

@@ -7,15 +7,21 @@
       <div class="card-header">
         <h3 class="card-title">
           <i class="fas fa-plus"></i>
-          Add New Group Booking
+          <span id="formTitle">Add New Group Booking</span>
         </h3>
       </div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('groups.manage_bookings') }}" id="groupForm">
+          <input type="hidden" id="booking_id" name="booking_id" value="" />
+          <input type="hidden" id="form_action" name="form_action" value="create" />
+
           <div class="row">
-            <div class="col-md-5">
+            <div class="col-md-6">
               <div class="form-group">
-                <label for="group_name">Group Name</label>
+                <label for="group_name">
+                  Group Name
+                  <span class="text-danger">*</span>
+                </label>
                 <input
                   type="text"
                   class="form-control"
@@ -26,9 +32,12 @@
                 />
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <div class="form-group">
-                <label for="visit_date">Visit Date</label>
+                <label for="visit_date">
+                  Visit Date
+                  <span class="text-danger">*</span>
+                </label>
                 <div class="input-group">
                   <input
                     type="text"
@@ -47,11 +56,52 @@
                 </div>
               </div>
             </div>
-            <div class="col-md-3">
-              <label>&nbsp;</label>
-              <button type="submit" class="btn btn-primary btn-block">
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="contact_person">
+                  Contact Person
+                  <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="contact_person"
+                  name="contact_person"
+                  placeholder="Enter contact person name"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-group">
+                <label for="mobile_number">
+                  Mobile Number
+                  <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="tel"
+                  class="form-control"
+                  id="mobile_number"
+                  name="mobile_number"
+                  placeholder="e.g., +27 82 123 4567"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary" id="submitBtn">
                 <i class="fas fa-save"></i>
-                Create Booking
+                <span id="submitBtnText">Create Booking</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none">
+                <i class="fas fa-times"></i>
+                Cancel
               </button>
             </div>
           </div>
@@ -76,10 +126,12 @@
           <thead>
             <tr>
               <th>ID</th>
-              <th class="text-nowrap">Group Name</th>
-              <th class="text-nowrap">Visit Date</th>
+              <th>Group Name</th>
+              <th>Contact Person</th>
+              <th>Mobile Number</th>
+              <th>Visit Date</th>
               <th>Barcode</th>
-              <th>Actions</th>
+              <th class="text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -87,31 +139,58 @@
             <tr>
               <td data-label="ID">{{ booking.id }}</td>
               <td data-label="Group Name"><strong>{{ booking.group_name }}</strong></td>
+              <td data-label="Contact Person">{{ booking.contact_person }}</td>
+              <td data-label="Mobile Number" class="text-nowrap">{{ booking.mobile_number }}</td>
               <td data-label="Visit Date" class="text-nowrap">{{ booking.visit_date }}</td>
               <td data-label="Barcode"><code>{{ booking.barcode }}</code></td>
-              <td data-label="Actions" class="text-nowrap">
-                <div class="d-flex flex-wrap gap-1">
+              <td data-label="Actions" class="text-center text-nowrap">
+                <div class="btn-group-actions">
                   <a
                     href="{{ url_for('groups.view_ticket', barcode=booking.barcode) }}"
-                    class="btn btn-info btn-sm flex-fill"
+                    class="btn btn-info btn-sm"
                     target="_blank"
+                    data-toggle="tooltip"
+                    title="View Ticket"
                   >
                     <i class="fas fa-eye"></i>
-                    View
                   </a>
+                  <button
+                    type="button"
+                    class="btn btn-warning btn-sm edit-booking"
+                    data-id="{{ booking.id }}"
+                    data-group-name="{{ booking.group_name }}"
+                    data-contact-person="{{ booking.contact_person }}"
+                    data-mobile-number="{{ booking.mobile_number }}"
+                    data-visit-date="{{ booking.visit_date }}"
+                    data-toggle="tooltip"
+                    title="Edit Booking"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger btn-sm delete-booking"
+                    data-id="{{ booking.id }}"
+                    data-group-name="{{ booking.group_name }}"
+                    data-toggle="tooltip"
+                    title="Delete Booking"
+                  >
+                    <i class="fas fa-trash"></i>
+                  </button>
                   <a
                     href="{{ url_for('groups.download_ticket', barcode=booking.barcode) }}"
-                    class="btn btn-success btn-sm flex-fill"
+                    class="btn btn-success btn-sm"
+                    data-toggle="tooltip"
+                    title="Download Ticket"
                   >
                     <i class="fas fa-download"></i>
-                    Download
                   </a>
                 </div>
               </td>
             </tr>
             {% endfor %} {% else %}
             <tr>
-              <td colspan="5" class="text-center text-muted">
+              <td colspan="7" class="text-center text-muted">
                 <i class="fas fa-inbox"></i>
                 No bookings yet. Create your first one above!
               </td>
@@ -123,11 +202,60 @@
     </div>
   </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<div
+  class="modal fade"
+  id="deleteModal"
+  tabindex="-1"
+  role="dialog"
+  aria-labelledby="deleteModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-danger">
+        <h5 class="modal-title" id="deleteModalLabel">
+          <i class="fas fa-exclamation-triangle"></i>
+          Confirm Delete
+        </h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete this booking?</p>
+        <p>
+          <strong>Group Name:</strong>
+          <span id="deleteGroupName"></span>
+        </p>
+        <p class="text-warning">
+          <i class="fas fa-exclamation-circle"></i>
+          This action cannot be undone!
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+          <i class="fas fa-times"></i>
+          Cancel
+        </button>
+        <form method="POST" action="{{ url_for('groups.delete_booking') }}" id="deleteForm">
+          <input type="hidden" name="booking_id" id="deleteBookingId" />
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-trash"></i>
+            Delete Booking
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %} {% block extra_js %}
 <script>
   // Initialize DataTable
   $(document).ready(function() {
-      $('#bookingsTable').DataTable({
+      var table = $('#bookingsTable').DataTable({
           "responsive": true,
           "lengthChange": false,
           "autoWidth": false,
@@ -140,8 +268,15 @@
               "infoEmpty": "No bookings available",
               "infoFiltered": "(filtered from _MAX_ total bookings)",
               "zeroRecords": "No matching bookings found"
+          },
+          "drawCallback": function() {
+              // Reinitialize tooltips after table redraw
+              $('[data-toggle="tooltip"]').tooltip();
           }
       });
+
+      // Initialize tooltips
+      $('[data-toggle="tooltip"]').tooltip();
   });
 
   // Initialize Flatpickr date picker
@@ -156,6 +291,63 @@
   // Make calendar icon clickable
   document.getElementById('calendar-icon').addEventListener('click', function() {
       datePicker.open();
+  });
+
+  // Edit booking functionality
+  $(document).on('click', '.edit-booking', function() {
+      var id = $(this).data('id');
+      var groupName = $(this).data('group-name');
+      var contactPerson = $(this).data('contact-person');
+      var mobileNumber = $(this).data('mobile-number');
+      var visitDate = $(this).data('visit-date');
+
+      // Populate form
+      $('#booking_id').val(id);
+      $('#form_action').val('update');
+      $('#group_name').val(groupName);
+      $('#contact_person').val(contactPerson);
+      $('#mobile_number').val(mobileNumber);
+      datePicker.setDate(visitDate);
+
+      // Update form UI
+      $('#formTitle').text('Edit Group Booking');
+      $('#submitBtnText').text('Update Booking');
+      $('#submitBtn').removeClass('btn-primary').addClass('btn-warning');
+      $('#submitBtn i').removeClass('fa-save').addClass('fa-edit');
+      $('#cancelBtn').show();
+
+      // Scroll to form
+      $('html, body').animate({
+          scrollTop: $('#groupForm').offset().top - 100
+      }, 500);
+  });
+
+  // Cancel edit functionality
+  $('#cancelBtn').click(function() {
+      resetForm();
+  });
+
+  // Reset form function
+  function resetForm() {
+      $('#groupForm')[0].reset();
+      $('#booking_id').val('');
+      $('#form_action').val('create');
+      $('#formTitle').text('Add New Group Booking');
+      $('#submitBtnText').text('Create Booking');
+      $('#submitBtn').removeClass('btn-warning').addClass('btn-primary');
+      $('#submitBtn i').removeClass('fa-edit').addClass('fa-save');
+      $('#cancelBtn').hide();
+      datePicker.clear();
+  }
+
+  // Delete booking functionality
+  $(document).on('click', '.delete-booking', function() {
+      var id = $(this).data('id');
+      var groupName = $(this).data('group-name');
+
+      $('#deleteBookingId').val(id);
+      $('#deleteGroupName').text(groupName);
+      $('#deleteModal').modal('show');
   });
 
   // Show toast notifications for flash messages

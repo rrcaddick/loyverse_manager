@@ -99,6 +99,37 @@
     <!-- AdminLTE -->
     <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
 
+    <!-- Custom Sidebar Breakpoint Handler -->
+    <script>
+      $(document).ready(function () {
+        function handleSidebarBreakpoints() {
+          var width = $(window).width();
+          var $body = $("body");
+
+          if (width >= 1200) {
+            // Full sidebar with text
+            $body.removeClass("sidebar-collapse sidebar-closed sidebar-open");
+          } else if (width >= 1000) {
+            // Icon-only mode (collapsed)
+            $body.addClass("sidebar-collapse");
+            $body.removeClass("sidebar-closed sidebar-open");
+          } else {
+            // Hamburger menu (closed)
+            $body.addClass("sidebar-closed sidebar-collapse");
+            $body.removeClass("sidebar-open");
+          }
+        }
+
+        // Run on page load
+        handleSidebarBreakpoints();
+
+        // Run on window resize
+        $(window).on("resize", function () {
+          handleSidebarBreakpoints();
+        });
+      });
+    </script>
+
     {% block extra_js %}{% endblock %}
   </body>
 </html>
