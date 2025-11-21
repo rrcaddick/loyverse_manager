@@ -1,3 +1,5 @@
+import json
+
 from flask import (
     Blueprint,
     current_app,
@@ -283,7 +285,7 @@ def whatsapp_webhook():
             logger.info(f"Attempting to send reply to {from_number}")
             reply_text = f"Thanks for your message: '{message_body}'. We received it!"
 
-            result = whatsapp_service.send_message(from_number, reply_text)
+            result = whatsapp_service.send_test_message(from_number)
             logger.info(f"Send message result: {result}")
 
             return jsonify(
