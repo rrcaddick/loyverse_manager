@@ -7,7 +7,7 @@ from flask import current_app
 class WhatsAppService:
     """Service for sending messages via WhatsApp Business API"""
 
-    BASE_URL = "https://graph.facebook.com/v18.0"
+    BASE_URL = "https://graph.facebook.com/v22.0"
 
     def __init__(self):
         self.phone_number_id = current_app.config["WHATSAPP_PHONE_NUMBER_ID"]

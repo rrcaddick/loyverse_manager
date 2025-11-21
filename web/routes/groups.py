@@ -1,6 +1,8 @@
 from flask import (
     Blueprint,
+    current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -18,6 +20,7 @@ from web.models.database import (
 )
 from web.services.barcode import generate_barcode
 from web.services.pdf import generate_ticket_pdf
+from web.services.whatsapp import WhatsAppService
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/group-bookings")
 
@@ -151,3 +154,67 @@ def download_ticket(barcode):
     )
 
     return response
+
+
+@groups_bp.route("/webhook/whatsapp", methods=["GET", "POST"])
+def whatsapp_webhook():
+    """Handle incoming WhatsApp messages and send replies"""
+
+    whatsapp_service = WhatsAppService()
+
+    # GET request - Webhook verification
+    if request.method == "GET":
+        verify_token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
+        mode = request.args.get("hub.mode")
+
+        if mode == "subscribe" and verify_token == current_app.config["VERIFY_TOKEN"]:
+            return challenge, 200
+        else:
+            return "Verification failed", 403
+
+    # POST request - Handle incoming messages
+    if request.method == "POST":
+        try:
+            data = request.get_json()
+
+            # Check if this is a message webhook
+            if (
+                data.get("object") == "whatsapp_business_account"
+                and data.get("entry")
+                and len(data["entry"]) > 0
+            ):
+                entry = data["entry"][0]
+                changes = entry.get("changes", [])
+
+                if changes and len(changes) > 0:
+                    change = changes[0]
+                    value = change.get("value", {})
+
+                    # Check if there are messages in the webhook
+                    if "messages" in value and len(value["messages"]) > 0:
+                        message = value["messages"][0]
+
+                        # Extract message details
+                        from_number = message.get("from")
+                        message_body = message.get("text", {}).get("body", "")
+
+                        # Send a reply
+                        reply_text = f"Thanks for your message: '{message_body}'. We received it!"
+                        result = whatsapp_service.send_message(from_number, reply_text)
+
+                        return jsonify(
+                            {
+                                "status": "success",
+                                "message": "Reply sent",
+                                "result": result,
+                            }
+                        ), 200
+
+            # Always return 200 to acknowledge receipt
+            return jsonify({"status": "success"}), 200
+
+        except Exception as e:
+            print(f"Error processing webhook: {str(e)}")
+            # Still return 200 to prevent webhook retries
+            return jsonify({"status": "error", "message": str(e)}), 200
