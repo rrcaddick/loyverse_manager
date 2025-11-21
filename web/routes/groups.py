@@ -164,22 +164,39 @@ def whatsapp_webhook():
 
     # GET request - Webhook verification
     if request.method == "GET":
-        verify_token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
+        # Get verification parameters
         mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-        if (
-            mode == "subscribe"
-            and verify_token == current_app.config["WHATSAPP_VERIFY_TOKEN"]
-        ):
-            return challenge, 200
+        # Log for debugging
+        print(
+            f"Webhook verification - Mode: {mode}, Token: {token}, Challenge: {challenge}"
+        )
+        print(f"Expected token: {current_app.config.get('WHATSAPP_VERIFY_TOKEN')}")
+
+        # Check if we have the required parameters
+        if mode and token:
+            # Verify the token matches
+            if mode == "subscribe" and token == current_app.config.get(
+                "WHATSAPP_VERIFY_TOKEN"
+            ):
+                print("Verification successful!")
+                return challenge, 200
+            else:
+                print("Verification failed - token mismatch")
+                return "Forbidden", 403
         else:
-            return "Verification failed", 403
+            print("Verification failed - missing parameters")
+            return "Bad Request", 400
 
     # POST request - Handle incoming messages
     if request.method == "POST":
         try:
             data = request.get_json()
+
+            # Log incoming webhook
+            print(f"Incoming webhook data: {data}")
 
             # Check if this is a message webhook
             if (
