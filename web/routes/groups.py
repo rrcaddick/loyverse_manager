@@ -168,7 +168,10 @@ def whatsapp_webhook():
         challenge = request.args.get("hub.challenge")
         mode = request.args.get("hub.mode")
 
-        if mode == "subscribe" and verify_token == current_app.config["VERIFY_TOKEN"]:
+        if (
+            mode == "subscribe"
+            and verify_token == current_app.config["WHATSAPP_VERIFY_TOKEN"]
+        ):
             return challenge, 200
         else:
             return "Verification failed", 403
