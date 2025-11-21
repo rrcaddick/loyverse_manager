@@ -10,6 +10,7 @@ from flask import (
     url_for,
 )
 
+from src.utils.logging import setup_logger
 from web.models.database import (
     create_group_booking,
     delete_group_booking,
@@ -22,6 +23,7 @@ from web.services.barcode import generate_barcode
 from web.services.pdf import generate_ticket_pdf
 from web.services.whatsapp import WhatsAppService
 
+logger = setup_logger("whatsapp_webhook")
 groups_bp = Blueprint("groups", __name__, url_prefix="/group-bookings")
 
 
@@ -160,6 +162,8 @@ def download_ticket(barcode):
 def whatsapp_webhook():
     """Handle incoming WhatsApp messages and send replies"""
 
+    logger.info(f"=== WEBHOOK CALLED === Method: {request.method}")
+
     whatsapp_service = WhatsAppService()
 
     # GET request - Webhook verification
@@ -170,10 +174,11 @@ def whatsapp_webhook():
         challenge = request.args.get("hub.challenge")
 
         # Log for debugging
-        print(
-            f"Webhook verification - Mode: {mode}, Token: {token}, Challenge: {challenge}"
+        logger.info("GET request - Webhook verification")
+        logger.info(f"Mode: {mode}, Token: {token}, Challenge: {challenge}")
+        logger.info(
+            f"Expected token: {current_app.config.get('WHATSAPP_VERIFY_TOKEN')}"
         )
-        print(f"Expected token: {current_app.config.get('WHATSAPP_VERIFY_TOKEN')}")
 
         # Check if we have the required parameters
         if mode and token:
@@ -181,62 +186,115 @@ def whatsapp_webhook():
             if mode == "subscribe" and token == current_app.config.get(
                 "WHATSAPP_VERIFY_TOKEN"
             ):
-                print("Verification successful!")
+                logger.info("✓ Verification successful!")
                 return challenge, 200
             else:
-                print("Verification failed - token mismatch")
+                logger.error("✗ Verification failed - token mismatch")
                 return "Forbidden", 403
         else:
-            print("Verification failed - missing parameters")
+            logger.error("✗ Verification failed - missing parameters")
             return "Bad Request", 400
 
     # POST request - Handle incoming messages
     if request.method == "POST":
         try:
+            logger.info("POST request - Processing incoming webhook")
+
+            # Get raw data first
+            raw_data = request.get_data(as_text=True)
+            logger.info(f"Raw webhook payload: {raw_data}")
+
             data = request.get_json()
+            logger.info(f"Parsed JSON data: {json.dumps(data, indent=2)}")
 
-            # Log incoming webhook
-            print(f"Incoming webhook data: {data}")
+            # Check webhook object type
+            webhook_object = data.get("object")
+            logger.info(f"Webhook object type: {webhook_object}")
 
-            # Check if this is a message webhook
-            if (
-                data.get("object") == "whatsapp_business_account"
-                and data.get("entry")
-                and len(data["entry"]) > 0
-            ):
-                entry = data["entry"][0]
-                changes = entry.get("changes", [])
+            if webhook_object != "whatsapp_business_account":
+                logger.warning(f"Unexpected webhook object: {webhook_object}")
+                return jsonify(
+                    {"status": "ignored", "reason": "not whatsapp_business_account"}
+                ), 200
 
-                if changes and len(changes) > 0:
-                    change = changes[0]
-                    value = change.get("value", {})
+            # Check for entries
+            entries = data.get("entry", [])
+            logger.info(f"Number of entries: {len(entries)}")
 
-                    # Check if there are messages in the webhook
-                    if "messages" in value and len(value["messages"]) > 0:
-                        message = value["messages"][0]
+            if not entries or len(entries) == 0:
+                logger.warning("No entries in webhook")
+                return jsonify({"status": "success", "reason": "no entries"}), 200
 
-                        # Extract message details
-                        from_number = message.get("from")
-                        message_body = message.get("text", {}).get("body", "")
+            # Process first entry
+            entry = entries[0]
+            logger.info(f"Processing entry: {json.dumps(entry, indent=2)}")
 
-                        # Send a reply
-                        reply_text = f"Thanks for your message: '{message_body}'. We received it!"
-                        result = whatsapp_service.send_test_message(
-                            to_number=from_number
-                        )
+            changes = entry.get("changes", [])
+            logger.info(f"Number of changes: {len(changes)}")
 
-                        return jsonify(
-                            {
-                                "status": "success",
-                                "message": "Reply sent",
-                                "result": result,
-                            }
-                        ), 200
+            if not changes or len(changes) == 0:
+                logger.warning("No changes in entry")
+                return jsonify({"status": "success", "reason": "no changes"}), 200
 
-            # Always return 200 to acknowledge receipt
-            return jsonify({"status": "success"}), 200
+            # Process first change
+            change = changes[0]
+            logger.info(f"Processing change: {json.dumps(change, indent=2)}")
+
+            value = change.get("value", {})
+            field = change.get("field")
+            logger.info(f"Change field: {field}")
+            logger.info(f"Change value keys: {list(value.keys())}")
+
+            # Check for messages
+            messages = value.get("messages", [])
+            logger.info(f"Number of messages: {len(messages)}")
+
+            if not messages or len(messages) == 0:
+                logger.info("No messages in webhook (might be status update)")
+
+                # Check if it's a status update instead
+                statuses = value.get("statuses", [])
+                if statuses:
+                    logger.info(f"This is a status update webhook: {statuses}")
+
+                return jsonify({"status": "success", "reason": "no messages"}), 200
+
+            # Process message
+            message = messages[0]
+            logger.info(f"Processing message: {json.dumps(message, indent=2)}")
+
+            from_number = message.get("from")
+            message_type = message.get("type")
+            message_id = message.get("id")
+
+            logger.info(f"From: {from_number}, Type: {message_type}, ID: {message_id}")
+
+            # Get message body based on type
+            message_body = ""
+            if message_type == "text":
+                message_body = message.get("text", {}).get("body", "")
+            else:
+                logger.warning(f"Unsupported message type: {message_type}")
+                message_body = f"[{message_type} message]"
+
+            logger.info(f"Message body: {message_body}")
+
+            # Send a reply
+            logger.info(f"Attempting to send reply to {from_number}")
+            reply_text = f"Thanks for your message: '{message_body}'. We received it!"
+
+            result = whatsapp_service.send_message(from_number, reply_text)
+            logger.info(f"Send message result: {result}")
+
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": "Reply sent",
+                    "result": result,
+                }
+            ), 200
 
         except Exception as e:
-            print(f"Error processing webhook: {str(e)}")
+            logger.error(f"ERROR processing webhook: {str(e)}", exc_info=True)
             # Still return 200 to prevent webhook retries
             return jsonify({"status": "error", "message": str(e)}), 200
