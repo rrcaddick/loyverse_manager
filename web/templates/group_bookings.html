@@ -120,6 +120,22 @@
           <i class="fas fa-list"></i>
           All Group Bookings
         </h3>
+        <div class="card-tools">
+          <div class="btn-group btn-group-sm date-filter-buttons" role="group">
+            <button type="button" class="btn btn-outline-primary active" data-filter="all">
+              <i class="fas fa-list"></i>
+              All
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-filter="today">
+              <i class="fas fa-calendar-day"></i>
+              Today
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-filter="week">
+              <i class="fas fa-calendar-week"></i>
+              Next 7 Days
+            </button>
+          </div>
+        </div>
       </div>
       <div class="card-body">
         <table id="bookingsTable" class="table table-bordered table-striped table-hover">
@@ -191,6 +207,8 @@
                     data-barcode="{{ booking.barcode }}"
                     data-mobile="{{ booking.mobile_number }}"
                     data-group-name="{{ booking.group_name }}"
+                    data-contact-person="{{ booking.contact_person }}"
+                    data-visit-date="{{ booking.visit_date }}"
                     data-toggle="tooltip"
                     title="Send via WhatsApp"
                   >
@@ -288,7 +306,57 @@
 
       // Initialize tooltips
       $('[data-toggle="tooltip"]').tooltip();
+
+      // Date filter buttons
+      $('.date-filter-buttons button').on('click', function() {
+          var filter = $(this).data('filter');
+
+          // Update active button state
+          $('.date-filter-buttons button').removeClass('active');
+          $(this).addClass('active');
+
+          // Apply filter
+          applyDateFilter(table, filter);
+      });
   });
+
+  // Apply date filter to DataTable
+  function applyDateFilter(table, filter) {
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Clear previous custom filters
+      $.fn.dataTable.ext.search = $.fn.dataTable.ext.search.filter(function(fn) {
+          // keep any other non-date filters if you add them later; but in current code there are none
+          return false;
+      });
+
+      if (filter === 'today') {
+          $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+              var raw = data[4]; // Column index 4 is visit_date
+              if (!raw) return false;
+              var visitDate = new Date(raw);
+              visitDate.setHours(0, 0, 0, 0);
+              return visitDate.getTime() === today.getTime();
+          });
+      } else if (filter === 'week') {
+          var weekFromNow = new Date();
+          weekFromNow.setDate(today.getDate() + 7);
+          weekFromNow.setHours(23, 59, 59, 999);
+
+          $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+              var raw = data[4];
+              if (!raw) return false;
+              var visitDate = new Date(raw);
+              // normalize time for comparison
+              visitDate.setHours(0, 0, 0, 0);
+              return visitDate.getTime() >= today.getTime() && visitDate.getTime() <= weekFromNow.getTime();
+          });
+      }
+      // 'all' filter - no filter pushed
+
+      table.draw();
+  }
 
   // Initialize Flatpickr date picker
   const datePicker = flatpickr("#visit_date", {
@@ -367,19 +435,25 @@
       var barcode = button.data('barcode');
       var mobile = button.data('mobile');
       var groupName = button.data('group-name');
+      var contactPerson = button.data('contact-person');
+      var visitDate = button.data('visit-date');
 
       // Disable button and show loading state
       button.prop('disabled', true);
       var originalHtml = button.html();
       button.html('<i class="fas fa-spinner fa-spin"></i>');
 
-      // Send AJAX request
+      // Send AJAX request to server endpoint that handles the template send
       $.ajax({
           url: '{{ url_for("groups.send_whatsapp_ticket") }}',
           method: 'POST',
           contentType: 'application/json',
           data: JSON.stringify({
-              barcode: barcode
+              barcode: barcode,
+              mobile: mobile,
+              group_name: groupName,
+              contact_person: contactPerson,
+              visit_date: visitDate
           }),
           success: function(response) {
               button.prop('disabled', false);
