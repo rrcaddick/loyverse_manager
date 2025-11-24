@@ -75,9 +75,63 @@ def manage_bookings():
             )
 
             if booking_id:
-                flash(
-                    f"Group booking created successfully! Barcode: {barcode}", "success"
-                )
+                # Get the complete booking data
+                booking = get_booking_by_barcode(barcode)
+
+                # Generate PDF ticket
+                pdf_bytes = generate_ticket_pdf(booking)
+
+                # Send ticket via WhatsApp
+                try:
+                    whatsapp_service = WhatsAppService()
+
+                    # Format mobile number (remove spaces, ensure starts with country code)
+                    formatted_number = mobile_number.replace(" ", "").replace("+", "")
+                    if not formatted_number.startswith("27"):
+                        # Assume SA number if no country code
+                        if formatted_number.startswith("0"):
+                            formatted_number = "27" + formatted_number[1:]
+                        else:
+                            formatted_number = "27" + formatted_number
+
+                    logger.info(
+                        f"Attempting to send WhatsApp ticket to {formatted_number}"
+                    )
+
+                    result = whatsapp_service.send_ticket(
+                        formatted_number, booking, pdf_bytes
+                    )
+
+                    if result.get("success"):
+                        logger.info(
+                            f"WhatsApp ticket sent successfully to {formatted_number}"
+                        )
+                        flash(
+                            f"Group booking created successfully! Barcode: {barcode}. "
+                            f"Ticket sent via WhatsApp to {mobile_number}.",
+                            "success",
+                        )
+                    else:
+                        logger.error(
+                            f"Failed to send WhatsApp ticket: {result.get('error')}"
+                        )
+                        flash(
+                            f"Group booking created successfully! Barcode: {barcode}. "
+                            f"However, ticket could not be sent via WhatsApp: {result.get('error')}. "
+                            f"Please download and send manually.",
+                            "warning",
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"Exception sending WhatsApp ticket: {str(e)}", exc_info=True
+                    )
+                    flash(
+                        f"Group booking created successfully! Barcode: {barcode}. "
+                        f"However, there was an error sending via WhatsApp: {str(e)}. "
+                        f"Please download and send manually.",
+                        "warning",
+                    )
             else:
                 flash("Error creating booking", "error")
 
@@ -158,6 +212,109 @@ def download_ticket(barcode):
     )
 
     return response
+
+
+@groups_bp.route("/test_whatsapp", methods=["GET"])
+def whatsapp_test():
+    """Enhanced test route to send a full ticket with PDF attachment"""
+    try:
+        whatsapp_service = WhatsAppService()
+
+        # Test number
+        test_number = "27763635909"
+
+        # Create a sample booking for testing
+        test_booking = {
+            "group_name": "Test Group WhatsApp",
+            "visit_date": "2025-12-25",
+            "barcode": "TEST123456789",
+            "contact_person": "Test Contact",
+            "mobile_number": test_number,
+        }
+
+        # Generate test PDF
+        pdf_bytes = generate_ticket_pdf(test_booking)
+
+        logger.info(f"Generated test PDF, size: {len(pdf_bytes)} bytes")
+
+        # Send full ticket with attachment
+        result = whatsapp_service.send_ticket(test_number, test_booking, pdf_bytes)
+
+        if result.get("success"):
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": "Test ticket sent successfully with PDF attachment",
+                    "result": result,
+                    "test_booking": test_booking,
+                }
+            ), 200
+        else:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Failed to send test ticket",
+                    "error": result.get("error"),
+                    "result": result,
+                }
+            ), 500
+
+    except Exception as e:
+        logger.error(f"Error in test_whatsapp: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@groups_bp.route("/send-whatsapp", methods=["POST"])
+def send_whatsapp_ticket():
+    """Manually send ticket via WhatsApp"""
+    try:
+        data = request.get_json()
+        barcode = data.get("barcode")
+
+        if not barcode:
+            return jsonify({"success": False, "error": "Barcode is required"}), 400
+
+        # Get booking details
+        booking = get_booking_by_barcode(barcode)
+
+        if not booking:
+            return jsonify({"success": False, "error": "Booking not found"}), 404
+
+        # Generate PDF ticket
+        pdf_bytes = generate_ticket_pdf(booking)
+
+        # Format mobile number
+        mobile_number = booking["mobile_number"]
+        formatted_number = mobile_number.replace(" ", "").replace("+", "")
+        if not formatted_number.startswith("27"):
+            if formatted_number.startswith("0"):
+                formatted_number = "27" + formatted_number[1:]
+            else:
+                formatted_number = "27" + formatted_number
+
+        # Send via WhatsApp
+        whatsapp_service = WhatsAppService()
+        result = whatsapp_service.send_ticket(formatted_number, booking, pdf_bytes)
+
+        if result.get("success"):
+            logger.info(
+                f"Manually sent WhatsApp ticket for barcode {barcode} to {formatted_number}"
+            )
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Ticket sent successfully to {mobile_number}",
+                }
+            ), 200
+        else:
+            logger.error(f"Failed to send WhatsApp ticket: {result.get('error')}")
+            return jsonify(
+                {"success": False, "error": result.get("error", "Unknown error")}
+            ), 500
+
+    except Exception as e:
+        logger.error(f"Exception in send_whatsapp_ticket: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @groups_bp.route("/webhook/whatsapp", methods=["GET", "POST"])

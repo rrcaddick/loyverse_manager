@@ -185,6 +185,17 @@
                   >
                     <i class="fas fa-download"></i>
                   </a>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm send-whatsapp"
+                    data-barcode="{{ booking.barcode }}"
+                    data-mobile="{{ booking.mobile_number }}"
+                    data-group-name="{{ booking.group_name }}"
+                    data-toggle="tooltip"
+                    title="Send via WhatsApp"
+                  >
+                    <i class="fab fa-whatsapp"></i>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -348,6 +359,53 @@
       $('#deleteBookingId').val(id);
       $('#deleteGroupName').text(groupName);
       $('#deleteModal').modal('show');
+  });
+
+  // Send via WhatsApp functionality
+  $(document).on('click', '.send-whatsapp', function() {
+      var button = $(this);
+      var barcode = button.data('barcode');
+      var mobile = button.data('mobile');
+      var groupName = button.data('group-name');
+
+      // Disable button and show loading state
+      button.prop('disabled', true);
+      var originalHtml = button.html();
+      button.html('<i class="fas fa-spinner fa-spin"></i>');
+
+      // Send AJAX request
+      $.ajax({
+          url: '{{ url_for("groups.send_whatsapp_ticket") }}',
+          method: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({
+              barcode: barcode
+          }),
+          success: function(response) {
+              button.prop('disabled', false);
+              button.html(originalHtml);
+
+              if (response.success) {
+                  toastr.success('Ticket sent successfully via WhatsApp to ' + mobile + '!');
+              } else {
+                  toastr.error('Failed to send ticket: ' + (response.error || 'Unknown error'));
+              }
+          },
+          error: function(xhr, status, error) {
+              button.prop('disabled', false);
+              button.html(originalHtml);
+
+              var errorMsg = 'Error sending ticket via WhatsApp';
+              try {
+                  var response = JSON.parse(xhr.responseText);
+                  errorMsg = response.error || errorMsg;
+              } catch(e) {
+                  errorMsg = error || errorMsg;
+              }
+
+              toastr.error(errorMsg);
+          }
+      });
   });
 
   // Show toast notifications for flash messages
