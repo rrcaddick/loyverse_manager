@@ -56,6 +56,8 @@ class WhatsAppService:
         Returns:
             str: Media ID if successful, None otherwise
         """
+        from io import BytesIO
+
         url = f"{self.BASE_URL}/{self.phone_number_id}/media"
 
         headers = {
@@ -63,13 +65,18 @@ class WhatsAppService:
         }
 
         files = {
-            "file": (filename, file_bytes, "application/pdf"),
-            "messaging_product": (None, "whatsapp"),
-            "type": (None, "application/pdf"),
+            "file": (filename, BytesIO(file_bytes), "application/pdf"),
+        }
+
+        data = {
+            "messaging_product": "whatsapp",
+            "type": "application/pdf",
         }
 
         try:
-            response = requests.post(url, headers=headers, files=files, timeout=30)
+            response = requests.post(
+                url, headers=headers, files=files, data=data, timeout=30
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -77,7 +84,7 @@ class WhatsAppService:
 
         except requests.exceptions.RequestException as e:
             print(f"Error uploading media: {e}")
-            if hasattr(e.response, "text"):
+            if e.response is not None and hasattr(e.response, "text"):
                 print(f"Response: {e.response.text}")
             return None
 
@@ -116,7 +123,7 @@ class WhatsAppService:
             "to": to_number,
             "type": "template",
             "template": {
-                "name": "ticket_delivery",  # Update this to your approved template name
+                "name": "ticket_delivery",
                 "language": {"code": "en"},
                 "components": [
                     {
@@ -140,7 +147,6 @@ class WhatsAppService:
                             },
                             {"type": "text", "text": booking["group_name"]},
                             {"type": "text", "text": formatted_date},
-                            {"type": "text", "text": booking["barcode"]},
                         ],
                     },
                 ],
@@ -162,9 +168,10 @@ class WhatsAppService:
             }
 
         except requests.exceptions.RequestException as e:
-            error_message = str(e)
-            if hasattr(e.response, "text"):
+            if e.response is not None and hasattr(e.response, "text"):
                 error_message = e.response.text
+            else:
+                error_message = str(e)
 
             print(f"Error sending WhatsApp template message: {error_message}")
 
@@ -246,9 +253,10 @@ The Farmyard Park, Protea Road, Klapmuts, Western Cape
             }
 
         except requests.exceptions.RequestException as e:
-            error_message = str(e)
-            if hasattr(e.response, "text"):
+            if e.response is not None and hasattr(e.response, "text"):
                 error_message = e.response.text
+            else:
+                error_message = str(e)
 
             print(f"Error sending WhatsApp message: {error_message}")
 
@@ -288,5 +296,7 @@ The Farmyard Park, Protea Road, Klapmuts, Western Cape
             return {
                 "success": False,
                 "error": str(e),
-                "response": e.response.text if hasattr(e.response, "text") else None,
+                "response": e.response.text
+                if hasattr(e.response, "text") and e.response is not None
+                else None,
             }
