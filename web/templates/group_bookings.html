@@ -1,5 +1,7 @@
 {% extends "base.html" %} {% block title %}Group Bookings{% endblock %} {% block page_title %}Group Bookings{% endblock
-%} {% block content %}
+%} {% block content %} {% set current_action = request.form.get('form_action', 'create') %} {% set is_edit =
+(current_action == 'update') %}
+
 <!-- Add New Group Form - Always Visible -->
 <div class="row mb-3">
   <div class="col-12">
@@ -7,13 +9,13 @@
       <div class="card-header">
         <h3 class="card-title">
           <i class="fas fa-plus"></i>
-          <span id="formTitle">Add New Group Booking</span>
+          <span id="formTitle">{% if is_edit %}Edit Group Booking{% else %}Add New Group Booking{% endif %}</span>
         </h3>
       </div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('groups.manage_bookings') }}" id="groupForm">
-          <input type="hidden" id="booking_id" name="booking_id" value="" />
-          <input type="hidden" id="form_action" name="form_action" value="create" />
+          <input type="hidden" id="booking_id" name="booking_id" value="{{ request.form.get('booking_id', '') }}" />
+          <input type="hidden" id="form_action" name="form_action" value="{{ current_action }}" />
 
           <div class="row">
             <div class="col-md-6">
@@ -29,6 +31,7 @@
                   name="group_name"
                   placeholder="Enter group name"
                   required
+                  value="{{ request.form.get('group_name', '') }}"
                 />
               </div>
             </div>
@@ -47,6 +50,7 @@
                     placeholder="Select visit date"
                     required
                     readonly="readonly"
+                    value="{{ request.form.get('visit_date', '') }}"
                   />
                   <div class="input-group-append">
                     <span class="input-group-text" style="cursor: pointer" id="calendar-icon">
@@ -72,6 +76,7 @@
                   name="contact_person"
                   placeholder="Enter contact person name"
                   required
+                  value="{{ request.form.get('contact_person', '') }}"
                 />
               </div>
             </div>
@@ -88,6 +93,7 @@
                   name="mobile_number"
                   placeholder="e.g., +27 82 123 4567"
                   required
+                  value="{{ request.form.get('mobile_number', '') }}"
                 />
               </div>
             </div>
@@ -95,11 +101,20 @@
 
           <div class="row">
             <div class="col-12">
-              <button type="submit" class="btn btn-primary" id="submitBtn">
-                <i class="fas fa-save"></i>
-                <span id="submitBtnText">Create Booking</span>
+              <button
+                type="submit"
+                class="btn {% if is_edit %}btn-warning{% else %}btn-primary{% endif %}"
+                id="submitBtn"
+              >
+                <i class="fas {% if is_edit %}fa-edit{% else %}fa-save{% endif %}"></i>
+                <span id="submitBtnText">{% if is_edit %}Update Booking{% else %}Create Booking{% endif %}</span>
               </button>
-              <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                id="cancelBtn"
+                style="{% if is_edit %}display: inline-block{% else %}display: none{% endif %}"
+              >
                 <i class="fas fa-times"></i>
                 Cancel
               </button>
@@ -156,7 +171,7 @@
               <td data-label="ID">{{ booking.id }}</td>
               <td data-label="Group Name"><strong>{{ booking.group_name }}</strong></td>
               <td data-label="Contact Person">{{ booking.contact_person }}</td>
-              <td data-label="Mobile Number" class="text-nowrap">{{ booking.mobile_number }}</td>
+              <td data-label="Mobile Number" class="text-nowrap">{{ booking.mobile_number_display }}</td>
               <td data-label="Visit Date" class="text-nowrap">{{ booking.visit_date }}</td>
               <td data-label="Barcode"><code>{{ booking.barcode }}</code></td>
               <td data-label="Actions" class="text-center text-nowrap">
@@ -218,12 +233,14 @@
               </td>
             </tr>
             {% endfor %} {% else %}
-            <tr>
-              <td colspan="7" class="text-center text-muted">
-                <i class="fas fa-inbox"></i>
-                No bookings yet. Create your first one above!
-              </td>
-            </tr>
+            <tfoot>
+              <tr>
+                <td colspan="7" class="text-center text-muted">
+                  <i class="fas fa-inbox"></i>
+                  No bookings yet. Create your first one above!
+                </td>
+              </tr>
+            </tfoot>
             {% endif %}
           </tbody>
         </table>
@@ -318,6 +335,29 @@
           // Apply filter
           applyDateFilter(table, filter);
       });
+
+      // Loading state on form submit (create / update booking)
+      $('#groupForm').on('submit', function(e) {
+          var btn = $('#submitBtn');
+
+          // Prevent double submission
+          if (btn.prop('disabled')) {
+              e.preventDefault();
+              return;
+          }
+
+          var action = $('#form_action').val();
+          var loadingText = (action === 'update') ? 'Updating...' : 'Creating...';
+
+          btn.prop('disabled', true);
+          $('#cancelBtn').prop('disabled', true);
+
+          // Swap icon to spinner and update text
+          btn.find('i')
+              .removeClass('fa-save fa-edit')
+              .addClass('fa-spinner fa-spin');
+          $('#submitBtnText').text(loadingText);
+      });
   });
 
   // Apply date filter to DataTable
@@ -327,7 +367,6 @@
 
       // Clear previous custom filters
       $.fn.dataTable.ext.search = $.fn.dataTable.ext.search.filter(function(fn) {
-          // keep any other non-date filters if you add them later; but in current code there are none
           return false;
       });
 
@@ -348,12 +387,10 @@
               var raw = data[4];
               if (!raw) return false;
               var visitDate = new Date(raw);
-              // normalize time for comparison
               visitDate.setHours(0, 0, 0, 0);
               return visitDate.getTime() >= today.getTime() && visitDate.getTime() <= weekFromNow.getTime();
           });
       }
-      // 'all' filter - no filter pushed
 
       table.draw();
   }
@@ -366,6 +403,12 @@
       altFormat: "F j, Y",
       allowInput: false  // Prevent manual typing
   });
+
+  // Restore date after validation error if value exists
+  const existingDate = document.getElementById('visit_date').value;
+  if (existingDate) {
+      datePicker.setDate(existingDate, true);
+  }
 
   // Make calendar icon clickable
   document.getElementById('calendar-icon').addEventListener('click', function() {
@@ -386,7 +429,7 @@
       $('#group_name').val(groupName);
       $('#contact_person').val(contactPerson);
       $('#mobile_number').val(mobileNumber);
-      datePicker.setDate(visitDate);
+      datePicker.setDate(visitDate, true);
 
       // Update form UI
       $('#formTitle').text('Edit Group Booking');
@@ -416,6 +459,7 @@
       $('#submitBtn').removeClass('btn-warning').addClass('btn-primary');
       $('#submitBtn i').removeClass('fa-edit').addClass('fa-save');
       $('#cancelBtn').hide();
+      $('#cancelBtn').prop('disabled', false);
       datePicker.clear();
   }
 

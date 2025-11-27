@@ -1,5 +1,6 @@
 import json
 
+import phonenumbers
 from flask import (
     Blueprint,
     current_app,
@@ -11,6 +12,7 @@ from flask import (
     request,
     url_for,
 )
+from phonenumbers import NumberParseException
 
 from src.utils.logging import setup_logger
 from web.models.database import (
@@ -42,7 +44,27 @@ def manage_bookings():
         # Validate required fields
         if not all([group_name, contact_person, mobile_number, visit_date]):
             flash("All fields are required!", "error")
-            return redirect(url_for("groups.manage_bookings"))
+            bookings = get_all_group_bookings()
+            return render_template("group_bookings.html", bookings=bookings), 400
+
+        # --- PHONE NORMALISATION + VALIDATION ---
+        try:
+            parsed = phonenumbers.parse(mobile_number, "ZA")
+
+            if not phonenumbers.is_valid_number(parsed):
+                flash("Please enter a valid mobile number.", "error")
+                bookings = get_all_group_bookings()
+                return render_template("group_bookings.html", bookings=bookings), 400
+
+            # store digits-only format for WhatsApp & DB, e.g. "27821234567"
+            normalized_mobile_number = phonenumbers.format_number(
+                parsed, phonenumbers.PhoneNumberFormat.E164
+            ).replace("+", "")
+
+        except NumberParseException:
+            flash("Please enter a valid mobile number.", "error")
+            bookings = get_all_group_bookings()
+            return render_template("group_bookings.html", bookings=bookings), 400
 
         if form_action == "update":
             # UPDATE EXISTING BOOKING
@@ -50,10 +72,15 @@ def manage_bookings():
 
             if not booking_id:
                 flash("Booking ID is required for update!", "error")
-                return redirect(url_for("groups.manage_bookings"))
+                bookings = get_all_group_bookings()
+                return render_template("group_bookings.html", bookings=bookings), 400
 
             success = update_group_booking(
-                booking_id, group_name, contact_person, mobile_number, visit_date
+                booking_id,
+                group_name,
+                contact_person,
+                normalized_mobile_number,
+                visit_date,
             )
 
             if success:
@@ -71,7 +98,11 @@ def manage_bookings():
 
             # Save to database
             booking_id = create_group_booking(
-                group_name, contact_person, mobile_number, visit_date, barcode
+                group_name,
+                contact_person,
+                normalized_mobile_number,
+                visit_date,
+                barcode,
             )
 
             if booking_id:
@@ -85,30 +116,21 @@ def manage_bookings():
                 try:
                     whatsapp_service = WhatsAppService()
 
-                    # Format mobile number (remove spaces, ensure starts with country code)
-                    formatted_number = mobile_number.replace(" ", "").replace("+", "")
-                    if not formatted_number.startswith("27"):
-                        # Assume SA number if no country code
-                        if formatted_number.startswith("0"):
-                            formatted_number = "27" + formatted_number[1:]
-                        else:
-                            formatted_number = "27" + formatted_number
-
                     logger.info(
-                        f"Attempting to send WhatsApp ticket to {formatted_number}"
+                        f"Attempting to send WhatsApp ticket to {normalized_mobile_number}"
                     )
 
                     result = whatsapp_service.send_ticket(
-                        formatted_number, booking, pdf_bytes
+                        normalized_mobile_number, booking, pdf_bytes
                     )
 
                     if result.get("success"):
                         logger.info(
-                            f"WhatsApp ticket sent successfully to {formatted_number}"
+                            f"WhatsApp ticket sent successfully to {normalized_mobile_number}"
                         )
                         flash(
                             f"Group booking created successfully! Barcode: {barcode}. "
-                            f"Ticket sent via WhatsApp to {mobile_number}.",
+                            f"Ticket sent via WhatsApp to {normalized_mobile_number}.",
                             "success",
                         )
                     else:
@@ -135,10 +157,24 @@ def manage_bookings():
             else:
                 flash("Error creating booking", "error")
 
+        # On success, PRG redirect
         return redirect(url_for("groups.manage_bookings"))
 
-    # Get all bookings for table display
-    bookings = get_all_group_bookings()
+    # GET: initial load
+    bookings = [
+        {
+            **booking,
+            "mobile_number_display": (
+                phonenumbers.format_number(
+                    phonenumbers.parse(booking["mobile_number"], "ZA"),
+                    phonenumbers.PhoneNumberFormat.NATIONAL,
+                )
+                if booking.get("mobile_number")
+                else ""
+            ),
+        }
+        for booking in get_all_group_bookings()
+    ]
 
     return render_template("group_bookings.html", bookings=bookings)
 
@@ -221,7 +257,7 @@ def whatsapp_test():
         whatsapp_service = WhatsAppService()
 
         # Test number
-        test_number = "27763635909"
+        test_number = "27763635909"  # Ray Caddick
 
         # Create a sample booking for testing
         test_booking = {
@@ -283,22 +319,16 @@ def send_whatsapp_ticket():
         # Generate PDF ticket
         pdf_bytes = generate_ticket_pdf(booking)
 
-        # Format mobile number
+        # Mobile number is already normalised when saved
         mobile_number = booking["mobile_number"]
-        formatted_number = mobile_number.replace(" ", "").replace("+", "")
-        if not formatted_number.startswith("27"):
-            if formatted_number.startswith("0"):
-                formatted_number = "27" + formatted_number[1:]
-            else:
-                formatted_number = "27" + formatted_number
 
         # Send via WhatsApp
         whatsapp_service = WhatsAppService()
-        result = whatsapp_service.send_ticket(formatted_number, booking, pdf_bytes)
+        result = whatsapp_service.send_ticket(mobile_number, booking, pdf_bytes)
 
         if result.get("success"):
             logger.info(
-                f"Manually sent WhatsApp ticket for barcode {barcode} to {formatted_number}"
+                f"Manually sent WhatsApp ticket for barcode {barcode} to {mobile_number}"
             )
             return jsonify(
                 {
@@ -339,9 +369,7 @@ def whatsapp_webhook():
             f"Expected token: {current_app.config.get('WHATSAPP_VERIFY_TOKEN')}"
         )
 
-        # Check if we have the required parameters
         if mode and token:
-            # Verify the token matches
             if mode == "subscribe" and token == current_app.config.get(
                 "WHATSAPP_VERIFY_TOKEN"
             ):
@@ -359,14 +387,12 @@ def whatsapp_webhook():
         try:
             logger.info("POST request - Processing incoming webhook")
 
-            # Get raw data first
             raw_data = request.get_data(as_text=True)
             logger.info(f"Raw webhook payload: {raw_data}")
 
             data = request.get_json()
             logger.info(f"Parsed JSON data: {json.dumps(data, indent=2)}")
 
-            # Check webhook object type
             webhook_object = data.get("object")
             logger.info(f"Webhook object type: {webhook_object}")
 
@@ -376,26 +402,23 @@ def whatsapp_webhook():
                     {"status": "ignored", "reason": "not whatsapp_business_account"}
                 ), 200
 
-            # Check for entries
             entries = data.get("entry", [])
             logger.info(f"Number of entries: {len(entries)}")
 
-            if not entries or len(entries) == 0:
+            if not entries:
                 logger.warning("No entries in webhook")
                 return jsonify({"status": "success", "reason": "no entries"}), 200
 
-            # Process first entry
             entry = entries[0]
             logger.info(f"Processing entry: {json.dumps(entry, indent=2)}")
 
             changes = entry.get("changes", [])
             logger.info(f"Number of changes: {len(changes)}")
 
-            if not changes or len(changes) == 0:
+            if not changes:
                 logger.warning("No changes in entry")
                 return jsonify({"status": "success", "reason": "no changes"}), 200
 
-            # Process first change
             change = changes[0]
             logger.info(f"Processing change: {json.dumps(change, indent=2)}")
 
@@ -404,21 +427,17 @@ def whatsapp_webhook():
             logger.info(f"Change field: {field}")
             logger.info(f"Change value keys: {list(value.keys())}")
 
-            # Check for messages
             messages = value.get("messages", [])
             logger.info(f"Number of messages: {len(messages)}")
 
-            if not messages or len(messages) == 0:
+            if not messages:
                 logger.info("No messages in webhook (might be status update)")
-
-                # Check if it's a status update instead
                 statuses = value.get("statuses", [])
                 if statuses:
                     logger.info(f"This is a status update webhook: {statuses}")
 
                 return jsonify({"status": "success", "reason": "no messages"}), 200
 
-            # Process message
             message = messages[0]
             logger.info(f"Processing message: {json.dumps(message, indent=2)}")
 
@@ -428,7 +447,6 @@ def whatsapp_webhook():
 
             logger.info(f"From: {from_number}, Type: {message_type}, ID: {message_id}")
 
-            # Get message body based on type
             message_body = ""
             if message_type == "text":
                 message_body = message.get("text", {}).get("body", "")
@@ -438,10 +456,7 @@ def whatsapp_webhook():
 
             logger.info(f"Message body: {message_body}")
 
-            # Send a reply
             logger.info(f"Attempting to send reply to {from_number}")
-            reply_text = f"Thanks for your message: '{message_body}'. We received it!"
-
             result = whatsapp_service.send_test_message(from_number)
             logger.info(f"Send message result: {result}")
 
@@ -455,5 +470,4 @@ def whatsapp_webhook():
 
         except Exception as e:
             logger.error(f"ERROR processing webhook: {str(e)}", exc_info=True)
-            # Still return 200 to prevent webhook retries
             return jsonify({"status": "error", "message": str(e)}), 200
