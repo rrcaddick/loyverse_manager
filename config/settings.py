@@ -23,6 +23,12 @@ QUICKET_PASSWORD = os.getenv("QUICKET_PASSWORD")
 
 LOYVERSE_API_KEY = os.getenv("LOYVERSE_API_KEY")
 
+# MySQL Database
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DB = os.getenv("MYSQL_DB")
+
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")

@@ -8,6 +8,7 @@ from src.utils.date import get_today
 LOYVERSE_STORE_ID = "8d44fa8a-4ee6-4a18-a1b3-15ace8a3138c"
 
 ONLINE_ITEM_IMAGE_PATH = BASE_DIR / "images" / "product_image_online.png"
+GROUP_ITEM_IMAGE_PATH = BASE_DIR / "images" / "product_image_group.png"
 
 CATEGORIES = {
     "online_ticket": "6d089f1a-f067-4d10-871c-f2a4724e4c2b",

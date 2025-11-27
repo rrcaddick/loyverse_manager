@@ -80,3 +80,34 @@ class InventoryService:
             for variant in created_item["variants"]
             if "~" not in variant["option1_value"]  # Skip non-order variants
         ]
+
+    def create_items_from_group_bookings(self, group_bookings):
+        """
+        Create Loyverse items from group bookings.
+        Simple items need one variant with barcode/SKU/price.
+
+        Args:
+            group_bookings: List of group booking dictionaries from database
+
+        Returns:
+            List of formatted items ready for Loyverse API
+        """
+        items = []
+
+        for booking in group_bookings:
+            # Simple item requires one variant with barcode/SKU/price
+            entry = {
+                "item_name": booking["group_name"],
+                "variants": [
+                    {
+                        "sku": booking["barcode"],
+                        "barcode": booking["barcode"],
+                        "default_pricing_type": "FIXED",
+                        "default_price": 0,
+                    }
+                ],
+            }
+
+            items.append(entry)
+
+        return self.loyverse_service.add_loyverse_group_keys(items)

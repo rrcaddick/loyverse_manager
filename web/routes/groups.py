@@ -14,8 +14,7 @@ from flask import (
 )
 from phonenumbers import NumberParseException
 
-from src.utils.logging import setup_logger
-from web.models.database import (
+from src.repositories.mysql import (
     create_group_booking,
     delete_group_booking,
     get_all_group_bookings,
@@ -23,6 +22,7 @@ from web.models.database import (
     get_booking_by_id,
     update_group_booking,
 )
+from src.utils.logging import setup_logger
 from web.services.barcode import generate_barcode
 from web.services.pdf import generate_ticket_pdf
 from web.services.whatsapp import WhatsAppService

@@ -1,17 +1,18 @@
 from contextlib import contextmanager
 
 import pymysql
-from flask import current_app
+
+from config.settings import MYSQL_DB, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_USER
 
 
 @contextmanager
 def get_db_connection():
-    """Context manager for database connections"""
+    """Context manager for MySQL database connections"""
     connection = pymysql.connect(
-        host=current_app.config["MYSQL_HOST"],
-        user=current_app.config["MYSQL_USER"],
-        password=current_app.config["MYSQL_PASSWORD"],
-        database=current_app.config["MYSQL_DB"],
+        host=MYSQL_HOST,
+        user=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        database=MYSQL_DB,
         cursorclass=pymysql.cursors.DictCursor,
     )
     try:
@@ -63,6 +64,15 @@ def get_booking_by_id(booking_id):
             sql = "SELECT * FROM group_bookings WHERE id = %s"
             cursor.execute(sql, (booking_id,))
             return cursor.fetchone()
+
+
+def get_bookings_by_date(visit_date):
+    """Get all group bookings for a specific date"""
+    with get_db_connection() as conn:
+        with conn.cursor() as cursor:
+            sql = "SELECT * FROM group_bookings WHERE visit_date = %s"
+            cursor.execute(sql, (visit_date,))
+            return cursor.fetchall()
 
 
 def update_group_booking(

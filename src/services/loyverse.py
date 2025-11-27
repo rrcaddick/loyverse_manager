@@ -198,18 +198,37 @@ class LoyverseService:
             for item in items
         ]
 
-    def process_item_with_inventory(self, item: dict) -> None:
+    def add_loyverse_group_keys(self, items):
+        """Add Loyverse-specific keys for group booking items - no option fields for simple items"""
+        return [
+            {
+                "category_id": self.categories["groups"],
+                "track_stock": False,
+                **item,
+            }
+            for item in items
+        ]
+
+    def process_item_with_inventory(self, item: dict, image_path: str = None) -> dict:
         """
         Create item, upload image, and update inventory in one operation.
 
         Args:
             item: Item dict with variants
+            image_path: Path to product image (defaults to ONLINE_ITEM_IMAGE_PATH)
+
+        Returns:
+            Created item dictionary
         """
+        # Use default online image if none provided
+        if image_path is None:
+            image_path = ONLINE_ITEM_IMAGE_PATH
+
         # Create item
         created_item = self.create_item(item)
 
         # Upload product image
-        self.upload_item_image(created_item["id"], ONLINE_ITEM_IMAGE_PATH)
+        self.upload_item_image(created_item["id"], image_path)
 
         # Return created item for further processing
         return created_item
