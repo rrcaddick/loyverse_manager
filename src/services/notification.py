@@ -83,3 +83,16 @@ class NoticifationService:
         subject = f"Inventory Update Status - {date}"
         message = "No event scheduled for today. Process completed successfully."
         self.send_notification(recipients, subject, message)
+
+    def send_quicket_event_hide_failure(
+        self,
+        recipients: list[str],
+        date: date,
+    ) -> None:
+        """Send quicket event hide failure."""
+        subject = f"Quicket event hide failed - {date}"
+        message = (
+            "Error hiding Quicket event for today:\n"
+            "Please manualy, hide the event on Quicket platform.\n"
+        )
+        self.send_notification(recipients, subject, message)

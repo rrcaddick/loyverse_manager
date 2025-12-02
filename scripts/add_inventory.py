@@ -77,13 +77,27 @@ def main():
         else:
             logger.info(f"Processing Quicket event ID: {event_id}")
 
-            # Hide the event
-            with QuicketBot(
-                email=QUICKET_EMAIL,
-                password=QUICKET_PASSWORD,
-                logger=setup_logger("quicket_bot"),
-            ) as quicket_bot:
-                quicket_bot.hide_event(event_id, TODAY, max_retries=3)
+            # Try to hide the event
+            event_hidden_successfully = False
+            try:
+                with QuicketBot(
+                    email=QUICKET_EMAIL,
+                    password=QUICKET_PASSWORD,
+                    logger=setup_logger("quicket_bot"),
+                ) as quicket_bot:
+                    quicket_bot.hide_event(event_id, TODAY)
+                    event_hidden_successfully = True
+            except Exception as hide_error:
+                logger.error(
+                    f"Failed to hide Quicket event {event_id}: {type(hide_error).__name__}: {str(hide_error)}"
+                )
+                # Send notification about the failure but continue processing
+                notification_service.send_quicket_event_hide_failure(
+                    recipients=NOTIFICATION_RECIPIENTS,
+                    date=TODAY,
+                )
+
+                # TODO: Send whatsapp message to admin about failure
 
             # Get Tickets
             guest_list = quicket_service.get_guest_list(event_id)
@@ -111,6 +125,11 @@ def main():
 
             online_ticket_count = len(loyverse_items)
             logger.info(f"Processed {online_ticket_count} online ticket orders")
+
+            if not event_hidden_successfully:
+                logger.warning(
+                    f"Event {event_id} was NOT hidden - manual intervention required"
+                )
 
         # ========================================
         # Process Group Bookings (always check)

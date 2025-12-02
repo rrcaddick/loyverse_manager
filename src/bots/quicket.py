@@ -1,3 +1,4 @@
+import time
 from datetime import date, datetime
 from typing import Optional
 
@@ -42,29 +43,49 @@ class QuicketBot:
         """Context manager exit point for cleanup."""
         self.stop_browser()
 
-    def start_browser(self):
+    def start_browser(self, max_retries=3):
         """Initialize the browser and WebDriver."""
-        chrome_options = webdriver.ChromeOptions()
+        retries = max_retries
+        last_error = None
 
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
+        while retries > 0:
+            try:
+                chrome_options = webdriver.ChromeOptions()
 
-        chrome_kwargs = {
-            "options": chrome_options,
-        }
+                chrome_options.add_argument("--no-sandbox")
+                chrome_options.add_argument("--headless")
+                chrome_options.add_argument("--disable-gpu")
 
-        if ENV == "prod":
-            chrome_options.binary_location = f"{HOME_DIR}/chrome/chrome-linux64/chrome"
-            service = Service(
-                executable_path=f"{HOME_DIR}/chrome/chromedriver-linux64/chromedriver"
-            )
+                chrome_kwargs = {
+                    "options": chrome_options,
+                }
 
-            chrome_kwargs["service"] = service
+                if ENV == "prod":
+                    chrome_options.binary_location = (
+                        f"{HOME_DIR}/chrome/chrome-linux64/chrome"
+                    )
+                    service = Service(
+                        executable_path=f"{HOME_DIR}/chrome/chromedriver-linux64/chromedriver"
+                    )
 
-        # Initialize WebDriver
-        self._driver = webdriver.Chrome(**chrome_kwargs)
-        self._wait = WebDriverWait(self.driver, 10)
+                    chrome_kwargs["service"] = service
+
+                self._driver = webdriver.Chrome(**chrome_kwargs)
+                self._wait = WebDriverWait(self.driver, 10)
+                return
+            except Exception as e:
+                last_error = e
+                retries -= 1
+                if retries > 0:
+                    self.logger.warning(
+                        f"Browser start attempt {max_retries - retries}/{max_retries} failed: {type(e).__name__}: {str(e)}"
+                    )
+                    time.sleep(2)
+                else:
+                    self.logger.error(
+                        f"Failed to start browser after {max_retries} attempts: {type(e).__name__}: {str(e)}"
+                    )
+                    raise last_error
 
     def stop_browser(self):
         """Quit the browser and clean up resources."""
@@ -75,8 +96,24 @@ class QuicketBot:
         self._wait = None
 
     def restart_browser(self):
-        """Restart the browser session."""
-        self.stop_browser()
+        """Restart the browser session with complete cleanup."""
+        import time
+
+        # Force cleanup of any lingering processes
+        if getattr(self, "_driver", None):
+            try:
+                self._driver.quit()
+            except Exception:
+                pass  # Ignore errors during forced cleanup
+            finally:
+                self._driver = None
+
+        self._wait = None
+
+        # Give the system a moment to clean up resources
+        time.sleep(2)
+
+        # Start fresh
         self.start_browser()
 
     def _login(self):
@@ -245,29 +282,9 @@ class QuicketBot:
         failure_message = f"Target date {target_date} not found in any headers."
         raise RuntimeError(failure_message)
 
-    def hide_event(
-        self, event_id: str, target_date: date, max_retries: int = 3
-    ) -> None:
-        """Hide event with automatic retry logic."""
-        retries = max_retries
-        while retries > 0:
-            try:
-                if retries != max_retries:
-                    self.logger.info("Retrying hide event - restarting browser")
-                    self.restart_browser()
-                self._login()
-                self._navigate_to_event(event_id)
-                self._hide_event(target_date)
-                self.logger.info(f"Successfully hid event {event_id}")
-                return
-            except Exception as e:
-                retries -= 1
-                if retries == 0:
-                    self.logger.error(
-                        f"Failed to hide event after {max_retries} attempts: {type(e).__name__}: {str(e)}",
-                        exc_info=True,  # This adds full stack trace
-                    )
-                    raise
-                self.logger.warning(
-                    f"Retry {max_retries - retries}/{max_retries} failed: {type(e).__name__}: {str(e)}"
-                )
+    def hide_event(self, event_id: str, target_date: date) -> None:
+        """Hide event for the specified date."""
+        self._login()
+        self._navigate_to_event(event_id)
+        self._hide_event(target_date)
+        self.logger.info(f"Successfully hid event {event_id}")
