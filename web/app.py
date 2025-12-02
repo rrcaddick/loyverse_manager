@@ -1,6 +1,7 @@
 from flask import Flask, render_template
 
 from web.config import Config
+from web.routes import scripts as scripts_routes
 from web.routes.api import api_bp
 from web.routes.groups import groups_bp
 
@@ -16,6 +17,8 @@ def create_app(config_class=Config):
     # Register blueprints
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(groups_bp)
+
+    app.register_blueprint(scripts_routes.bp)
 
     # Root route
     @app.route("/")

@@ -32,7 +32,7 @@ from src.utils.logging import setup_logger
 TODAY = get_today()
 
 
-def main():
+def add_inventory():
     logger = setup_logger("add_inventory")
 
     try:
@@ -183,6 +183,13 @@ def main():
         notification_service.send_inventory_failure_notification(
             recipients=NOTIFICATION_RECIPIENTS, date=TODAY, action="update", error=e
         )
+        raise
+
+
+def main():
+    try:
+        add_inventory()
+    except Exception:
         sys.exit(1)
 
 

@@ -20,7 +20,7 @@ from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
 
-def main():
+def clear_inventory():
     logger = setup_logger("clear_inventory")
     notification_service = NoticifationService(
         SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USERNAME
@@ -62,6 +62,13 @@ def main():
             action="clear",
             error=e,
         )
+        raise
+
+
+def main():
+    try:
+        clear_inventory()
+    except Exception:
         sys.exit(1)
 
 
