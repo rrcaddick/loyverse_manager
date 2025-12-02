@@ -1,7 +1,9 @@
+from io import BytesIO
 from typing import Optional
 
 import requests
 from flask import current_app
+from pdf2image import convert_from_bytes
 
 
 class WhatsAppService:
@@ -23,35 +25,60 @@ class WhatsAppService:
             "Content-Type": "application/json",
         }
 
-    def send_ticket(self, to_number: str, booking: dict, pdf_bytes: bytes) -> dict:
+    def _convert_pdf_to_jpeg(self, pdf_bytes: bytes) -> bytes:
         """
-        Send ticket PDF using WhatsApp template (works without 24-hour window)
+        Convert PDF to high-quality JPEG image in memory
 
         Args:
-            to_number: Recipient's WhatsApp number (format: 27821234567)
-            booking: Booking dict with group_name, visit_date, barcode, contact_person
             pdf_bytes: PDF file as bytes
 
         Returns:
-            dict: Response from WhatsApp API
+            bytes: JPEG image as bytes
         """
-        # Step 1: Upload the PDF to Meta servers
-        media_id = self._upload_media(pdf_bytes, f"ticket_{booking['barcode']}.pdf")
+        try:
+            # Convert PDF to images (list of PIL Image objects)
+            # dpi=300 ensures high quality for mobile viewing
+            images = convert_from_bytes(pdf_bytes, dpi=300, fmt="jpeg")
 
-        if not media_id:
-            return {
-                "success": False,
-                "error": "Failed to upload PDF to WhatsApp servers",
-            }
+            # Take the first page (tickets are single page)
+            if not images:
+                raise ValueError("No images generated from PDF")
 
-        # Step 2: Send using template message
-        result = self._send_template_message(to_number, media_id, booking)
+            ticket_image = images[0]
 
-        return result
+            # Convert to RGB if needed (some PDFs may be in RGBA)
+            if ticket_image.mode != "RGB":
+                ticket_image = ticket_image.convert("RGB")
 
-    def _upload_media(self, file_bytes: bytes, filename: str) -> Optional[str]:
+            # Save to BytesIO with high quality
+            jpeg_buffer = BytesIO()
+            ticket_image.save(
+                jpeg_buffer,
+                format="JPEG",
+                quality=95,  # High quality
+                optimize=True,
+            )
+
+            # Get the bytes
+            jpeg_bytes = jpeg_buffer.getvalue()
+            jpeg_buffer.close()
+
+            return jpeg_bytes
+
+        except Exception as e:
+            print(f"Error converting PDF to JPEG: {e}")
+            raise
+
+    def _upload_media(
+        self, file_bytes: bytes, filename: str, content_type: str = "application/pdf"
+    ) -> Optional[str]:
         """
-        Upload PDF to WhatsApp servers
+        Upload media file to WhatsApp servers
+
+        Args:
+            file_bytes: File content as bytes
+            filename: Name for the file
+            content_type: MIME type (e.g., 'application/pdf' or 'image/jpeg')
 
         Returns:
             str: Media ID if successful, None otherwise
@@ -65,12 +92,12 @@ class WhatsAppService:
         }
 
         files = {
-            "file": (filename, BytesIO(file_bytes), "application/pdf"),
+            "file": (filename, BytesIO(file_bytes), content_type),
         }
 
         data = {
             "messaging_product": "whatsapp",
-            "type": "application/pdf",
+            "type": content_type,
         }
 
         try:
@@ -87,6 +114,84 @@ class WhatsAppService:
             if e.response is not None and hasattr(e.response, "text"):
                 print(f"Response: {e.response.text}")
             return None
+
+    def _send_image_template_message(
+        self, to_number: str, media_id: str, booking: dict
+    ) -> dict:
+        """
+        Send the new image template message with JPEG attachment
+
+        Template name: group_vehicle_ticket_jpeg
+        Variables: {{contact_name}}
+
+        Args:
+            to_number: Recipient WhatsApp number
+            media_id: Media ID from upload (JPEG)
+            booking: Booking details
+
+        Returns:
+            dict: Success/failure response
+        """
+        url = f"{self.BASE_URL}/{self.phone_number_id}/messages"
+
+        # Get contact name, fallback to "Guest" if not provided
+        contact_name = booking.get("contact_person", "Guest")
+
+        # Template message payload for the new image template
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to_number,
+            "type": "template",
+            "template": {
+                "name": "group_vehicle_ticket_jpeg",
+                "language": {"code": "en"},
+                "components": [
+                    {
+                        "type": "header",
+                        "parameters": [
+                            {
+                                "type": "image",
+                                "image": {"id": media_id},
+                            }
+                        ],
+                    },
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": contact_name,
+                            }
+                        ],
+                    },
+                ],
+            },
+        }
+
+        try:
+            response = requests.post(
+                url, headers=self._get_headers(), json=payload, timeout=30
+            )
+            response.raise_for_status()
+
+            data = response.json()
+
+            return {
+                "success": True,
+                "message_id": data.get("messages", [{}])[0].get("id"),
+                "response": data,
+            }
+
+        except requests.exceptions.RequestException as e:
+            if e.response is not None and hasattr(e.response, "text"):
+                error_message = e.response.text
+            else:
+                error_message = str(e)
+
+            print(f"Error sending WhatsApp image template message: {error_message}")
+
+            return {"success": False, "error": error_message}
 
     def _send_template_message(
         self, to_number: str, media_id: str, booking: dict
@@ -300,3 +405,40 @@ The Farmyard Park, Protea Road, Klapmuts, Western Cape
                 if hasattr(e.response, "text") and e.response is not None
                 else None,
             }
+
+    def send_ticket(self, to_number: str, booking: dict, pdf_bytes: bytes) -> dict:
+        """
+        Send ticket as JPEG using WhatsApp image template
+
+        Args:
+            to_number: Recipient's WhatsApp number (format: 27821234567)
+            booking: Booking dict with group_name, visit_date, barcode, contact_person
+            pdf_bytes: PDF file as bytes (will be converted to JPEG)
+
+        Returns:
+            dict: Response from WhatsApp API
+        """
+        # Step 1: Convert PDF to JPEG
+        try:
+            jpeg_bytes = self._convert_pdf_to_jpeg(pdf_bytes)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to convert PDF to JPEG: {str(e)}",
+            }
+
+        # Step 2: Upload the JPEG to Meta servers
+        media_id = self._upload_media(
+            jpeg_bytes, f"ticket_{booking['barcode']}.jpg", "image/jpeg"
+        )
+
+        if not media_id:
+            return {
+                "success": False,
+                "error": "Failed to upload JPEG to WhatsApp servers",
+            }
+
+        # Step 3: Send using the new image template
+        result = self._send_image_template_message(to_number, media_id, booking)
+
+        return result
