@@ -161,6 +161,7 @@ class WhatsAppService:
                         "parameters": [
                             {
                                 "type": "text",
+                                "parameter_name": "contact_name",
                                 "text": contact_name,
                             }
                         ],
