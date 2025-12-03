@@ -1,9 +1,10 @@
 from io import BytesIO
 from typing import Optional
 
+import fitz
 import requests
 from flask import current_app
-from pdf2image import convert_from_bytes
+from PIL import Image
 
 
 class WhatsAppService:
@@ -27,7 +28,7 @@ class WhatsAppService:
 
     def _convert_pdf_to_jpeg(self, pdf_bytes: bytes) -> bytes:
         """
-        Convert PDF to high-quality JPEG image in memory
+        Convert PDF to high-quality JPEG image in memory using PyMuPDF
 
         Args:
             pdf_bytes: PDF file as bytes
@@ -36,23 +37,31 @@ class WhatsAppService:
             bytes: JPEG image as bytes
         """
         try:
-            # Convert PDF to images (list of PIL Image objects)
-            # dpi=300 ensures high quality for mobile viewing
-            images = convert_from_bytes(pdf_bytes, dpi=300, fmt="jpeg")
+            # Open PDF from bytes
+            pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-            # Take the first page (tickets are single page)
-            if not images:
-                raise ValueError("No images generated from PDF")
+            if len(pdf_document) == 0:
+                raise ValueError("PDF has no pages")
 
-            ticket_image = images[0]
+            # Get the first page (tickets are single page)
+            page = pdf_document[0]
+
+            # Render page to pixmap at high resolution
+            # matrix with zoom factor 3.0 gives ~300 DPI (default is 72 DPI)
+            mat = fitz.Matrix(3.0, 3.0)
+            pix = page.get_pixmap(matrix=mat)
+
+            # Convert pixmap to PIL Image
+            img_data = pix.tobytes("png")
+            img: Image.Image = Image.open(BytesIO(img_data))
 
             # Convert to RGB if needed (some PDFs may be in RGBA)
-            if ticket_image.mode != "RGB":
-                ticket_image = ticket_image.convert("RGB")
+            if img.mode != "RGB":
+                img = img.convert("RGB")
 
-            # Save to BytesIO with high quality
+            # Save to BytesIO as JPEG with high quality
             jpeg_buffer = BytesIO()
-            ticket_image.save(
+            img.save(
                 jpeg_buffer,
                 format="JPEG",
                 quality=95,  # High quality
@@ -62,6 +71,9 @@ class WhatsAppService:
             # Get the bytes
             jpeg_bytes = jpeg_buffer.getvalue()
             jpeg_buffer.close()
+
+            # Close the PDF document
+            pdf_document.close()
 
             return jpeg_bytes
 
@@ -83,7 +95,6 @@ class WhatsAppService:
         Returns:
             str: Media ID if successful, None otherwise
         """
-        from io import BytesIO
 
         url = f"{self.BASE_URL}/{self.phone_number_id}/media"
 
