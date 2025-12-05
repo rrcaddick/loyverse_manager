@@ -252,7 +252,7 @@ def view_ticket(barcode):
         flash("Booking not found", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    pdf_bytes = generate_ticket_pdf(booking.to_dict())
+    pdf_bytes = generate_ticket_pdf(booking)
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -270,7 +270,7 @@ def download_ticket(barcode):
         flash("Booking not found", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    pdf_bytes = generate_ticket_pdf(booking.to_dict())
+    pdf_bytes = generate_ticket_pdf(booking)
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"

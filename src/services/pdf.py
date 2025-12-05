@@ -11,6 +11,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
 from config.constants import IMAGE_DIR
+from src.models.group_booking import GroupBooking
 
 
 def fit_font_size(text, font_name, max_width, max_font=24, min_font=8, step=0.5):
@@ -49,7 +50,7 @@ def split_long_text(text):
     return list(best)
 
 
-def generate_ticket_pdf(booking):
+def generate_ticket_pdf(booking: GroupBooking):
     """
     Generate a professional PDF ticket for a group booking
 
@@ -168,7 +169,7 @@ def generate_ticket_pdf(booking):
     c.setFont("Helvetica", 16)
     c.drawCentredString(width / 2, y_pos, "GROUP NAME:")
 
-    group_name = str(booking["group_name"])
+    group_name = str(booking.group_name)
     font_name = "Helvetica-Bold"
 
     # Max width inside your white box (same as before with padding)
@@ -248,10 +249,10 @@ def generate_ticket_pdf(booking):
     from datetime import datetime
 
     try:
-        date_obj = datetime.strptime(str(booking["visit_date"]), "%Y-%m-%d")
+        date_obj = datetime.strptime(str(booking.visit_date), "%Y-%m-%d")
         formatted_date = date_obj.strftime("%A, %d %B %Y")
     except Exception:
-        formatted_date = str(booking["visit_date"])
+        formatted_date = str(booking.visit_date)
 
     c.drawCentredString(width / 2, y_pos - 15 * mm, formatted_date)
 
@@ -270,7 +271,7 @@ def generate_ticket_pdf(booking):
 
     # Draw barcode
     c.setFillColor(text_black)
-    barcode_value = booking["barcode"]
+    barcode_value = booking.barcode
 
     # Increased barWidth significantly for wider barcode
     barcode = code128.Code128(

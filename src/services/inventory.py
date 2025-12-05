@@ -1,6 +1,8 @@
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+from src.models.group_booking import GroupBooking
+
 if TYPE_CHECKING:
     from src.services.loyverse import LoyverseService
     from src.services.quicket import QuicketService
@@ -81,7 +83,7 @@ class InventoryService:
             if "~" not in variant["option1_value"]  # Skip non-order variants
         ]
 
-    def create_items_from_group_bookings(self, group_bookings):
+    def create_items_from_group_bookings(self, group_bookings: list[GroupBooking]):
         """
         Create Loyverse items from group bookings.
         Simple items need one variant with barcode/SKU/price.
@@ -97,11 +99,11 @@ class InventoryService:
         for booking in group_bookings:
             # Simple item requires one variant with barcode/SKU/price
             entry = {
-                "item_name": booking["group_name"],
+                "item_name": booking.group_name,
                 "variants": [
                     {
-                        "sku": booking["barcode"],
-                        "barcode": booking["barcode"],
+                        "sku": booking.barcode,
+                        "barcode": booking.barcode,
                         "default_pricing_type": "FIXED",
                         "default_price": 0,
                     }
