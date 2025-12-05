@@ -169,7 +169,14 @@ def update():
             return redirect(url_for("groups.manage_bookings"))
 
         if requires_new_ticket:
-            image_url = "https://www.shutterstock.com/image-vector/vector-ticket-one-stub-rip-260nw-2389943611.jpg"
+            token = TokenService.generate_ticket_image_token(updated_booking.barcode)
+
+            image_url = url_for(
+                "groups.get_ticket_image",
+                barcode=updated_booking.barcode,
+                token=token,
+                _external=True,
+            )
 
             result = messaging_service.send_group_vehicle_ticket_jpeg(
                 to_number=updated_booking.mobile_number,
