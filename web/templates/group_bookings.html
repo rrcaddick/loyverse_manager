@@ -1,6 +1,6 @@
+<!-- group_bookings.html -->
 {% extends "base.html" %} {% block title %}Group Bookings{% endblock %} {% block page_title %}Group Bookings{% endblock
-%} {% block content %} {% set current_action = request.form.get('form_action', 'create') %} {% set is_edit =
-(current_action == 'update') %}
+%} {% block content %} {% set is_edit = request.form.get('booking_id', '') != '' %}
 
 <!-- Add New Group Form - Always Visible -->
 <div class="row mb-3">
@@ -13,9 +13,8 @@
         </h3>
       </div>
       <div class="card-body">
-        <form method="POST" action="{{ url_for('groups.manage_bookings') }}" id="groupForm">
+        <form method="POST" action="{{ url_for('groups.create') }}" id="groupForm">
           <input type="hidden" id="booking_id" name="booking_id" value="{{ request.form.get('booking_id', '') }}" />
-          <input type="hidden" id="form_action" name="form_action" value="{{ current_action }}" />
 
           <div class="row">
             <div class="col-md-6">
@@ -346,8 +345,8 @@
               return;
           }
 
-          var action = $('#form_action').val();
-          var loadingText = (action === 'update') ? 'Updating...' : 'Creating...';
+          var isEdit = $('#booking_id').val() !== '';
+          var loadingText = isEdit ? 'Updating...' : 'Creating...';
 
           btn.prop('disabled', true);
           $('#cancelBtn').prop('disabled', true);
@@ -425,7 +424,6 @@
 
       // Populate form
       $('#booking_id').val(id);
-      $('#form_action').val('update');
       $('#group_name').val(groupName);
       $('#contact_person').val(contactPerson);
       $('#mobile_number').val(mobileNumber);
@@ -437,6 +435,9 @@
       $('#submitBtn').removeClass('btn-primary').addClass('btn-warning');
       $('#submitBtn i').removeClass('fa-save').addClass('fa-edit');
       $('#cancelBtn').show();
+
+      // Change form action to update
+      $('#groupForm').attr('action', '{{ url_for("groups.update") }}');
 
       // Scroll to form
       $('html, body').animate({
@@ -453,7 +454,6 @@
   function resetForm() {
       $('#groupForm')[0].reset();
       $('#booking_id').val('');
-      $('#form_action').val('create');
       $('#formTitle').text('Add New Group Booking');
       $('#submitBtnText').text('Create Booking');
       $('#submitBtn').removeClass('btn-warning').addClass('btn-primary');
@@ -461,6 +461,7 @@
       $('#cancelBtn').hide();
       $('#cancelBtn').prop('disabled', false);
       datePicker.clear();
+      $('#groupForm').attr('action', '{{ url_for("groups.create") }}');
   }
 
   // Delete booking functionality

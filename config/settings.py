@@ -1,4 +1,3 @@
-# config/settings.py
 import os
 from pathlib import Path
 
@@ -36,6 +35,20 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 ADD_PAY_APP_ID = os.getenv("ADD_PAY_APP_ID")
 ADD_PAY_MERCHANT_NO = os.getenv("ADD_PAY_MERCHANT_NO")
+
+# WhatsApp Business API
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN")
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID")
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
+
+# Chatwoot
+CHATWOOT_URL = os.getenv("CHATWOOT_URL")
+CHATWOOT_API_TOKEN = os.getenv("CHATWOOT_API_TOKEN")
+CHATWOOT_ACCOUNT_ID = os.getenv("CHATWOOT_ACCOUNT_ID")
+CHATWOOT_INBOX_ID = os.getenv("CHATWOOT_INBOX_ID")
+
+IMAGE_TOKEN_SECRET = os.getenv("IMAGE_TOKEN_SECRET")
 
 
 # Load private/public keys from files

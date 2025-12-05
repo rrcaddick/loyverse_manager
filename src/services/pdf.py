@@ -1,8 +1,7 @@
-"""Professional PDF ticket generation using ReportLab"""
-
 from io import BytesIO
 
-from flask import current_app
+import fitz
+from PIL import Image
 from reportlab.graphics.barcode import code128
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -10,6 +9,8 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
+
+from config.constants import IMAGE_DIR
 
 
 def fit_font_size(text, font_name, max_width, max_font=24, min_font=8, step=0.5):
@@ -99,9 +100,7 @@ def generate_ticket_pdf(booking):
 
     # Now draw logo ON TOP of white circle
     try:
-        logo_path = (
-            current_app.config["BASE_DIR"] / "static" / "images" / "Farmyard_Logo.jpg"
-        )
+        logo_path = IMAGE_DIR / "Farmyard_Logo.jpg"
         if logo_path.exists():
             logo = ImageReader(str(logo_path))
             c.drawImage(
@@ -367,3 +366,72 @@ def generate_ticket_pdf(booking):
     buffer.close()
 
     return pdf_bytes
+
+
+def convert_pdf_to_jpeg(pdf_bytes: bytes) -> bytes:
+    """
+    Convert PDF to high-quality JPEG image in memory using PyMuPDF
+
+    Args:
+        pdf_bytes: PDF file as bytes
+
+    Returns:
+        bytes: JPEG image as bytes
+    """
+    try:
+        # Open PDF from bytes
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+        if len(pdf_document) == 0:
+            raise ValueError("PDF has no pages")
+
+        # Get the first page (tickets are single page)
+        page = pdf_document[0]
+
+        # Render page to pixmap at reduced resolution to keep size <5MB
+        mat = fitz.Matrix(2.0, 2.0)
+        pix = page.get_pixmap(matrix=mat)
+
+        # Convert pixmap to PIL Image
+        img_data = pix.tobytes("png")
+        img: Image.Image = Image.open(BytesIO(img_data))
+
+        # Convert to RGB if needed (some PDFs may be in RGBA)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Save to BytesIO as JPEG with reduced quality
+        jpeg_buffer = BytesIO()
+        img.save(
+            jpeg_buffer,
+            format="JPEG",
+            quality=80,  # Reduced quality for smaller size
+            optimize=True,
+        )
+
+        # Get the bytes
+        jpeg_bytes = jpeg_buffer.getvalue()
+        jpeg_buffer.close()
+
+        # Close the PDF document
+        pdf_document.close()
+
+        return jpeg_bytes
+
+    except Exception as e:
+        print(f"Error converting PDF to JPEG: {e}")
+        raise
+
+
+def get_ticket_image_bytes(booking):
+    """
+    Generate ticket PDF and convert to JPEG image
+
+    Args:
+        booking: Dict with keys: group_name, visit_date, barcode
+
+    Returns:
+        bytes: JPEG image as bytes
+    """
+
+    return convert_pdf_to_jpeg(generate_ticket_pdf(booking))

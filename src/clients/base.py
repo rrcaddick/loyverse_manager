@@ -5,7 +5,7 @@ class BaseClient:
     def __init__(self, base_url, headers, params=None):
         self.base_url = base_url
         self.headers = headers
-        self.params = params
+        self.params = params or {}
 
     def get(self, endpoint, params={}):
         url = f"{self.base_url}{endpoint}"

@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify
 from config.constants import CATEGORIES, GAZEBO_MAP, LOYVERSE_STORE_ID
 from config.settings import LOYVERSE_API_KEY
 from src.clients.loyverse import LoyverseClient
-from web.services.loyverse import LoyverseService
+from src.services.loyverse import LoyverseService
 from web.utils.formatters import format_date, format_time
 
 api_bp = Blueprint("api", __name__)

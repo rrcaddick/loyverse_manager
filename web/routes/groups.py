@@ -1,9 +1,7 @@
-import json
-
-import phonenumbers
 from flask import (
     Blueprint,
-    current_app,
+    Response,
+    abort,
     flash,
     jsonify,
     make_response,
@@ -12,221 +10,203 @@ from flask import (
     request,
     url_for,
 )
-from phonenumbers import NumberParseException
 
-from src.repositories.mysql import (
-    create_group_booking,
-    delete_group_booking,
-    get_all_group_bookings,
-    get_booking_by_barcode,
-    get_booking_by_id,
-    update_group_booking,
+from config.settings import (
+    CHATWOOT_ACCOUNT_ID,
+    CHATWOOT_API_TOKEN,
+    CHATWOOT_INBOX_ID,
+    CHATWOOT_URL,
 )
+from src.clients.chatwoot import ChatwootClient
+from src.models.group_booking import GroupBooking
+from src.services.chatwoot import ChatwootService
+from src.services.pdf import generate_ticket_pdf, get_ticket_image_bytes
+from src.services.token import TokenService
 from src.utils.logging import setup_logger
-from web.services.barcode import generate_barcode
-from web.services.pdf import generate_ticket_pdf
-from web.services.whatsapp import WhatsAppService
 
 logger = setup_logger("whatsapp_webhook")
 groups_bp = Blueprint("groups", __name__, url_prefix="/group-bookings")
 
 
-def _send_whatsapp_ticket(mobile_number: str, booking: dict) -> tuple[bool, str | None]:
+def get_booking_form_data(request):
+    """Extract booking form data from request"""
+    booking_id = request.form.get("booking_id")
+    group_name = request.form.get("group_name")
+    contact_person = request.form.get("contact_person")
+    mobile_number = request.form.get("mobile_number")
+    visit_date = request.form.get("visit_date")
+
+    return booking_id, group_name, contact_person, mobile_number, visit_date
+
+
+def get_messaging_service():
     """
-    Generate PDF and send ticket via WhatsApp.
+    Factory function to get the configured messaging service.
+
+    This makes it easy to switch between Chatwoot and direct Meta sending.
+    Just change the implementation here without touching the rest of the code.
 
     Returns:
-        (success, error_message)
+        Service instance with send_ticket() method
     """
-    try:
-        pdf_bytes = generate_ticket_pdf(booking)
+    # Currently using Chatwoot - to switch to direct Meta, change this
+    inbox_id = CHATWOOT_INBOX_ID
 
-        whatsapp_service = WhatsAppService()
-        logger.info(f"Attempting to send WhatsApp ticket to {mobile_number}")
+    if not inbox_id:
+        raise ValueError("CHATWOOT_INBOX_ID not configured")
 
-        result = whatsapp_service.send_ticket(mobile_number, booking, pdf_bytes)
+    client = ChatwootClient(
+        base_url=CHATWOOT_URL,
+        api_token=CHATWOOT_API_TOKEN,
+        account_id=CHATWOOT_ACCOUNT_ID,
+    )
 
-        if result.get("success"):
-            logger.info(f"WhatsApp ticket sent successfully to {mobile_number}")
-            return True, None
-        else:
-            error = result.get("error", "Unknown error")
-            logger.error(f"Failed to send WhatsApp ticket: {error}")
-            return False, error
-
-    except Exception as e:
-        logger.error(f"Exception sending WhatsApp ticket: {str(e)}", exc_info=True)
-        return False, str(e)
+    return ChatwootService(client=client, inbox_id=inbox_id)
 
 
-@groups_bp.route("/", methods=["GET", "POST"])
+messaging_service = get_messaging_service()
+
+
+@groups_bp.route("/", methods=["GET"])
 def manage_bookings():
     """Display form and table for group bookings"""
-    if request.method == "POST":
-        form_action = request.form.get("form_action", "create")
-        group_name = request.form.get("group_name")
-        contact_person = request.form.get("contact_person")
-        mobile_number = request.form.get("mobile_number")
-        visit_date = request.form.get("visit_date")
 
-        # Validate required fields
-        if not all([group_name, contact_person, mobile_number, visit_date]):
-            flash("All fields are required!", "error")
-            bookings = get_all_group_bookings()
-            return render_template("group_bookings.html", bookings=bookings), 400
+    return render_template("group_bookings.html", bookings=GroupBooking.get_formatted())
 
-        # --- PHONE NORMALISATION + VALIDATION ---
-        try:
-            parsed = phonenumbers.parse(mobile_number, "ZA")
 
-            if not phonenumbers.is_valid_number(parsed):
-                flash("Please enter a valid mobile number.", "error")
-                bookings = get_all_group_bookings()
-                return render_template("group_bookings.html", bookings=bookings), 400
+@groups_bp.route("/create", methods=["POST"])
+def create():
+    _, group_name, contact_person, mobile_number, visit_date = get_booking_form_data(
+        request
+    )
 
-            normalized_mobile_number = phonenumbers.format_number(
-                parsed, phonenumbers.PhoneNumberFormat.E164
-            ).replace("+", "")
+    try:
+        booking = GroupBooking.create(
+            group_name=group_name,
+            contact_person=contact_person,
+            mobile_number=mobile_number,
+            visit_date=visit_date,
+        )
 
-        except NumberParseException:
-            flash("Please enter a valid mobile number.", "error")
-            bookings = get_all_group_bookings()
-            return render_template("group_bookings.html", bookings=bookings), 400
+        if booking.id:
+            token = TokenService.generate_ticket_image_token(booking.barcode)
 
-        if form_action == "update":
-            # UPDATE EXISTING BOOKING
-            booking_id = request.form.get("booking_id")
-
-            if not booking_id:
-                flash("Booking ID is required for update!", "error")
-                bookings = get_all_group_bookings()
-                return render_template("group_bookings.html", bookings=bookings), 400
-
-            existing_booking = get_booking_by_id(booking_id)
-            if not existing_booking:
-                flash("Booking not found!", "error")
-                bookings = get_all_group_bookings()
-                return render_template("group_bookings.html", bookings=bookings), 404
-
-            # Normalise values for comparison so that only real changes trigger WhatsApp
-            existing_group_name = (existing_booking.get("group_name") or "").strip()
-            new_group_name = (group_name or "").strip()
-
-            existing_visit_raw = existing_booking.get("visit_date")
-            if hasattr(existing_visit_raw, "isoformat"):
-                existing_visit_date = existing_visit_raw.isoformat()
-            else:
-                existing_visit_date = str(existing_visit_raw or "").strip()
-            new_visit_date = str(visit_date or "").strip()
-
-            existing_mobile = (existing_booking.get("mobile_number") or "").strip()
-            new_mobile = (normalized_mobile_number or "").strip()
-
-            ticket_fields_changed = (
-                existing_group_name != new_group_name
-                or existing_visit_date != new_visit_date
-                or existing_mobile != new_mobile
+            image_url = url_for(
+                "groups.get_ticket_image",
+                barcode=booking.barcode,
+                token=token,
+                _external=True,
             )
 
-            success = update_group_booking(
-                booking_id,
-                group_name,
-                contact_person,
-                normalized_mobile_number,
-                visit_date,
+            result = messaging_service.send_group_vehicle_ticket_jpeg(
+                to_number=booking.mobile_number,
+                booking=booking.to_dict(),
+                image_url=image_url,
+                inbox_id=CHATWOOT_INBOX_ID,
             )
 
-            if not success:
-                flash("Error updating booking", "error")
-                return redirect(url_for("groups.manage_bookings"))
+            send_success = result.get("success", False)
+            error = result.get("error")
 
-            if ticket_fields_changed:
-                updated_booking = get_booking_by_id(booking_id)
-                if not updated_booking:
-                    flash(
-                        f'Booking for "{group_name}" has been updated, '
-                        "but there was an error retrieving the updated record. "
-                        "Please download and send the ticket manually if needed.",
-                        "warning",
-                    )
-                else:
-                    send_success, error = _send_whatsapp_ticket(
-                        updated_booking["mobile_number"], updated_booking
-                    )
-
-                    if send_success:
-                        flash(
-                            f'Booking for "{group_name}" has been updated successfully! '
-                            f"New ticket sent via WhatsApp to {updated_booking['mobile_number']}.",
-                            "success",
-                        )
-                    else:
-                        flash(
-                            f'Booking for "{group_name}" has been updated successfully! '
-                            f"However, the new ticket could not be sent via WhatsApp: {error}. "
-                            f"Please download and send manually.",
-                            "warning",
-                        )
-            else:
+            if send_success:
                 flash(
-                    f"Booking for {group_name} has been updated successfully",
+                    f"Group booking created successfully! Barcode: {booking.barcode}. "
+                    f"Ticket sent via WhatsApp to {booking.mobile_number}.",
                     "success",
                 )
-
+            else:
+                flash(
+                    f"Group booking created successfully! Barcode: {booking.barcode}. "
+                    f"However, ticket could not be sent via WhatsApp: {error}. "
+                    f"Please download and send manually.",
+                    "warning",
+                )
         else:
-            # CREATE NEW BOOKING
-            barcode = generate_barcode()
+            flash("Error creating booking", "error")
 
-            booking_id = create_group_booking(
-                group_name,
-                contact_person,
-                normalized_mobile_number,
-                visit_date,
-                barcode,
+    except ValueError as e:
+        flash(str(e), "error")
+        return render_template(
+            "group_bookings.html", bookings=GroupBooking.get_formatted()
+        ), 400
+
+    return redirect(url_for("groups.manage_bookings"))
+
+
+@groups_bp.route("/update", methods=["POST"])
+def update():
+    booking_id, group_name, contact_person, mobile_number, visit_date = (
+        get_booking_form_data(request)
+    )
+
+    if not booking_id:
+        flash("Booking ID is required for update!", "error")
+        return render_template(
+            "group_bookings.html", bookings=GroupBooking.get_formatted()
+        ), 400
+
+    existing_booking = GroupBooking.get_by_id(booking_id)
+    if not existing_booking:
+        flash("Booking not found!", "error")
+        return render_template(
+            "group_bookings.html", bookings=GroupBooking.get_formatted()
+        ), 404
+
+    try:
+        requires_new_ticket = existing_booking.requires_new_ticket(
+            group_name, visit_date, mobile_number
+        )
+
+        updated_booking = existing_booking.update(
+            group_name=group_name,
+            contact_person=contact_person,
+            mobile_number=mobile_number,
+            visit_date=visit_date,
+        )
+
+        if not updated_booking:
+            flash("Error updating booking", "error")
+            return redirect(url_for("groups.manage_bookings"))
+
+        if requires_new_ticket:
+            image_url = "https://www.shutterstock.com/image-vector/vector-ticket-one-stub-rip-260nw-2389943611.jpg"
+
+            result = messaging_service.send_group_vehicle_ticket_jpeg(
+                to_number=updated_booking.mobile_number,
+                booking=updated_booking.to_dict(),
+                image_url=image_url,
+                inbox_id=CHATWOOT_INBOX_ID,
             )
 
-            if booking_id:
-                booking = get_booking_by_barcode(barcode)
+            send_success = result.get("success", False)
+            error = result.get("error")
 
-                send_success, error = _send_whatsapp_ticket(
-                    normalized_mobile_number, booking
+            if send_success:
+                flash(
+                    f'Booking for "{group_name}" has been updated successfully! '
+                    f"New ticket sent via WhatsApp to {updated_booking.mobile_number}.",
+                    "success",
                 )
-
-                if send_success:
-                    flash(
-                        f"Group booking created successfully! Barcode: {barcode}. "
-                        f"Ticket sent via WhatsApp to {normalized_mobile_number}.",
-                        "success",
-                    )
-                else:
-                    flash(
-                        f"Group booking created successfully! Barcode: {barcode}. "
-                        f"However, ticket could not be sent via WhatsApp: {error}. "
-                        f"Please download and send manually.",
-                        "warning",
-                    )
             else:
-                flash("Error creating booking", "error")
-
-        return redirect(url_for("groups.manage_bookings"))
-
-    # GET: initial load
-    bookings = [
-        {
-            **booking,
-            "mobile_number_display": (
-                phonenumbers.format_number(
-                    phonenumbers.parse(booking["mobile_number"], "ZA"),
-                    phonenumbers.PhoneNumberFormat.NATIONAL,
+                flash(
+                    f'Booking for "{group_name}" has been updated successfully! '
+                    f"However, the new ticket could not be sent via WhatsApp: {error}. "
+                    f"Please download and send manually.",
+                    "warning",
                 )
-                if booking.get("mobile_number")
-                else ""
-            ),
-        }
-        for booking in get_all_group_bookings()
-    ]
+        else:
+            flash(
+                f"Booking for {group_name} has been updated successfully",
+                "success",
+            )
 
-    return render_template("group_bookings.html", bookings=bookings)
+    except ValueError as e:
+        flash(str(e), "error")
+        return render_template(
+            "group_bookings.html", bookings=GroupBooking.get_formatted()
+        ), 400
+
+    return redirect(url_for("groups.manage_bookings"))
 
 
 @groups_bp.route("/delete", methods=["POST"])
@@ -238,15 +218,15 @@ def delete_booking():
         flash("Booking ID is required!", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    booking = get_booking_by_id(booking_id)
+    booking = GroupBooking.get_by_id(booking_id)
 
     if not booking:
         flash("Booking not found!", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    group_name = booking.get("group_name", "Unknown")
+    group_name = getattr(booking, "group_name", "Unknown")
 
-    success = delete_group_booking(booking_id)
+    success = GroupBooking.delete(booking_id)
 
     if success:
         flash(f'Booking for "{group_name}" has been deleted successfully!', "success")
@@ -259,13 +239,13 @@ def delete_booking():
 @groups_bp.route("/ticket/<barcode>")
 def view_ticket(barcode):
     """View PDF ticket in browser"""
-    booking = get_booking_by_barcode(barcode)
+    booking = GroupBooking.get_by_barcode(barcode)
 
     if not booking:
         flash("Booking not found", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    pdf_bytes = generate_ticket_pdf(booking)
+    pdf_bytes = generate_ticket_pdf(booking.to_dict())
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -277,13 +257,13 @@ def view_ticket(barcode):
 @groups_bp.route("/download/<barcode>")
 def download_ticket(barcode):
     """Download PDF ticket"""
-    booking = get_booking_by_barcode(barcode)
+    booking = GroupBooking.get_by_barcode(barcode)
 
     if not booking:
         flash("Booking not found", "error")
         return redirect(url_for("groups.manage_bookings"))
 
-    pdf_bytes = generate_ticket_pdf(booking)
+    pdf_bytes = generate_ticket_pdf(booking.to_dict())
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -294,42 +274,70 @@ def download_ticket(barcode):
     return response
 
 
-@groups_bp.route("/test_whatsapp", methods=["GET"])
-def whatsapp_test():
-    """Enhanced test route to send a full ticket with PDF attachment"""
-    try:
-        test_number = "27763635909"  # Ray Caddick
+@groups_bp.route("/ticket/image/<barcode>")
+def get_ticket_image(barcode: str):
+    """
+    Serve ticket image with JWT token authentication
 
-        test_booking = {
-            "group_name": "Test Group WhatsApp",
-            "visit_date": "2025-12-25",
-            "barcode": "TEST123456789",
-            "contact_person": "Test Contact",
-            "mobile_number": test_number,
-        }
+    This endpoint generates the ticket PDF on-demand, converts it to JPEG,
+    and serves it. Access is controlled via short-lived JWT tokens.
 
-        send_success, error = _send_whatsapp_ticket(test_number, test_booking)
+    Args:
+        barcode: The booking barcode from URL
 
-        if send_success:
-            return jsonify(
-                {
-                    "status": "success",
-                    "message": "Test ticket sent successfully with PDF attachment",
-                    "test_booking": test_booking,
-                }
-            ), 200
+    Query params:
+        token: JWT token for authentication
+
+    Returns:
+        JPEG image or HTTP error (403, 410, 404)
+    """
+    token = request.args.get("token")
+
+    if not token:
+        logger.warning(f"Ticket image request without token for barcode: {barcode}")
+        abort(403)
+
+    # Verify JWT token
+    is_valid, error = TokenService.verify_ticket_image_token(token, barcode)
+
+    if not is_valid:
+        if error == "expired":
+            logger.warning(f"Expired token for barcode: {barcode}")
+            abort(410)  # Gone - token expired
+        elif error == "mismatch":
+            logger.warning(f"Token barcode mismatch for barcode: {barcode}")
+            abort(403)  # Forbidden - wrong barcode
         else:
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": "Failed to send test ticket",
-                    "error": error,
-                }
-            ), 500
+            logger.warning(f"Invalid token for barcode: {barcode}, error: {error}")
+            abort(403)  # Forbidden - invalid token
+
+    # Fetch booking from database
+    booking = GroupBooking.get_by_barcode(barcode)
+    if not booking:
+        logger.warning(f"Booking not found for barcode: {barcode}")
+        abort(404)
+
+    try:
+        # Get ticket image bytes
+        jpeg_bytes = get_ticket_image_bytes(booking.to_dict())
+
+        # Serve image with no-cache headers
+        response = Response(jpeg_bytes, mimetype="image/jpeg")
+        response.headers["Cache-Control"] = (
+            "no-store, no-cache, must-revalidate, max-age=0"
+        )
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+        logger.info(f"Successfully served ticket image for barcode: {barcode}")
+        return response
 
     except Exception as e:
-        logger.error(f"Error in test_whatsapp: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(
+            f"Error generating ticket image for barcode {barcode}: {str(e)}",
+            exc_info=True,
+        )
+        abort(500)
 
 
 @groups_bp.route("/send-whatsapp", methods=["POST"])
@@ -342,23 +350,35 @@ def send_whatsapp_ticket():
         if not barcode:
             return jsonify({"success": False, "error": "Barcode is required"}), 400
 
-        booking = get_booking_by_barcode(barcode)
+        booking = GroupBooking.get_by_barcode(barcode)
 
         if not booking:
             return jsonify({"success": False, "error": "Booking not found"}), 404
 
-        mobile_number = booking["mobile_number"]
+        token = TokenService.generate_ticket_image_token(barcode)
 
-        send_success, error = _send_whatsapp_ticket(mobile_number, booking)
+        image_url = url_for(
+            "groups.get_ticket_image", barcode=barcode, token=token, _external=True
+        )
+
+        result = messaging_service.send_group_vehicle_ticket_jpeg(
+            to_number=booking.mobile_number,
+            booking=booking.to_dict(),
+            image_url=image_url,
+            inbox_id=CHATWOOT_INBOX_ID,
+        )
+
+        send_success = result.get("success", False)
+        error = result.get("error")
 
         if send_success:
             logger.info(
-                f"Manually sent WhatsApp ticket for barcode {barcode} to {mobile_number}"
+                f"Manually sent WhatsApp ticket for barcode {barcode} to {booking.mobile_number}"
             )
             return jsonify(
                 {
                     "success": True,
-                    "message": f"Ticket sent successfully to {mobile_number}",
+                    "message": f"Ticket sent successfully to {booking.mobile_number}",
                 }
             ), 200
         else:
@@ -368,124 +388,3 @@ def send_whatsapp_ticket():
     except Exception as e:
         logger.error(f"Exception in send_whatsapp_ticket: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
-
-
-@groups_bp.route("/webhook/whatsapp", methods=["GET", "POST"])
-def whatsapp_webhook():
-    """Handle incoming WhatsApp messages and send replies"""
-
-    logger.info(f"=== WEBHOOK CALLED === Method: {request.method}")
-
-    whatsapp_service = WhatsAppService()
-
-    if request.method == "GET":
-        mode = request.args.get("hub.mode")
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-
-        logger.info("GET request - Webhook verification")
-        logger.info(f"Mode: {mode}, Token: {token}, Challenge: {challenge}")
-        logger.info(
-            f"Expected token: {current_app.config.get('WHATSAPP_VERIFY_TOKEN')}"
-        )
-
-        if mode and token:
-            if mode == "subscribe" and token == current_app.config.get(
-                "WHATSAPP_VERIFY_TOKEN"
-            ):
-                logger.info("✓ Verification successful!")
-                return challenge, 200
-            else:
-                logger.error("✗ Verification failed - token mismatch")
-                return "Forbidden", 403
-        else:
-            logger.error("✗ Verification failed - missing parameters")
-            return "Bad Request", 400
-
-    if request.method == "POST":
-        try:
-            logger.info("POST request - Processing incoming webhook")
-
-            raw_data = request.get_data(as_text=True)
-            logger.info(f"Raw webhook payload: {raw_data}")
-
-            data = request.get_json()
-            logger.info(f"Parsed JSON data: {json.dumps(data, indent=2)}")
-
-            webhook_object = data.get("object")
-            logger.info(f"Webhook object type: {webhook_object}")
-
-            if webhook_object != "whatsapp_business_account":
-                logger.warning(f"Unexpected webhook object: {webhook_object}")
-                return jsonify(
-                    {"status": "ignored", "reason": "not whatsapp_business_account"}
-                ), 200
-
-            entries = data.get("entry", [])
-            logger.info(f"Number of entries: {len(entries)}")
-
-            if not entries:
-                logger.warning("No entries in webhook")
-                return jsonify({"status": "success", "reason": "no entries"}), 200
-
-            entry = entries[0]
-            logger.info(f"Processing entry: {json.dumps(entry, indent=2)}")
-
-            changes = entry.get("changes", [])
-            logger.info(f"Number of changes: {len(changes)}")
-
-            if not changes:
-                logger.warning("No changes in entry")
-                return jsonify({"status": "success", "reason": "no changes"}), 200
-
-            change = changes[0]
-            logger.info(f"Processing change: {json.dumps(change, indent=2)}")
-
-            value = change.get("value", {})
-            field = change.get("field")
-            logger.info(f"Change field: {field}")
-            logger.info(f"Change value keys: {list(value.keys())}")
-
-            messages = value.get("messages", [])
-            logger.info(f"Number of messages: {len(messages)}")
-
-            if not messages:
-                logger.info("No messages in webhook (might be status update)")
-                statuses = value.get("statuses", [])
-                if statuses:
-                    logger.info(f"This is a status update webhook: {statuses}")
-
-                return jsonify({"status": "success", "reason": "no messages"}), 200
-
-            message = messages[0]
-            logger.info(f"Processing message: {json.dumps(message, indent=2)}")
-
-            from_number = message.get("from")
-            message_type = message.get("type")
-            message_id = message.get("id")
-
-            logger.info(f"From: {from_number}, Type: {message_type}, ID: {message_id}")
-
-            if message_type == "text":
-                message_body = message.get("text", {}).get("body", "")
-            else:
-                logger.warning(f"Unsupported message type: {message_type}")
-                message_body = f"[{message_type} message]"
-
-            logger.info(f"Message body: {message_body}")
-
-            logger.info(f"Attempting to send reply to {from_number}")
-            result = whatsapp_service.send_test_message(from_number)
-            logger.info(f"Send message result: {result}")
-
-            return jsonify(
-                {
-                    "status": "success",
-                    "message": "Reply sent",
-                    "result": result,
-                }
-            ), 200
-
-        except Exception as e:
-            logger.error(f"ERROR processing webhook: {str(e)}", exc_info=True)
-            return jsonify({"status": "error", "message": str(e)}), 200

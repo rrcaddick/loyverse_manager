@@ -2,7 +2,7 @@ from pathlib import Path
 
 import requests
 
-from config.constants import ONLINE_ITEM_IMAGE_PATH
+from config.constants import IMAGE_DIR
 
 
 class LoyverseService:
@@ -215,14 +215,14 @@ class LoyverseService:
 
         Args:
             item: Item dict with variants
-            image_path: Path to product image (defaults to ONLINE_ITEM_IMAGE_PATH)
+            image_path: Path to product image (defaults to online item image if None)
 
         Returns:
             Created item dictionary
         """
         # Use default online image if none provided
         if image_path is None:
-            image_path = ONLINE_ITEM_IMAGE_PATH
+            image_path = IMAGE_DIR / "product_image_online.png"
 
         # Create item
         created_item = self.create_item(item)

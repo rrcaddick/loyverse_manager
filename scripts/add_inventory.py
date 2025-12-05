@@ -3,7 +3,7 @@ import sys
 from config.constants import (
     CATEGORIES,
     GAZEBO_MAP,
-    GROUP_ITEM_IMAGE_PATH,
+    IMAGE_DIR,
     LOYVERSE_STORE_ID,
     NOTIFICATION_RECIPIENTS,
 )
@@ -21,7 +21,7 @@ from config.settings import (
 from src.bots.quicket import QuicketBot
 from src.clients.loyverse import LoyverseClient
 from src.clients.quicket import QuicketClient
-from src.services.group import GroupService
+from src.models.group_booking import GroupBooking
 from src.services.inventory import InventoryService
 from src.services.loyverse import LoyverseService
 from src.services.notification import NoticifationService
@@ -135,8 +135,8 @@ def add_inventory():
         # Process Group Bookings (always check)
         # ========================================
         logger.info("Checking for group bookings")
-        group_service = GroupService(TODAY)
-        group_bookings = group_service.get_groups_for_date()
+
+        group_bookings = GroupBooking.get_by_date(TODAY)
 
         if group_bookings:
             logger.info(f"Found {len(group_bookings)} group bookings for today")
@@ -147,9 +147,10 @@ def add_inventory():
             )
 
             # Process each group item with the group image
+            group_item_img_path = IMAGE_DIR / "product_image_group.png"
             for group_item in group_items:
                 loyverse_service.process_item_with_inventory(
-                    group_item, GROUP_ITEM_IMAGE_PATH
+                    group_item, group_item_img_path
                 )
 
             group_booking_count = len(group_bookings)
