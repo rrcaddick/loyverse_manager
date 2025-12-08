@@ -249,7 +249,7 @@ class QuicketBot:
             failure_message = "Failed to detect success message after clicking SAVE."
             raise RuntimeError(failure_message) from e
 
-    def _hide_event(self, target_date: date):
+    def _hide_event_once(self, target_date: date):
         """Hide the event: expand headers, locate the target date, and save."""
         accordion_headers = self.wait.until(
             ec.presence_of_all_elements_located(
@@ -282,9 +282,70 @@ class QuicketBot:
         failure_message = f"Target date {target_date} not found in any headers."
         raise RuntimeError(failure_message)
 
-    def hide_event(self, event_id: str, target_date: date) -> None:
-        """Hide event for the specified date."""
-        self._login()
-        self._navigate_to_event(event_id)
-        self._hide_event(target_date)
-        self.logger.info(f"Successfully hid event {event_id}")
+    def hide_event(
+        self, event_id: str, target_date: date, max_retries: int | None = None
+    ) -> None:
+        """
+        Hide event for the specified date with automatic retry logic.
+
+        This method will attempt to hide the event up to max_retries times,
+        restarting the browser between attempts if failures occur.
+
+        Args:add-
+            event_id: The Quicket event ID to hide
+            target_date: The date for which to hide the event
+
+        Raises:
+            RuntimeError: If all retry attempts fail
+        """
+        if max_retries is None:
+            max_retries = 5
+
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.logger.info(
+                    f"Attempting to hide event {event_id} (attempt {attempt}/{max_retries})"
+                )
+
+                self._login()
+                self._navigate_to_event(event_id)
+                self._hide_event_once(target_date)
+
+                self.logger.info(
+                    f"Successfully hid event {event_id} on attempt {attempt}"
+                )
+                return  # Success - exit the method
+
+            except Exception as e:
+                last_error = e
+                self.logger.warning(
+                    f"Attempt {attempt}/{max_retries} failed to hide event {event_id}: "
+                    f"{type(e).__name__}: {str(e)}"
+                )
+
+                # If this isn't the last attempt, restart browser and wait before retry
+                if attempt < max_retries:
+                    wait_time = 2 * attempt  # Exponential backoff
+                    self.logger.info(
+                        f"Restarting browser and waiting {wait_time} seconds before retry..."
+                    )
+
+                    try:
+                        self.restart_browser()
+                    except Exception as restart_error:
+                        self.logger.error(
+                            f"Failed to restart browser: {type(restart_error).__name__}: {str(restart_error)}"
+                        )
+                        # Continue anyway - the next attempt will try to use the browser
+
+                    time.sleep(wait_time)
+
+        # All retries exhausted - raise the last error
+        self.logger.error(
+            f"Failed to hide event {event_id} after {max_retries} attempts"
+        )
+        raise RuntimeError(
+            f"Failed to hide event {event_id} after {max_retries} attempts"
+        ) from last_error

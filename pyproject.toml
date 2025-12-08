@@ -45,6 +45,7 @@ include = ["src*", "config*", "scripts*"]
 [project.scripts]
 add-inventory = "scripts.add_inventory:main"
 clear-inventory = "scripts.clear_inventory:main"
+hide-quicket-event = "scripts.hide_quicket_event:main"
 
 [[tool.mypy.overrides]]
 module = "fitz"

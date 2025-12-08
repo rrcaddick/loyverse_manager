@@ -77,7 +77,7 @@ def add_inventory():
         else:
             logger.info(f"Processing Quicket event ID: {event_id}")
 
-            # Try to hide the event
+            # Try to hide the event (bot handles retries internally)
             event_hidden_successfully = False
             try:
                 with QuicketBot(
@@ -89,7 +89,8 @@ def add_inventory():
                     event_hidden_successfully = True
             except Exception as hide_error:
                 logger.error(
-                    f"Failed to hide Quicket event {event_id}: {type(hide_error).__name__}: {str(hide_error)}"
+                    f"Failed to hide Quicket event {event_id} after all retry attempts: "
+                    f"{type(hide_error).__name__}: {str(hide_error)}"
                 )
                 # Send notification about the failure but continue processing
                 notification_service.send_quicket_event_hide_failure(
