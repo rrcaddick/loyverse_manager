@@ -76,6 +76,13 @@ NOTIFICATION_RECIPIENTS = [
     "farmyardmanagers@gmail.com",
 ]
 
+WHATSAPP_RECEIPIENTS = [
+    "27763635909",
+    "27739019157",
+    "27618421970",
+    "27652874796",
+]
+
 # Season Configuration
 SEASON_START = date(2025, 10, 1)
 

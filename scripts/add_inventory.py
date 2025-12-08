@@ -6,6 +6,7 @@ from config.constants import (
     IMAGE_DIR,
     LOYVERSE_STORE_ID,
     NOTIFICATION_RECIPIENTS,
+    WHATSAPP_RECEIPIENTS,
 )
 from config.settings import (
     LOYVERSE_API_KEY,
@@ -22,6 +23,7 @@ from src.bots.quicket import QuicketBot
 from src.clients.loyverse import LoyverseClient
 from src.clients.quicket import QuicketClient
 from src.models.group_booking import GroupBooking
+from src.services.chatwoot import ChatwootService
 from src.services.inventory import InventoryService
 from src.services.loyverse import LoyverseService
 from src.services.notification import NoticifationService
@@ -98,7 +100,13 @@ def add_inventory():
                     date=TODAY,
                 )
 
-                # TODO: Send whatsapp message to admin about failure
+                chatwoot_service = ChatwootService()
+                for recipient in WHATSAPP_RECEIPIENTS:
+                    chatwoot_service.send_quicketbot_hide_event_failure(
+                        to_number=recipient,
+                        event_id=event_id,
+                        event_url=quicket_service.get_event_url(event_id),
+                    )
 
             # Get Tickets
             guest_list = quicket_service.get_guest_list(event_id)

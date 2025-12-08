@@ -4,6 +4,7 @@ from config.constants import (
     GAZEBO_MAP,
     LOYVERSE_STORE_ID,
     NOTIFICATION_RECIPIENTS,
+    WHATSAPP_RECEIPIENTS,
 )
 from config.settings import (
     QUICKET_API_KEY,
@@ -17,6 +18,7 @@ from config.settings import (
 )
 from src.bots.quicket import QuicketBot
 from src.clients.quicket import QuicketClient
+from src.services.chatwoot import ChatwootService
 from src.services.notification import NoticifationService
 from src.services.quicket import QuicketService
 from src.utils.date import get_today
@@ -78,6 +80,15 @@ def hide_quicket_event() -> None:
                 recipients=NOTIFICATION_RECIPIENTS,
                 date=TODAY,
             )
+
+            chatwoot_service = ChatwootService()
+            for recipient in WHATSAPP_RECEIPIENTS:
+                print(f"Sending Quicket hide event failure to {recipient}")
+                chatwoot_service.send_quicketbot_hide_event_failure(
+                    to_number=recipient,
+                    event_id=event_id,
+                    event_url=quicket_service.get_event_url(event_id),
+                )
 
             raise
 

@@ -73,3 +73,7 @@ class QuicketService:
                 "surname": surname,
                 "cellphone": cellphone,
             }
+
+    def get_event_url(self, event_id: str) -> str:
+        """Construct the URL for the given event ID."""
+        return f"https://www.quicket.co.za/app/#/account/event/{event_id}/details"

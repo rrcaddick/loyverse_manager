@@ -1,7 +1,13 @@
 from typing import Optional
 
-from config.settings import CHATWOOT_ACCOUNT_ID, CHATWOOT_API_TOKEN, CHATWOOT_URL
+from config.settings import (
+    CHATWOOT_ACCOUNT_ID,
+    CHATWOOT_API_TOKEN,
+    CHATWOOT_INBOX_ID,
+    CHATWOOT_URL,
+)
 from src.clients.chatwoot import ChatwootClient
+from src.models.group_booking import GroupBooking
 
 
 class ChatwootService:
@@ -44,12 +50,12 @@ class ChatwootService:
             self.client = client
 
         # Store inbox_id if provided, otherwise can be passed per-method
-        self.default_inbox_id = inbox_id
+        self.default_inbox_id = CHATWOOT_INBOX_ID
 
     def send_group_vehicle_ticket_jpeg(
         self,
         to_number: str,
-        booking: dict,
+        booking: GroupBooking,
         image_url: str,
         inbox_id: Optional[int] = None,
     ) -> dict:
@@ -77,7 +83,7 @@ class ChatwootService:
 
         try:
             # Step 1: Get or create contact in Chatwoot
-            contact_name = booking.get("contact_person", "Guest")
+            contact_name = booking.contact_person or "Guest"
             contact = self.client.get_or_create_contact(
                 identifier=f"+{to_number}", name=contact_name
             )
@@ -89,6 +95,7 @@ class ChatwootService:
                 }
 
             contact_id = contact.get("id")
+            assert contact_id is not None, "Contact ID should not be None"
 
             # Step 2: Get or create conversation for this contact
             # Extract source_id from contact if available
@@ -111,6 +118,7 @@ class ChatwootService:
                 }
 
             conversation_id = conversation.get("id")
+            assert conversation_id is not None, "Conversation ID should not be None"
 
             # Step 3: Build template message content
             template_content = f"""Hi {contact_name}
@@ -170,6 +178,133 @@ We wish you all a blessed day at the Farmyard."""
                     pass
 
             print(f"Error sending template via Chatwoot: {error_detail}")
+            return {
+                "success": False,
+                "error": f"Chatwoot API error: {error_detail}",
+            }
+
+    def send_quicketbot_hide_event_failure(
+        self,
+        to_number: str,
+        event_id: str,
+        event_url: str,
+        inbox_id: Optional[int] = None,
+    ) -> dict:
+        """
+        Send Quicket event hide failure alert via Chatwoot.
+
+        This method sends a text-only template to notify that manual intervention
+        is required to hide a Quicket event.
+
+        Template name: quicketbot_hide_event_failure
+        Variables: {{event_id}}, {{event_url}}
+
+        Args:
+            to_number: Recipient's WhatsApp number (format: 27821234567)
+            event_id: The Quicket event ID that failed to hide
+            event_url: The URL to the Quicket event
+            inbox_id: Chatwoot inbox ID for this WhatsApp channel (uses default if None)
+
+        Returns:
+            dict: Response with success status and conversation details
+        """
+        inbox_id = inbox_id or self.default_inbox_id
+        if not inbox_id:
+            return {
+                "success": False,
+                "error": "inbox_id is required but was not provided",
+            }
+
+        try:
+            # Step 1: Get or create contact in Chatwoot
+            contact = self.client.get_or_create_contact(
+                identifier=f"+{to_number}", name="Team Member"
+            )
+
+            if not contact:
+                return {
+                    "success": False,
+                    "error": "Failed to create/get contact in Chatwoot",
+                }
+
+            contact_id = contact.get("id")
+            assert contact_id is not None, "Contact ID should not be None"
+
+            # Step 2: Get or create conversation for this contact
+            source_id = None
+            for ci in contact.get("contact_inboxes", []):
+                if ci.get("inbox", {}).get("id") == inbox_id:
+                    source_id = ci.get("source_id")
+                    break
+
+            conversation = self.client.get_or_create_conversation(
+                contact_id=contact_id,
+                inbox_id=inbox_id,
+                source_id=source_id,
+            )
+
+            if not conversation:
+                return {
+                    "success": False,
+                    "error": "Failed to get/create conversation in Chatwoot",
+                }
+
+            conversation_id = conversation.get("id")
+            assert conversation_id is not None, "Conversation ID should not be None"
+
+            # Step 3: Build template message content
+            template_content = f"""Morning Team,
+    The system was unable to hide today's Quicket event automatically.
+    ⚠️ Action required:
+    Please log in to Quicket and manually hide the event for today to prevent additional sales occuring after the Loyverse inventory update.
+    Details:
+    - Event: *{event_id}*
+    - Event Url: *{event_url}*
+    Once the event is hidden, you may proceed with the normal manual inventory update workflow.
+    — The Farmyard Park Automation System 🤖"""
+
+            # Step 4: Prepare template message payload
+            message_payload = {
+                "content": template_content,
+                "message_type": "outgoing",
+                "template_params": {
+                    "name": "quicketbot_hide_event_failure",
+                    "category": "UTILITY",
+                    "language": "en",
+                    "processed_params": {
+                        "body": {
+                            "event_id": event_id,
+                            "event_url": event_url,
+                        },
+                    },
+                },
+            }
+
+            # Step 5: Send message via Chatwoot
+            result = self.client.send_message(
+                conversation_id=conversation_id,
+                message=message_payload,
+            )
+
+            return {
+                "success": True,
+                "conversation_id": conversation_id,
+                "message_id": result.get("id"),
+                "contact_id": contact_id,
+                "chatwoot_response": result,
+            }
+
+        except Exception as e:
+            error_detail = str(e)
+            if hasattr(e, "response") and e.response is not None:
+                try:
+                    error_detail = e.response.text
+                except Exception:
+                    pass
+
+            print(
+                f"Error sending quicketbot hide event failure alert via Chatwoot: {error_detail}"
+            )
             return {
                 "success": False,
                 "error": f"Chatwoot API error: {error_detail}",

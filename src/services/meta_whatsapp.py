@@ -2,6 +2,7 @@ from typing import Optional
 
 from config.settings import WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID
 from src.clients.meta_whatsapp import MetaWhatsappClient
+from src.models.group_booking import GroupBooking
 from src.services.pdf import convert_pdf_to_jpeg, generate_ticket_pdf
 
 
@@ -64,7 +65,7 @@ class MetaWhatsappService:
             return {"success": False, "error": error_msg}
 
     def send_group_vehicle_ticket_jpeg(
-        self, to_number: str, booking: dict, pdf_bytes: Optional[bytes] = None
+        self, to_number: str, booking: GroupBooking, pdf_bytes: Optional[bytes] = None
     ) -> dict:
         """
         Send the group vehicle ticket template with JPEG attachment.
@@ -101,7 +102,7 @@ class MetaWhatsappService:
         try:
             upload_response = self.client.upload_media(
                 file_bytes=jpeg_bytes,
-                filename=f"ticket_{booking['barcode']}.jpg",
+                filename=f"ticket_{booking.barcode}.jpg",
                 mime_type="image/jpeg",
             )
             media_id = upload_response.get("id")
@@ -127,7 +128,7 @@ class MetaWhatsappService:
             }
 
         # Step 3: Build template components
-        contact_name = booking.get("contact_person", "Guest")
+        contact_name = booking.contact_person or "Guest"
 
         components = [
             {
@@ -178,7 +179,7 @@ class MetaWhatsappService:
             return {"success": False, "error": error_msg}
 
     def send_ticket_delivery(
-        self, to_number: str, booking: dict, pdf_bytes: Optional[bytes] = None
+        self, to_number: str, booking: GroupBooking, pdf_bytes: Optional[bytes] = None
     ) -> dict:
         """
         Send the ticket delivery template with PDF attachment.
@@ -205,7 +206,7 @@ class MetaWhatsappService:
         try:
             upload_response = self.client.upload_media(
                 file_bytes=pdf_bytes,
-                filename=f"Farmyard_Ticket_{booking['barcode']}.pdf",
+                filename=f"Farmyard_Ticket_{booking.barcode}.pdf",
                 mime_type="application/pdf",
             )
             media_id = upload_response.get("id")
@@ -234,10 +235,10 @@ class MetaWhatsappService:
         from datetime import datetime
 
         try:
-            date_obj = datetime.strptime(str(booking["visit_date"]), "%Y-%m-%d")
+            date_obj = datetime.strptime(str(booking.visit_date), "%Y-%m-%d")
             formatted_date = date_obj.strftime("%A, %d %B %Y")
         except Exception:
-            formatted_date = str(booking["visit_date"])
+            formatted_date = str(booking.visit_date)
 
         # Step 3: Build template components
         components = [
@@ -248,7 +249,7 @@ class MetaWhatsappService:
                         "type": "document",
                         "document": {
                             "id": media_id,
-                            "filename": f"Farmyard_Ticket_{booking['barcode']}.pdf",
+                            "filename": f"Farmyard_Ticket_{booking.barcode}.pdf",
                         },
                     }
                 ],
@@ -256,8 +257,8 @@ class MetaWhatsappService:
             {
                 "type": "body",
                 "parameters": [
-                    {"type": "text", "text": booking.get("contact_person", "Guest")},
-                    {"type": "text", "text": booking["group_name"]},
+                    {"type": "text", "text": booking.contact_person},
+                    {"type": "text", "text": booking.group_name},
                     {"type": "text", "text": formatted_date},
                 ],
             },
@@ -287,4 +288,69 @@ class MetaWhatsappService:
                     pass
 
             print(f"Error sending ticket delivery template: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    def send_quicketbot_hide_event_failure(
+        self, to_number: str, event_id: str, event_url: str
+    ) -> dict:
+        """
+        Send Quicket event hide failure alert.
+
+        This method sends a text-only template to notify that manual intervention
+        is required to hide a Quicket event.
+
+        Template name: quicketbot_hide_event_failure
+        Variables: {{event_id}}, {{event_url}}
+
+        Args:
+            to_number: Recipient WhatsApp number (format: 27821234567)
+            event_id: The Quicket event ID that failed to hide
+            event_url: The URL to the Quicket event
+
+        Returns:
+            dict: Success/failure response with message_id
+        """
+        # Build template components with named parameters
+        components = [
+            {
+                "type": "body",
+                "parameters": [
+                    {
+                        "type": "text",
+                        "parameter_name": "event_id",
+                        "text": event_id,
+                    },
+                    {
+                        "type": "text",
+                        "parameter_name": "event_url",
+                        "text": event_url,
+                    },
+                ],
+            },
+        ]
+
+        # Send template
+        try:
+            response = self.client.send_template(
+                to=to_number,
+                template_name="quicketbot_hide_event_failure",
+                language_code="en",
+                components=components,
+            )
+
+            return {
+                "success": True,
+                "message_id": response.get("messages", [{}])[0].get("id"),
+                "response": response,
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            if hasattr(e, "response") and e.response is not None:
+                try:
+                    error_msg = e.response.text
+                except Exception:
+                    pass
+
+            print(f"Error sending quicketbot hide event failure alert: {error_msg}")
             return {"success": False, "error": error_msg}

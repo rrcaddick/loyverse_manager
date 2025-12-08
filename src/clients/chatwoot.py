@@ -11,7 +11,7 @@ class ChatwootClient(BaseClient):
     - headers must include Authorization: Bearer <api_token>
     """
 
-    def __init__(self, base_url: str, api_token: str, account_id: int):
+    def __init__(self, base_url: str, api_token: str, account_id: str):
         headers = {
             "Content-Type": "application/json",
             "api_access_token": api_token,
