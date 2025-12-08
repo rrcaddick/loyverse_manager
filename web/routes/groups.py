@@ -100,7 +100,7 @@ def create():
 
             result = messaging_service.send_group_vehicle_ticket_jpeg(
                 to_number=booking.mobile_number,
-                booking=booking.to_dict(),
+                booking=booking,
                 image_url=image_url,
                 inbox_id=CHATWOOT_INBOX_ID,
             )
@@ -180,7 +180,7 @@ def update():
 
             result = messaging_service.send_group_vehicle_ticket_jpeg(
                 to_number=updated_booking.mobile_number,
-                booking=updated_booking.to_dict(),
+                booking=updated_booking,
                 image_url=image_url,
                 inbox_id=CHATWOOT_INBOX_ID,
             )
@@ -326,7 +326,7 @@ def get_ticket_image(barcode: str):
 
     try:
         # Get ticket image bytes
-        jpeg_bytes = get_ticket_image_bytes(booking.to_dict())
+        jpeg_bytes = get_ticket_image_bytes(booking)
 
         # Serve image with no-cache headers
         response = Response(jpeg_bytes, mimetype="image/jpeg")
@@ -368,9 +368,11 @@ def send_whatsapp_ticket():
             "groups.get_ticket_image", barcode=barcode, token=token, _external=True
         )
 
+        print(image_url)
+
         result = messaging_service.send_group_vehicle_ticket_jpeg(
             to_number=booking.mobile_number,
-            booking=booking.to_dict(),
+            booking=booking,
             image_url=image_url,
             inbox_id=CHATWOOT_INBOX_ID,
         )
