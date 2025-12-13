@@ -19,7 +19,9 @@ def get_group_data():
         loyverse_client, LOYVERSE_STORE_ID, CATEGORIES, GAZEBO_MAP
     )
 
-    receipts = loyverse_service.get_receipts()
+    receipts = loyverse_service.get_receipts(
+        created_at_min="2025-10-01T00:00:00.000Z", limit=250
+    )
 
     def get_group_name(line_item):
         return (
