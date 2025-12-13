@@ -34,8 +34,9 @@ def get_group_data():
         {
             "date": format_date(receipt["created_at"]),
             "time": format_time(receipt["created_at"]),
-            "group": get_group_name(line_item),
-            "vehicle_reg": receipt.get("order", "").upper()
+            "group": line_item["item_name"].title(),
+            "driver": receipt.get("note", "Not Captured"),
+            "vehicle_reg": receipt.get("order", "N/A").upper()
             if receipt.get("order")
             else "N/A",
             "visitors": line_item["quantity"],
@@ -43,7 +44,9 @@ def get_group_data():
         for receipt in receipts["receipts"]
         for line_item in receipt["line_items"]
         if line_item["variant_id"] != "428b62a9-284c-4c7a-95f3-0154aa5b0026"
-        and "Gazebo" not in line_item["item_name"]
+        and line_item["item_name"]
+        not in ["Gazebo", "Group Payment", "Re-Entry", "Visitor"]
+        and get_group_name(line_item) != "Online Tickets"
     ]
 
     return jsonify({"groups": groups})
