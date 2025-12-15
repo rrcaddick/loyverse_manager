@@ -1,3 +1,5 @@
+import json
+
 from src.repositories.mysql import get_db_connection
 
 
@@ -31,6 +33,8 @@ class OpenTicket:
 
     @classmethod
     def upsert_open(cls, ticket_id, semantic_hash, receipt_json, observed_at):
+        receipt_json_str = json.dumps(receipt_json)
+
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -43,7 +47,6 @@ class OpenTicket:
                 row = cursor.fetchone()
 
                 if row is None:
-                    # Create
                     cursor.execute(
                         """
                         INSERT INTO open_tickets_current
@@ -53,14 +56,14 @@ class OpenTicket:
                         (
                             ticket_id,
                             semantic_hash,
-                            receipt_json,
+                            receipt_json_str,
                             observed_at,
                             observed_at,
                         ),
                     )
                     event_type = "created"
+
                 elif row["semantic_hash"] != semantic_hash:
-                    # Modify
                     cursor.execute(
                         """
                         UPDATE open_tickets_current
@@ -71,14 +74,14 @@ class OpenTicket:
                         """,
                         (
                             semantic_hash,
-                            receipt_json,
+                            receipt_json_str,
                             observed_at,
                             ticket_id,
                         ),
                     )
                     event_type = "modified"
                 else:
-                    return  # No-op
+                    return
 
                 cursor.execute(
                     """
@@ -90,10 +93,11 @@ class OpenTicket:
                         ticket_id,
                         semantic_hash,
                         event_type,
-                        receipt_json,
+                        receipt_json_str,
                         observed_at,
                     ),
                 )
+
                 conn.commit()
 
     @classmethod
