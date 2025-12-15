@@ -13,6 +13,7 @@ HOME_DIR = os.path.expanduser("~")
 # Project root directory
 BASE_DIR = Path(__file__).parent.parent
 KEYS_DIR = BASE_DIR / "keys"
+MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 # API Keys and credentials from .env
 QUICKET_API_KEY = os.getenv("QUICKET_API_KEY")
@@ -63,3 +64,5 @@ def load_key_file(filename):
 
 PAYCLOUD_APP_PRIVATE_KEY = load_key_file("paycloud/app_private_key.pem")
 PAYCLOUD_GATEWAY_PUBLIC_KEY = load_key_file("paycloud/gateway_public_key.pem")
+
+ARONIUM_PATH = BASE_DIR / "db" / "aronium" / "pos.db"
