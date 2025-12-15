@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Loyverse Manager - {% block title %}Dashboard{% endblock %}</title>
+    <title>Farmyard Admin Portal - {% block title %}Dashboard{% endblock %}</title>
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -40,7 +40,7 @@
       <!-- Sidebar -->
       <aside class="main-sidebar sidebar-dark-primary elevation-4">
         <a href="/" class="brand-link">
-          <span class="brand-text font-weight-light">Loyverse Manager</span>
+          <span class="brand-text font-weight-light">Farmyard Admin Portal</span>
         </a>
 
         <div class="sidebar">
@@ -68,6 +68,15 @@
                 >
                   <i class="nav-icon fas fa-terminal"></i>
                   <p>Scripts</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
+                  href="{{ url_for('audit.audit_history') }}"
+                  class="nav-link {{ 'active' if request.endpoint == 'audit.audit_history' else '' }}"
+                >
+                  <i class="nav-icon fas fa-file-invoice-dollar"></i>
+                  <p>Audit</p>
                 </a>
               </li>
             </ul>

@@ -24,7 +24,7 @@ from src.services.pdf import generate_ticket_pdf, get_ticket_image_bytes
 from src.services.token import TokenService
 from src.utils.logging import setup_logger
 
-logger = setup_logger("whatsapp_webhook")
+logger = setup_logger("groups_routes")
 groups_bp = Blueprint("groups", __name__, url_prefix="/group-bookings")
 
 
@@ -367,8 +367,6 @@ def send_whatsapp_ticket():
         image_url = url_for(
             "groups.get_ticket_image", barcode=barcode, token=token, _external=True
         )
-
-        print(image_url)
 
         result = messaging_service.send_group_vehicle_ticket_jpeg(
             to_number=booking.mobile_number,

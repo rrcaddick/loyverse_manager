@@ -1,9 +1,11 @@
 import sqlite3
 
+from config.settings import ARONIUM_PATH
+
 
 class AroniumRepository:
-    def __init__(self, db_path):
-        self.db_path = db_path
+    def __init__(self):
+        self.db_path = ARONIUM_PATH
 
     def get_card_payments(self):
         with sqlite3.connect(self.db_path) as conn:

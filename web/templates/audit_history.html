@@ -1,0 +1,220 @@
+{% extends "base.html" %} {% block title %}Audit History{% endblock %} {% block page_title %}Audit History{% endblock %}
+{% block content %}
+
+<!-- Summary Cards -->
+<div class="row mb-3">
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-info">
+      <div class="inner">
+        <h3>{{ summary.total_days }}</h3>
+        <p>Days Audited</p>
+      </div>
+      <div class="icon">
+        <i class="fas fa-calendar"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-warning">
+      <div class="inner">
+        <h3>{{ summary.days_with_variance }}</h3>
+        <p>Days with Variance</p>
+      </div>
+      <div class="icon">
+        <i class="fas fa-exclamation-triangle"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-danger">
+      <div class="inner">
+        <h3>R{{ "%.2f"|format(summary.total_variance) }}</h3>
+        <p>Total Variance</p>
+      </div>
+      <div class="icon">
+        <i class="fas fa-money-bill-wave"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 col-6">
+    <div class="small-box bg-success">
+      <div class="inner">
+        <h3>R{{ "%.2f"|format(summary.largest_variance) }}</h3>
+        <p>Largest Variance</p>
+      </div>
+      <div class="icon">
+        <i class="fas fa-chart-line"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Audit History Table -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="fas fa-history"></i>
+          Card Payment Audit Records
+        </h3>
+        <div class="card-tools">
+          <button type="button" class="btn btn-sm btn-success" id="runAudit">
+            <i class="fas fa-play"></i>
+            Run Audit
+          </button>
+          <button type="button" class="btn btn-sm btn-primary" id="refreshAudit">
+            <i class="fas fa-sync"></i>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <table id="auditTable" class="table table-bordered table-striped table-hover">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Paycloud</th>
+              <th>Loyverse</th>
+              <th>Aronium</th>
+              <th>POS Total</th>
+              <th>Variance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in records %}
+            <tr
+              class="{{ 'table-danger' if record.variance|abs > 50 else ('table-warning' if record.variance|abs > 0.01 else 'table-success') }}"
+            >
+              <td data-label="Date" class="text-nowrap">{{ record.audit_date }}</td>
+              <td data-label="Paycloud" class="text-right">R{{ "%.2f"|format(record.paycloud_amount) }}</td>
+              <td data-label="Loyverse" class="text-right">R{{ "%.2f"|format(record.loyverse_amount) }}</td>
+              <td data-label="Aronium" class="text-right">R{{ "%.2f"|format(record.aronium_amount) }}</td>
+              <td data-label="POS Total" class="text-right"><strong>R{{ "%.2f"|format(record.pos_total) }}</strong></td>
+              <td data-label="Variance" class="text-right">
+                <span
+                  class="badge badge-{{ 'success' if record.variance|abs < 0.01 else ('warning' if record.variance|abs <= 50 else 'danger') }}"
+                >
+                  {{ "+" if record.variance > 0 else "" }}R{{ "%.2f"|format(record.variance) }}
+                </span>
+              </td>
+              <td data-label="Status" class="text-center">
+                {% if record.variance|abs < 0.01 %}
+                <i class="fas fa-check-circle text-success" data-toggle="tooltip" title="Balanced"></i>
+                {% elif record.variance|abs <= 50 %}
+                <i class="fas fa-exclamation-circle text-warning" data-toggle="tooltip" title="Minor Variance"></i>
+                {% else %}
+                <i class="fas fa-times-circle text-danger" data-toggle="tooltip" title="Major Variance"></i>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %} {% block extra_js %}
+<script>
+  $(function() {
+    console.log("Document ready");
+
+    // Initialize DataTable (without buttons extension)
+    var table = $('#auditTable').DataTable({
+      order: [[0, 'desc']], // Sort by date descending
+      pageLength: 25,
+      responsive: true,
+      columnDefs: [
+        { targets: [1, 2, 3, 4, 5], className: 'text-right' },
+        { targets: 6, className: 'text-center', orderable: false }
+      ]
+    });
+
+    console.log("DataTable initialized");
+
+    // Refresh audit data
+    $('#refreshAudit').on('click', function() {
+      console.log("Refresh button clicked");
+      var btn = $(this);
+      btn.prop('disabled', true);
+      btn.html('<i class="fas fa-spinner fa-spin"></i> Refreshing...');
+
+      location.reload();
+    });
+
+    console.log("Refresh handler attached");
+
+    // Run audit
+    $('#runAudit').on('click', function() {
+      console.log("Run audit button clicked");
+      var btn = $(this);
+      var originalHtml = btn.html();
+      btn.prop('disabled', true);
+      btn.html('<i class="fas fa-spinner fa-spin"></i> Running...');
+
+      $.ajax({
+        url: '/audit/run',
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json'
+      })
+      .done(function(response) {
+        console.log("AJAX success:", response);
+        if (response && response.success) {
+          toastr.success(response.message || 'Audit completed successfully!');
+          setTimeout(function() {
+            location.reload();
+          }, 1000);
+        } else {
+          toastr.error(response.error || 'Failed to run audit');
+        }
+      })
+      .fail(function(xhr) {
+        console.error('AJAX error:', xhr);
+        var errorMsg = 'Error running audit';
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.error) {
+            errorMsg = data.error;
+          }
+        } catch(e) {}
+
+        toastr.error(errorMsg);
+      })
+      .always(function() {
+        btn.prop('disabled', false);
+        btn.html(originalHtml);
+      });
+    });
+
+    console.log("Run audit handler attached");
+
+    // Initialize tooltips
+    $('[data-toggle="tooltip"]').tooltip();
+
+    // Show toast notifications for flash messages
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          toastr.{{ category }}('{{ message }}');
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    // Configure toastr options
+    toastr.options = {
+      "closeButton": true,
+      "progressBar": true,
+      "positionClass": "toast-top-right",
+      "timeOut": "5000",
+      "extendedTimeOut": "1000"
+    };
+  });
+</script>
+{% endblock %}

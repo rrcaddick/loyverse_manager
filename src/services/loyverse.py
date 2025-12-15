@@ -75,6 +75,49 @@ class LoyverseService:
 
         return result
 
+    def get_shifts(self, **kwargs):
+        """Get shifts from Loyverse API."""
+        return self.client.get("shifts", params=kwargs)
+
+    def get_cash_payments_by_shift(self, receipts=None):
+        """
+        Get cash payments broken down by shift.
+        Groups by date, employee_id, pos_device_id, and shift_id (if available).
+
+        Returns:
+            List of dicts with keys: date, employee_id, pos_device_id, shift_id, amount
+        """
+        receipts = receipts if receipts else self.get_receipts()
+        shift_totals = {}
+
+        for receipt in receipts["receipts"]:
+            date = receipt["receipt_date"].split("T")[0]
+            employee_id = receipt.get("employee_id")
+            pos_device_id = receipt.get("pos_device_id")
+
+            # Create a unique key for this shift combination
+            shift_key = (date, employee_id, pos_device_id)
+
+            for payment in receipt["payments"]:
+                if payment["type"] == "CASH":
+                    if shift_key in shift_totals:
+                        shift_totals[shift_key] += payment["money_amount"]
+                    else:
+                        shift_totals[shift_key] = payment["money_amount"]
+
+        # Convert to list format
+        result = [
+            {
+                "date": key[0],
+                "employee_id": key[1],
+                "pos_device_id": key[2],
+                "amount": amount,
+            }
+            for key, amount in shift_totals.items()
+        ]
+
+        return result
+
     def clear_items(self, category_ids):
         items = self.get_items()["items"]
         delete_item_ids = [
@@ -209,7 +252,9 @@ class LoyverseService:
             for item in items
         ]
 
-    def process_item_with_inventory(self, item: dict, image_path: str = None) -> dict:
+    def process_item_with_inventory(
+        self, item: dict, image_path: Path | None = None
+    ) -> dict:
         """
         Create item, upload image, and update inventory in one operation.
 
