@@ -27,39 +27,53 @@ class InventoryService:
         items = []
 
         for tickets in email_groups.values():
-            # Get ticket purchaser
-            first_name, surname, cellphone = self.quicket_service.get_ticket_purchaser(
-                tickets
-            ).values()
+            try:
+                purchaser_data = self.quicket_service.get_ticket_purchaser(tickets)
 
-            # Count visitor tickets by OrderId
-            visitor_counts = defaultdict(int)
-            non_visitor_types = set()
+                first_name = purchaser_data["first_name"]
+                surname = purchaser_data["surname"]
+                cellphone = purchaser_data["cellphone"]
+                email = purchaser_data["email"]
 
-            for ticket in tickets:
-                ticket_type = ticket["TicketInformation"]["Ticket Type"]
-                order_id = ticket["OrderId"]
+                # Count visitor tickets by OrderId
+                visitor_counts = defaultdict(int)
+                non_visitor_types = set()
 
-                if "visitor" in ticket_type.lower():
-                    visitor_counts[order_id] += 1
+                for ticket in tickets:
+                    ticket_type = ticket["TicketInformation"]["Ticket Type"]
+                    order_id = ticket["OrderId"]
+
+                    if "visitor" in ticket_type.lower():
+                        visitor_counts[order_id] += 1
+                    else:
+                        non_visitor_types.add(ticket_type)
+
+                # Create item name - use email if no surname
+                if surname:
+                    item_name = f"{first_name} {surname}"
                 else:
-                    non_visitor_types.add(ticket_type)
+                    item_name = email  # Use full email if no proper name
 
-            # Create the output structure
-            entry = {"item_name": f"{first_name} {surname}", "variants": []}
+                # Create the output structure
+                entry = {"item_name": item_name, "variants": []}
 
-            # Add visitor ticket counts
-            for order_id, count in visitor_counts.items():
-                entry["variants"].append({"option1_value": f"{order_id} x {count}"})
+                # Add visitor ticket counts
+                for order_id, count in visitor_counts.items():
+                    entry["variants"].append({"option1_value": f"{order_id} x {count}"})
 
-            # Add non-visitor ticket types
-            for ticket_type in sorted(non_visitor_types):
-                entry["variants"].append({"option1_value": f"~~ {ticket_type} ~~"})
+                # Add non-visitor ticket types
+                for ticket_type in sorted(non_visitor_types):
+                    entry["variants"].append({"option1_value": f"~~ {ticket_type} ~~"})
 
-            # Add mobile number
-            entry["variants"].append({"option1_value": f"~~ {cellphone} ~~"})
+                # Add mobile number if available
+                if cellphone:
+                    entry["variants"].append({"option1_value": f"~~ {cellphone} ~~"})
 
-            items.append(entry)
+                items.append(entry)
+
+            except Exception as e:
+                print(f"Error processing tickets: {e}")
+                continue
 
         return self.loyverse_service.add_loyverse_item_keys(items)
 
