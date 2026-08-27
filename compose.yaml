@@ -17,10 +17,8 @@ x-logging: &logging
     max-file: "5"
 
 x-app: &app
-  build:
-    context: .
-  logging: *logging
   image: farmyard-manager:latest
+  logging: *logging
   env_file:
     - .env
   environment: &app-env
@@ -87,6 +85,9 @@ services:
 
   web:
     <<: *app
+    # Sole owner of the build; scheduler and migrate reuse the tag it produces.
+    build:
+      context: .
     command: ["web"]
     restart: unless-stopped
     ports:
