@@ -112,6 +112,12 @@ services:
 
   scheduler:
     <<: *app
+    # Behind a profile, so `docker compose up` does NOT create it and nothing
+    # can fire on a timer. Turn the schedule on by setting
+    # COMPOSE_PROFILES=scheduled in .env, then `docker compose up -d`.
+    # `docker compose run --rm scheduler <job>` still works with the profile
+    # inactive - that is the manual, on-demand path.
+    profiles: ["scheduled"]
     command: ["scheduler"]
     restart: unless-stopped
     environment:

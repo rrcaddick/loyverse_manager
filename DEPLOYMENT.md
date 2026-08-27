@@ -85,19 +85,50 @@ docker compose run --rm scheduler clear-inventory
 docker compose run --rm scheduler hide-quicket-event
 ```
 
-## Schedule
+## Schedule — off by default
 
-The `scheduler` container runs supercronic in the `TZ` from `.env`
-(`Africa/Johannesburg`). Defaults, matching the historical PythonAnywhere runs:
+**Nothing runs on a timer unless you switch it on.** The `scheduler` service
+sits behind the `scheduled` compose profile, so `docker compose up -d` does not
+create it. Confirm with `docker compose ps` — there should be no `scheduler`
+row.
+
+The jobs are still available on demand, and `docker compose run` activates the
+profile for that one invocation:
+
+```bash
+docker compose run --rm scheduler add-inventory
+docker compose run --rm scheduler clear-inventory
+docker compose run --rm scheduler hide-quicket-event
+```
+
+### Turning the daily schedule on
+
+Uncomment `COMPOSE_PROFILES=scheduled` in `.env`, then:
+
+```bash
+docker compose up -d          # scheduler container is created and starts
+docker compose ps             # verify it is running
+docker compose logs scheduler # prints the crontab it loaded
+```
+
+### Turning it off again
+
+```bash
+# comment COMPOSE_PROFILES out in .env, then:
+docker compose stop scheduler && docker compose rm -f scheduler
+```
+
+Once enabled it runs supercronic in the `TZ` from `.env`
+(`Africa/Johannesburg`), with these defaults, matching the historical
+PythonAnywhere runs:
 
 | Job | Default | Env var |
 | --- | --- | --- |
 | Morning Quicket + group sync | 06:01 | `ADD_INVENTORY_CRON` |
 | End-of-day teardown | 18:00 | `CLEAR_INVENTORY_CRON` |
 
-Set either to a different cron expression in `.env` and recreate the container.
-`hide-quicket-event` is not scheduled — `add-inventory` already hides the day's
-event as its second step.
+`hide-quicket-event` is never scheduled — `add-inventory` already hides the
+day's event as its second step.
 
 Supercronic will not start a job while the previous run of the same job is still
 going, so a slow morning sync cannot overlap itself.

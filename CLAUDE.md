@@ -142,6 +142,12 @@ docker compose run --rm scheduler clear-inventory     # end-of-day teardown, now
 docker compose run --rm scheduler hide-quicket-event  # bot only, now
 ```
 
+The daily schedule is **off by default**: the `scheduler` service is behind the
+`scheduled` compose profile, so `up` does not create it and nothing fires on a
+timer. `docker compose run` activates the profile for that single invocation,
+which is why the manual commands above still work. Enable the schedule by
+setting `COMPOSE_PROFILES=scheduled` in `.env`.
+
 Running against a local checkout instead:
 
 ```bash
