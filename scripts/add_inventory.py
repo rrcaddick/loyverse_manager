@@ -31,11 +31,19 @@ from src.services.quicket import QuicketService
 from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
-TODAY = get_today()
-
 
 def add_inventory():
     logger = setup_logger("add_inventory")
+
+    # Resolved per run rather than at import time. This module is imported once
+    # by the long-lived web process, so a module-level date would freeze at the
+    # moment the worker booted and the Scripts page would sync the wrong day.
+    TODAY = get_today()
+
+    # Built before the try block so the failure handler below can always use it.
+    notification_service = NoticifationService(
+        SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USERNAME
+    )
 
     try:
         logger.info("Starting inventory update process")
@@ -45,10 +53,6 @@ def add_inventory():
         loyverse_client = LoyverseClient(LOYVERSE_API_KEY)
 
         # Initialize services
-        notification_service = NoticifationService(
-            SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USERNAME
-        )
-
         loyverse_service = LoyverseService(
             loyverse_client, LOYVERSE_STORE_ID, CATEGORIES, GAZEBO_MAP
         )

@@ -51,13 +51,33 @@ CHATWOOT_INBOX_ID = os.getenv("CHATWOOT_INBOX_ID")
 
 IMAGE_TOKEN_SECRET = os.getenv("IMAGE_TOKEN_SECRET")
 
+# Flask session/flash signing key
+SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-key")
+
+# Scheme to use when building external URLs (the WhatsApp ticket image link).
+# Behind a TLS-terminating proxy this must be https.
+PREFERRED_URL_SCHEME = os.getenv("PREFERRED_URL_SCHEME", "http")
+
+# Selenium / Chrome for the Quicket bot.
+# SELENIUM_REMOTE_URL points at a standalone Chrome container (e.g.
+# http://chrome:4444). When unset the bot drives a locally installed Chrome,
+# optionally at the paths given by CHROME_BINARY / CHROMEDRIVER_PATH.
+SELENIUM_REMOTE_URL = os.getenv("SELENIUM_REMOTE_URL")
+CHROME_BINARY = os.getenv("CHROME_BINARY")
+CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH")
+
 
 # Load private/public keys from files
 def load_key_file(filename):
-    """Load key from file."""
+    """Load a key from ``keys/``, or return None when it is not present.
+
+    The PayCloud keys are only used by the payment-audit workflow, which is not
+    part of the deployed application. A missing key file must not stop the web
+    app or the inventory scripts from importing this module.
+    """
     key_path = KEYS_DIR / filename
     if not key_path.exists():
-        raise FileNotFoundError(f"Key file not found: {key_path}")
+        return None
     with open(key_path, "r") as f:
         return f.read()
 

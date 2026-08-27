@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from config.constants import CATEGORIES, GAZEBO_MAP, LOYVERSE_STORE_ID
 from config.settings import BASE_DIR as PROJECT_ROOT
 from config.settings import LOYVERSE_API_KEY
+from config.settings import PREFERRED_URL_SCHEME as URL_SCHEME
+from config.settings import SECRET_KEY as APP_SECRET_KEY
 
 load_dotenv()
 
@@ -12,8 +14,12 @@ load_dotenv()
 class Config:
     """Base configuration"""
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-key")
+    SECRET_KEY = APP_SECRET_KEY
     BASE_DIR = PROJECT_ROOT / "web"
+
+    # Used by url_for(..., _external=True) when building the ticket image link
+    # that Meta fetches. Must be "https" in production.
+    PREFERRED_URL_SCHEME = URL_SCHEME
 
     # Loyverse
     LOYVERSE_API_KEY = LOYVERSE_API_KEY

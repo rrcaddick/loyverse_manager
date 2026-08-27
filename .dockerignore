@@ -1,0 +1,32 @@
+# VCS & tooling
+.git
+.gitignore
+.mypy_cache
+.pytest_cache
+**/__pycache__
+*.py[cod]
+*.egg-info
+
+# Secrets - supplied at runtime via env_file / bind mount, never baked in
+.env
+.env.*
+keys/
+
+# Out-of-scope Aronium POS snapshot (7MB, payment-audit only)
+db/
+
+# Runtime output
+logs/
+web/static/pdfs/
+
+# Local envs & editor cruft
+venv/
+.venv/
+.vscode/
+.idea/
+
+# Docs that don't affect the runtime
+CLAUDE.md
+REAMDE.md
+DEPLOYMENT.md
+deploy/

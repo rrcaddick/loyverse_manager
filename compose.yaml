@@ -1,0 +1,128 @@
+# Farmyard Manager - self-contained stack.
+#
+#   docker compose up -d --build     bring everything up
+#   docker compose down              stop (data survives)
+#   docker compose down -v           stop and delete the database volume
+#
+# Nothing but the web port is published, and that only on the loopback
+# interface - MySQL and Chromium are reachable only from inside this stack.
+# Terminate TLS in nginx on the host and proxy to WEB_PORT.
+
+name: farmyard
+
+x-app: &app
+  build:
+    context: .
+  image: farmyard-manager:latest
+  env_file:
+    - .env
+  environment: &app-env
+    # Container-local overrides. These deliberately win over .env so a stale
+    # PythonAnywhere MYSQL_HOST in the operator's file cannot be picked up.
+    MYSQL_HOST: db
+    SELENIUM_REMOTE_URL: http://chrome:4444
+    PREFERRED_URL_SCHEME: ${PREFERRED_URL_SCHEME:-https}
+    TZ: ${TZ:-Africa/Johannesburg}
+  networks:
+    - internal
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DB:?set MYSQL_DB in .env}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      TZ: ${TZ:-Africa/Johannesburg}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # $$ keeps the expansion inside the container, so the password never
+      # lands in the rendered compose config.
+      test: ["CMD-SHELL", 'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    networks:
+      - internal
+
+  chrome:
+    image: selenium/standalone-chromium:151.0
+    restart: unless-stopped
+    # Chrome overruns the 64MB default and dies mid-session.
+    shm_size: 2gb
+    environment:
+      SE_NODE_MAX_SESSIONS: 1
+      SE_NODE_SESSION_TIMEOUT: 300
+      SE_ENABLE_TRACING: false
+      TZ: ${TZ:-Africa/Johannesburg}
+    healthcheck:
+      test: ["CMD-SHELL", 'curl -fsS http://localhost:4444/wd/hub/status | grep -qE ''"ready"\s*:\s*true''']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - internal
+
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    command: ["web"]
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      # Only started, not waited on: group bookings must stay available even if
+      # the browser container is unhealthy.
+      chrome:
+        condition: service_started
+    volumes:
+      - logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  scheduler:
+    <<: *app
+    command: ["scheduler"]
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      # Times are in TZ above. Historically 06:01 and 18:00 SAST.
+      ADD_INVENTORY_CRON: ${ADD_INVENTORY_CRON:-1 6 * * *}
+      CLEAR_INVENTORY_CRON: ${CLEAR_INVENTORY_CRON:-0 18 * * *}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      chrome:
+        condition: service_healthy
+    volumes:
+      - logs:/app/logs
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  logs:

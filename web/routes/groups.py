@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from flask import (
     Blueprint,
     Response,
@@ -39,9 +41,14 @@ def get_booking_form_data(request):
     return booking_id, group_name, contact_person, mobile_number, visit_date
 
 
+@lru_cache(maxsize=1)
 def get_messaging_service():
     """
     Factory function to get the configured messaging service.
+
+    Built lazily and cached: constructing it at import time meant a missing
+    CHATWOOT_INBOX_ID took down the whole app at startup instead of failing
+    the one request that needed it.
 
     This makes it easy to switch between Chatwoot and direct Meta sending.
     Just change the implementation here without touching the rest of the code.
@@ -62,9 +69,6 @@ def get_messaging_service():
     )
 
     return ChatwootService(client=client, inbox_id=inbox_id)
-
-
-messaging_service = get_messaging_service()
 
 
 @groups_bp.route("/", methods=["GET"])
@@ -98,7 +102,7 @@ def create():
                 _external=True,
             )
 
-            result = messaging_service.send_group_vehicle_ticket_jpeg(
+            result = get_messaging_service().send_group_vehicle_ticket_jpeg(
                 to_number=booking.mobile_number,
                 booking=booking,
                 image_url=image_url,
@@ -178,7 +182,7 @@ def update():
                 _external=True,
             )
 
-            result = messaging_service.send_group_vehicle_ticket_jpeg(
+            result = get_messaging_service().send_group_vehicle_ticket_jpeg(
                 to_number=updated_booking.mobile_number,
                 booking=updated_booking,
                 image_url=image_url,
@@ -368,7 +372,7 @@ def send_whatsapp_ticket():
             "groups.get_ticket_image", barcode=barcode, token=token, _external=True
         )
 
-        result = messaging_service.send_group_vehicle_ticket_jpeg(
+        result = get_messaging_service().send_group_vehicle_ticket_jpeg(
             to_number=booking.mobile_number,
             booking=booking,
             image_url=image_url,

@@ -24,11 +24,12 @@ from src.services.quicket import QuicketService
 from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
-TODAY = get_today()
-
 
 def hide_quicket_event() -> None:
     logger = setup_logger("hide_quicket_event")
+
+    # Resolved per run, not at import time - see add_inventory for why.
+    TODAY = get_today()
 
     try:
         logger.info("Starting Quicket event hide process")

@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 
-from config.settings import ENV, HOME_DIR
+from config.settings import CHROME_BINARY, CHROMEDRIVER_PATH, SELENIUM_REMOTE_URL
 
 
 class QuicketBot:
@@ -17,11 +17,11 @@ class QuicketBot:
         self.email = email
         self.password = password
         self.logger = logger
-        self._driver: Optional[webdriver.Chrome] = None
+        self._driver: Optional[webdriver.Remote] = None
         self._wait: Optional[WebDriverWait] = None
 
     @property
-    def driver(self) -> webdriver.Chrome:
+    def driver(self) -> webdriver.Remote:
         """Get driver, checking once here."""
         if self._driver is None:
             raise RuntimeError("Browser not started")
@@ -55,22 +55,32 @@ class QuicketBot:
                 chrome_options.add_argument("--no-sandbox")
                 chrome_options.add_argument("--headless")
                 chrome_options.add_argument("--disable-gpu")
+                # Containers default to a 64MB /dev/shm, which Chrome overruns.
+                chrome_options.add_argument("--disable-dev-shm-usage")
+                # The bot scrolls elements into view, so give it a real viewport.
+                chrome_options.add_argument("--window-size=1920,1080")
 
-                chrome_kwargs = {
-                    "options": chrome_options,
-                }
-
-                if ENV == "prod":
-                    chrome_options.binary_location = (
-                        f"{HOME_DIR}/chrome/chrome-linux64/chrome"
+                if SELENIUM_REMOTE_URL:
+                    self.logger.info(
+                        f"Connecting to remote Chrome at {SELENIUM_REMOTE_URL}"
                     )
-                    service = Service(
-                        executable_path=f"{HOME_DIR}/chrome/chromedriver-linux64/chromedriver"
+                    self._driver = webdriver.Remote(
+                        command_executor=SELENIUM_REMOTE_URL,
+                        options=chrome_options,
                     )
+                else:
+                    chrome_kwargs = {"options": chrome_options}
 
-                    chrome_kwargs["service"] = service
+                    if CHROME_BINARY:
+                        chrome_options.binary_location = CHROME_BINARY
 
-                self._driver = webdriver.Chrome(**chrome_kwargs)
+                    if CHROMEDRIVER_PATH:
+                        chrome_kwargs["service"] = Service(
+                            executable_path=CHROMEDRIVER_PATH
+                        )
+
+                    self._driver = webdriver.Chrome(**chrome_kwargs)
+
                 self._wait = WebDriverWait(self.driver, 10)
                 return
             except Exception as e:
