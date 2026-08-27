@@ -1,38 +1,35 @@
-# Example nginx site for the Farmyard admin portal.
+# nginx site for the Farmyard admin portal.
+# Follows the same shape as the existing erp/chatwoot sites on the server.
 #
-#   sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/farmyard
-#   sudo ln -s /etc/nginx/sites-available/farmyard /etc/nginx/sites-enabled/
-#   sudo certbot --nginx -d admin.farmyardpark.co.za
+#   sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/admin
+#   sudo ln -s /etc/nginx/sites-available/admin /etc/nginx/sites-enabled/admin
 #   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d admin.farmyardpark.co.za
 #
-# certbot rewrites this file to add the TLS block and the port 80 redirect.
+# certbot rewrites this file in place, adding the TLS server block and the
+# port 80 -> 443 redirect, exactly as it did for erp and chatwoot.
 
 server {
-    listen 80;
-    listen [::]:80;
-    server_name admin.farmyardpark.co.za;   # <- your A record
-
-    # Ticket JPEGs are ~150KB; PDFs a little smaller.
-    client_max_body_size 16m;
+    server_name admin.farmyardpark.co.za;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
-
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         # Required. ProxyFix reads this to build the https ticket-image URL
         # that Meta fetches; without it the link goes out as http:// and
         # WhatsApp delivery fails.
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host  $host;
+        proxy_http_version 1.1;
 
         # The Scripts page runs add-inventory synchronously and that drives
-        # Selenium. Keep this well above the worst-case run time.
-        proxy_connect_timeout 60s;
-        proxy_send_timeout    1800s;
-        proxy_read_timeout    1800s;
+        # Selenium. Keep these well above the worst-case run time.
+        proxy_read_timeout 1800;
+        proxy_send_timeout 1800;
 
-        proxy_buffering off;
+        client_max_body_size 16m;
     }
+
+    listen 80;
 }

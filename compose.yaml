@@ -10,9 +10,16 @@
 
 name: farmyard
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 x-app: &app
   build:
     context: .
+  logging: *logging
   image: farmyard-manager:latest
   env_file:
     - .env
@@ -30,6 +37,7 @@ services:
   db:
     image: mysql:8.4
     restart: unless-stopped
+    logging: *logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DB:?set MYSQL_DB in .env}
@@ -52,6 +60,7 @@ services:
   chrome:
     image: selenium/standalone-chromium:151.0
     restart: unless-stopped
+    logging: *logging
     # Chrome overruns the 64MB default and dies mid-session.
     shm_size: 2gb
     environment:
