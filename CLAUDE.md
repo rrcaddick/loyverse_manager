@@ -102,6 +102,23 @@ Online-ticket items encode data into the Loyverse variant field `option1_value`:
 this encoding, update `is_online_item`, `update_item_order_counts`, and
 `InventoryService.build_orders_inventory_map` together.
 
+### Authentication
+
+A single shared account gates the portal (`web/routes/auth.py`). The gate is a
+deny-by-default `before_request` registered in `create_app` **after** the
+blueprints, with a small `PUBLIC_ENDPOINTS` exemption set.
+
+The one exemption that matters: **`groups.get_ticket_image` must stay public**.
+Meta's servers fetch that URL to render the WhatsApp template header and have no
+session. It is protected by its own 5-minute JWT instead. Gating it silently
+breaks ticket delivery - the booking saves, the send reports success, and the
+customer receives a broken image.
+
+Credentials are `AUTH_USERNAME` plus a werkzeug hash in `AUTH_PASSWORD_HASH`.
+An empty hash fails closed. Moving to per-user accounts means replacing
+`_credentials_valid` and the session payload; nothing else depends on the shape
+of the credential check.
+
 ### Group booking ticket delivery
 
 `create`/`update` booking → EAN-13 barcode (`src/services/barcode.py`) → short-lived JWT

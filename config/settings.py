@@ -54,6 +54,19 @@ IMAGE_TOKEN_SECRET = os.getenv("IMAGE_TOKEN_SECRET")
 # Flask session/flash signing key
 SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-key")
 
+# Admin portal login (single shared account - see DEPLOYMENT.md).
+# AUTH_PASSWORD_HASH is a werkzeug hash, never a plaintext password. When it is
+# unset the portal fails closed and refuses every login.
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD_HASH = os.getenv("AUTH_PASSWORD_HASH")
+
+# Session cookie hardening. SECURE must stay true behind TLS; set it false only
+# to exercise the login over plain http locally.
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
+# Comfortably longer than the worst-case Scripts-page run, so a job that takes
+# half an hour cannot expire the session that started it.
+SESSION_LIFETIME_HOURS = int(os.getenv("SESSION_LIFETIME_HOURS", "12"))
+
 # Scheme to use when building external URLs (the WhatsApp ticket image link).
 # Behind a TLS-terminating proxy this must be https.
 PREFERRED_URL_SCHEME = os.getenv("PREFERRED_URL_SCHEME", "http")

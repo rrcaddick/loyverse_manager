@@ -49,6 +49,42 @@ Generate the two secrets with:
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
+## Login
+
+The portal is gated by a single shared account. There is no open page except
+the login form itself.
+
+| Public (no session) | Why |
+| --- | --- |
+| `/login`, `/logout` | the gate itself |
+| `/static/...` | stylesheet for the login page |
+| `/healthz` | container healthcheck |
+| `/group-bookings/ticket/image/<barcode>` | **Meta fetches this** to render the WhatsApp ticket. It has no session and never will, so it carries its own 5-minute JWT instead. |
+
+Everything else - bookings, the Scripts page, `/api/groups`, the ticket PDFs -
+requires a session. AJAX callers get `401` JSON rather than an HTML login page,
+and the browser is redirected to `/login` automatically.
+
+Set or change the password:
+
+```bash
+docker compose run --rm web python -c \
+  "import getpass; from werkzeug.security import generate_password_hash as g; \
+   print(g(getpass.getpass('new password: ')))"
+# paste the hash into AUTH_PASSWORD_HASH in .env, then:
+docker compose up -d --force-recreate web
+```
+
+**While `AUTH_PASSWORD_HASH` is empty the portal fails closed** - it refuses
+every login rather than leaving the site open. Failed attempts are logged with
+the source IP, so scanner traffic is visible in `docker compose logs web` and
+in `logs/inventory_updates.log`.
+
+CSRF is handled by the `SameSite=Lax` session cookie: browsers withhold a Lax
+cookie on cross-origin form submissions, so a hostile page cannot drive
+`/scripts/run` or `/group-bookings/delete` using an operator's session. If you
+later move to per-user accounts, add `Flask-WTF` tokens at the same time.
+
 ## nginx
 
 Copy `deploy/nginx.conf.example` to `/etc/nginx/sites-available/farmyard`, point

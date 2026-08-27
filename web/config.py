@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -7,6 +8,8 @@ from config.settings import BASE_DIR as PROJECT_ROOT
 from config.settings import LOYVERSE_API_KEY
 from config.settings import PREFERRED_URL_SCHEME as URL_SCHEME
 from config.settings import SECRET_KEY as APP_SECRET_KEY
+from config.settings import SESSION_COOKIE_SECURE as COOKIE_SECURE
+from config.settings import SESSION_LIFETIME_HOURS as LIFETIME_HOURS
 
 load_dotenv()
 
@@ -20,6 +23,15 @@ class Config:
     # Used by url_for(..., _external=True) when building the ticket image link
     # that Meta fetches. Must be "https" in production.
     PREFERRED_URL_SCHEME = URL_SCHEME
+
+    # Session cookie. SameSite=Lax is what stops cross-site CSRF on the POST
+    # routes: browsers withhold a Lax cookie on any cross-origin form
+    # submission, so a hostile page cannot drive /scripts/run or
+    # /group-bookings/delete with the operator's session.
+    SESSION_COOKIE_SECURE = COOKIE_SECURE
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=LIFETIME_HOURS)
 
     # Loyverse
     LOYVERSE_API_KEY = LOYVERSE_API_KEY

@@ -34,6 +34,12 @@
           <li class="nav-item">
             <span class="nav-link">The Farmyard Park (Pty) Ltd</span>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('auth.logout') }}" title="Sign out">
+              <i class="fas fa-sign-out-alt"></i>
+              Sign out
+            </a>
+          </li>
         </ul>
       </nav>
 
@@ -107,6 +113,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <!-- AdminLTE -->
     <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+    <!-- Session handling: a 401 from any AJAX call means the session lapsed -->
+    <script>
+      $(document).ajaxError(function (event, jqxhr) {
+        if (jqxhr.status === 401) {
+          window.location.href = "{{ url_for('auth.login') }}?next=" + encodeURIComponent(window.location.pathname);
+        }
+      });
+    </script>
 
     <!-- Custom Sidebar Breakpoint Handler -->
     <script>

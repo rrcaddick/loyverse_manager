@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in - Farmyard Admin Portal</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+  </head>
+  <body class="hold-transition login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <b>Farmyard</b> Admin Portal
+      </div>
+
+      <div class="card">
+        <div class="card-body login-card-body">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} py-2">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+
+          {% if not configured %}
+            <p class="login-box-msg text-danger">
+              Authentication is not configured on this server.
+            </p>
+            <p class="text-muted small mb-0">
+              Set <code>AUTH_PASSWORD_HASH</code> in <code>.env</code> and restart
+              the web container. See <code>DEPLOYMENT.md</code>.
+            </p>
+          {% else %}
+            <p class="login-box-msg">Sign in to continue</p>
+
+            <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+              <div class="input-group mb-3">
+                <input
+                  type="text"
+                  name="username"
+                  class="form-control"
+                  placeholder="Username"
+                  autocomplete="username"
+                  autofocus
+                  required
+                />
+                <div class="input-group-append">
+                  <div class="input-group-text"><span class="fas fa-user"></span></div>
+                </div>
+              </div>
+
+              <div class="input-group mb-3">
+                <input
+                  type="password"
+                  name="password"
+                  class="form-control"
+                  placeholder="Password"
+                  autocomplete="current-password"
+                  required
+                />
+                <div class="input-group-append">
+                  <div class="input-group-text"><span class="fas fa-lock"></span></div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-12">
+                  <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign in
+                  </button>
+                </div>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+  </body>
+</html>

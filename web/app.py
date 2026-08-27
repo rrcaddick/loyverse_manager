@@ -4,6 +4,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from web.config import Config
 from web.routes import scripts as scripts_routes
 from web.routes.api import api_bp
+from web.routes.auth import auth_bp, register_auth_guard
 from web.routes.groups import groups_bp
 from web.routes.open_tickets import open_tickets_bp
 
@@ -24,12 +25,17 @@ def create_app(config_class=Config):
     app.config["PDF_OUTPUT_DIR"].mkdir(parents=True, exist_ok=True)
 
     # Register blueprints
+    app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(groups_bp)
 
     app.register_blueprint(open_tickets_bp)
 
     app.register_blueprint(scripts_routes.bp)
+
+    # Deny-by-default gate. Must be registered after the blueprints so every
+    # endpoint is covered; the exempt list lives in web/routes/auth.py.
+    register_auth_guard(app)
 
     # Root route
     @app.route("/")
