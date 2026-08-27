@@ -53,12 +53,6 @@
           <nav class="mt-2">
             <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
               <li class="nav-item">
-                <a href="/" class="nav-link {{ 'active' if request.endpoint == 'home' else '' }}">
-                  <i class="nav-icon fas fa-tachometer-alt"></i>
-                  <p>Dashboard</p>
-                </a>
-              </li>
-              <li class="nav-item">
                 <a
                   href="{{ url_for('groups.manage_bookings') }}"
                   class="nav-link {{ 'active' if request.endpoint == 'groups.manage_bookings' else '' }}"

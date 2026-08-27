@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, redirect, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from web.config import Config
@@ -37,10 +37,12 @@ def create_app(config_class=Config):
     # endpoint is covered; the exempt list lives in web/routes/auth.py.
     register_auth_guard(app)
 
-    # Root route
+    # Root route. The dashboard had no content and its nav entry is gone, so
+    # "/" lands on the page the portal actually exists for. Kept as a route so
+    # existing bookmarks and the sidebar brand link still work.
     @app.route("/")
     def home():
-        return render_template("dashboard.html")
+        return redirect(url_for("groups.manage_bookings"))
 
     # Liveness probe for the container healthcheck. Deliberately touches
     # neither the database nor any upstream API.
