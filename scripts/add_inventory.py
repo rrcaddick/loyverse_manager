@@ -1,5 +1,4 @@
 import sys
-from datetime import date
 
 from config.constants import (
     CATEGORIES,
@@ -33,7 +32,6 @@ from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
 TODAY = get_today()
-TODAY = date(2025, 12, 28)
 
 
 def add_inventory():
