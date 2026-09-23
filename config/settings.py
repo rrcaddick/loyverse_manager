@@ -33,6 +33,15 @@ SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+# Implicit TLS (SMTPS) on 465, STARTTLS on anything else, unless overridden.
+# Hetzner blocks outbound 25 and 465 by default; 587 with STARTTLS gets through.
+SMTP_USE_SSL = (
+    os.getenv("SMTP_USE_SSL", "true" if SMTP_PORT == 465 else "false").lower()
+    == "true"
+)
+# Without this a blocked port waits out the kernel's full SYN-retry cycle
+# (~2 minutes) per notification, which is what made the Scripts page look hung.
+SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "10"))
 
 ADD_PAY_APP_ID = os.getenv("ADD_PAY_APP_ID")
 ADD_PAY_MERCHANT_NO = os.getenv("ADD_PAY_MERCHANT_NO")

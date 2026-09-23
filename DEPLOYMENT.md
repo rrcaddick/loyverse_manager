@@ -169,6 +169,16 @@ day's event as its second step.
 Supercronic will not start a job while the previous run of the same job is still
 going, so a slow morning sync cannot overlap itself.
 
+## Email notifications
+
+The scripts email `NOTIFICATION_RECIPIENTS` on success and failure. **Use
+`SMTP_PORT=587`.** Hetzner blocks outbound 25 and 465 on cloud servers by
+default, and a connection to a blocked port sits in the kernel's SYN-retry
+cycle for about two minutes before failing — which looked like a hung Scripts
+page. TLS mode follows the port automatically (465 → implicit TLS, otherwise
+STARTTLS), and `SMTP_TIMEOUT` (default 10s) bounds the wait if the port is
+ever unreachable.
+
 ## Backups
 
 Everything durable lives in the `farmyard_db_data` volume.

@@ -11,7 +11,9 @@ from config.settings import (
     SMTP_PASSWORD,
     SMTP_PORT,
     SMTP_SERVER,
+    SMTP_TIMEOUT,
     SMTP_USERNAME,
+    SMTP_USE_SSL,
 )
 from src.clients.loyverse import LoyverseClient
 from src.services.loyverse import LoyverseService
@@ -23,7 +25,13 @@ from src.utils.logging import setup_logger
 def clear_inventory():
     logger = setup_logger("clear_inventory")
     notification_service = NoticifationService(
-        SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USERNAME
+        SMTP_SERVER,
+        SMTP_PORT,
+        SMTP_USERNAME,
+        SMTP_PASSWORD,
+        SMTP_USERNAME,
+        use_ssl=SMTP_USE_SSL,
+        timeout=SMTP_TIMEOUT,
     )
 
     try:

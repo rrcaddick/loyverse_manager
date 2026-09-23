@@ -17,7 +17,9 @@ from config.settings import (
     SMTP_PASSWORD,
     SMTP_PORT,
     SMTP_SERVER,
+    SMTP_TIMEOUT,
     SMTP_USERNAME,
+    SMTP_USE_SSL,
 )
 from src.bots.quicket import QuicketBot
 from src.clients.loyverse import LoyverseClient
@@ -42,7 +44,13 @@ def add_inventory():
 
     # Built before the try block so the failure handler below can always use it.
     notification_service = NoticifationService(
-        SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USERNAME
+        SMTP_SERVER,
+        SMTP_PORT,
+        SMTP_USERNAME,
+        SMTP_PASSWORD,
+        SMTP_USERNAME,
+        use_ssl=SMTP_USE_SSL,
+        timeout=SMTP_TIMEOUT,
     )
 
     try:

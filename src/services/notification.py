@@ -8,7 +8,14 @@ from typing import Literal
 
 class NoticifationService:
     def __init__(
-        self, smtp_server, smtp_port, username, password, sender_email, use_ssl=True
+        self,
+        smtp_server,
+        smtp_port,
+        username,
+        password,
+        sender_email,
+        use_ssl=True,
+        timeout=10,
     ):
         self.smtp_server = smtp_server
         self.smtp_port = smtp_port
@@ -16,6 +23,7 @@ class NoticifationService:
         self.password = password
         self.sender_email = sender_email
         self.use_ssl = use_ssl
+        self.timeout = timeout
 
     def send_notification(self, recipient_emails, subject, message):
         msg = MIMEMultipart()
@@ -27,9 +35,13 @@ class NoticifationService:
 
         try:
             if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+                server = smtplib.SMTP_SSL(
+                    self.smtp_server, self.smtp_port, timeout=self.timeout
+                )
             else:
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server = smtplib.SMTP(
+                    self.smtp_server, self.smtp_port, timeout=self.timeout
+                )
                 server.starttls()
 
             server.login(self.username, self.password)
