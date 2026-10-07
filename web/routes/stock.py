@@ -9,6 +9,10 @@ POST /api/stock/availability
      "exclude_sync_id": 1759830000000, "local_stock": 6000}
     -> {"product_id": 123, "held_elsewhere": 5000, "stock_on_hand": 6000}
 
+POST /api/stock/availability   (bulk: the bridge refreshes its cache in the background)
+    {"products": [{"product_id": 123, "variant_id": null}, ...], "exclude_sync_id": 0}
+    -> {"results": [{"product_id": 123, "variant_id": null, "held_elsewhere": 5000}, ...]}
+
 Quantities are Loyverse's integer thousandths (1 unit = 1000).
 """
 
@@ -24,6 +28,8 @@ stock_bp = Blueprint("stock", __name__)
 @require_bridge_token
 def availability():
     payload = request.get_json(force=True, silent=True) or {}
+    if isinstance(payload.get("products"), list):
+        return _bulk(payload)
     try:
         product_id = int(payload["product_id"])
     except (KeyError, TypeError, ValueError):
@@ -39,4 +45,25 @@ def availability():
     )
     return jsonify(
         {"product_id": product_id, "held_elsewhere": held, "stock_on_hand": local_stock}
+    )
+
+
+def _bulk(payload):
+    exclude_sync_id = int(payload.get("exclude_sync_id") or 0)
+    keys = []
+    for p in payload["products"][:200]:
+        try:
+            product_id = int(p["product_id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        variant_id = p.get("variant_id")
+        keys.append((product_id, int(variant_id) if variant_id not in (None, "") else None))
+    held = OpenTicket.held_quantities(keys, exclude_sync_id=exclude_sync_id)
+    return jsonify(
+        {
+            "results": [
+                {"product_id": pid, "variant_id": vid, "held_elsewhere": held.get((pid, vid), 0)}
+                for pid, vid in keys
+            ]
+        }
     )

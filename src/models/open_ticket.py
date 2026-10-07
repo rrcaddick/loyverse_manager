@@ -252,6 +252,36 @@ class OpenTicket:
                 conn.commit()
 
     @classmethod
+    def held_quantities(cls, keys, exclude_sync_id=0):
+        """Held quantity (thousandths) per (product_id, variant_id) key in one pass over the
+        open tickets. A key with variant_id None matches every variant of the product."""
+        wanted = {(int(pid), vid) for pid, vid in keys}
+        held = {k: 0 for k in wanted}
+        if not wanted:
+            return held
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT receipt_json FROM open_tickets_current WHERE status = 'open'"
+                )
+                for row in cursor.fetchall():
+                    try:
+                        receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}
+                    except (TypeError, ValueError):
+                        continue
+                    if exclude_sync_id and int(receipt.get("sync_id") or 0) == int(exclude_sync_id):
+                        continue
+                    for item in receipt.get("items") or []:
+                        if item.get("voided"):
+                            continue
+                        pid = int(item.get("product_id") or 0)
+                        vid = item.get("variant_id")
+                        for key in ((pid, None), (pid, vid)):
+                            if key in held and (key[1] is None or vid == key[1]):
+                                held[key] += int(item.get("quantity") or 0)
+        return held
+
+    @classmethod
     def held_quantity(cls, product_id, variant_id=None, exclude_sync_id=0):
         """Quantity (thousandths) of a product held in open tickets, except one ticket.
 
