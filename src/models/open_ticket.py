@@ -187,16 +187,19 @@ class OpenTicket:
                     (ticket_id,),
                 )
                 row = cursor.fetchone()
-                if row is None or row["status"] != "open":
+                if row is not None and row["status"] != "open":
                     return
-                cursor.execute(
-                    """
-                    UPDATE open_tickets_current
-                    SET status = %s, closed_at = %s, last_modified_at = %s
-                    WHERE ticket_id = %s
-                    """,
-                    (status, observed_at, observed_at, ticket_id),
-                )
+                if row is not None:
+                    cursor.execute(
+                        """
+                        UPDATE open_tickets_current
+                        SET status = %s, closed_at = %s, last_modified_at = %s
+                        WHERE ticket_id = %s
+                        """,
+                        (status, observed_at, observed_at, ticket_id),
+                    )
+                # A receipt charged straight from the sales screen was never an open
+                # ticket; it still gets a history row so every close is auditable.
                 cursor.execute(
                     """
                     INSERT INTO open_tickets_history
@@ -205,7 +208,7 @@ class OpenTicket:
                     """,
                     (
                         ticket_id,
-                        row["semantic_hash"],
+                        row["semantic_hash"] if row is not None else "",
                         status,
                         json.dumps(receipt_json) if receipt_json is not None else None,
                         observed_at,
