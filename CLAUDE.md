@@ -141,8 +141,15 @@ which are later reconciled against a counted amount.
 ### Open tickets webhook
 
 `POST /open_tickets/events` upserts ticket state keyed on a `semantic_hash` (only writes
-history when the hash changes); `POST /open_tickets/heartbeat` closes any tracked ticket
-absent from the heartbeat set. Both are called by an external observer app.
+history when the hash changes); events carrying `event: voided|closed` end the ticket via
+`OpenTicket.close_one`. `POST /open_tickets/heartbeat` closes any tracked ticket absent from
+the heartbeat set. Both are called by the **Loyverse bridge** (the patched POS build in
+`~/repos/support/loyverse_addpay/bridge`), which replaced the old observer app; each event
+also carries `reason`, `device` and `employee_id`. `POST /api/stock/availability`
+(`web/routes/stock.py`) answers the bridge's stock guard with the quantity of a product
+held in other open tickets (`OpenTicket.held_quantity`, thousandths). All three endpoints
+require `Authorization: Bearer $BRIDGE_TOKEN` when `BRIDGE_TOKEN` is set
+(`web/routes/bridge_auth.py`).
 
 ## Commands
 
@@ -227,9 +234,10 @@ Pre-existing; don't "fix" them as a side effect of unrelated work, but be aware:
 - `CardPaymentAudit.create_batch` plain-`INSERT`s against a table with
   `UNIQUE KEY unique_audit_date`, so re-running the audit for an already-audited date
   fails rather than updating.
-- The web app has no authentication, authorisation or CSRF protection; the
-  `/open_tickets/*` webhooks are unauthenticated. It is published on `127.0.0.1` only
-  and reached through nginx — keep it that way, or put access control in front.
+- The web app has no CSRF protection; the `/open_tickets/*` webhooks and
+  `/api/stock/availability` are bridge-token protected (session guard exempts them) and
+  must stay reachable from the terminals through nginx. Everything else sits behind the
+  session login.
 - `LoyverseClient.get` auto-paginates using the endpoint string as the response key, so
   pagination only works when the endpoint is a bare resource name (`items`, `receipts`) —
   not when a query string is appended (`inventory?variant_ids=…`).

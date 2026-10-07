@@ -43,6 +43,9 @@ SMTP_USE_SSL = (
 # (~2 minutes) per notification, which is what made the Scripts page look hung.
 SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "10"))
 
+# Shared secret presented by the patched Loyverse terminals (feed + stock guard).
+BRIDGE_TOKEN = os.getenv("BRIDGE_TOKEN")
+
 ADD_PAY_APP_ID = os.getenv("ADD_PAY_APP_ID")
 ADD_PAY_MERCHANT_NO = os.getenv("ADD_PAY_MERCHANT_NO")
 

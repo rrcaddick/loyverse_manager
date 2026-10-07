@@ -41,6 +41,10 @@ PUBLIC_ENDPOINTS = {
     # Meta's servers fetch the WhatsApp ticket image and have no session.
     # This endpoint carries its own 5-minute JWT - see TokenService.
     "groups.get_ticket_image",
+    # Called by the patched Loyverse terminals; protected by BRIDGE_TOKEN instead.
+    "open_tickets.open_ticket_events",
+    "open_tickets.open_ticket_heartbeat",
+    "stock.availability",
 }
 
 SESSION_KEY = "authenticated_as"
