@@ -31,9 +31,25 @@ class OpenTicket:
                 )
                 return {row["ticket_id"] for row in cursor.fetchall()}
 
+    @staticmethod
+    def vehicle_columns(receipt_json):
+        """The bridge's structured vehicle block as (plate, make, model, colour, source)."""
+        vehicle = (receipt_json or {}).get("vehicle") or {}
+        if not isinstance(vehicle, dict) or not vehicle.get("plate"):
+            return (None, None, None, None, None)
+        source = vehicle.get("source")
+        return (
+            str(vehicle.get("plate"))[:16],
+            (vehicle.get("make") or None) and str(vehicle.get("make"))[:64],
+            (vehicle.get("model") or None) and str(vehicle.get("model"))[:64],
+            (vehicle.get("colour") or None) and str(vehicle.get("colour"))[:32],
+            source if source in ("disc", "manual") else None,
+        )
+
     @classmethod
     def upsert_open(cls, ticket_id, semantic_hash, receipt_json, observed_at):
         receipt_json_str = json.dumps(receipt_json)
+        plate, make, model, colour, source = cls.vehicle_columns(receipt_json)
 
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
@@ -55,18 +71,22 @@ class OpenTicket:
                         """
                         UPDATE open_tickets_current
                         SET status = 'open', closed_at = NULL, semantic_hash = %s,
-                            receipt_json = %s, last_modified_at = %s, last_seen_at = %s
+                            receipt_json = %s, last_modified_at = %s, last_seen_at = %s,
+                            plate = %s, vehicle_make = %s, vehicle_model = %s,
+                            vehicle_colour = %s, vehicle_source = %s
                         WHERE ticket_id = %s
                         """,
-                        (semantic_hash, receipt_json_str, observed_at, observed_at, ticket_id),
+                        (semantic_hash, receipt_json_str, observed_at, observed_at,
+                         plate, make, model, colour, source, ticket_id),
                     )
                     event_type = "reopened"
                 elif row is None:
                     cursor.execute(
                         """
                         INSERT INTO open_tickets_current
-                        (ticket_id, semantic_hash, status, receipt_json, opened_at, last_modified_at, last_seen_at)
-                        VALUES (%s, %s, 'open', %s, %s, %s, %s)
+                        (ticket_id, semantic_hash, status, receipt_json, opened_at, last_modified_at, last_seen_at,
+                         plate, vehicle_make, vehicle_model, vehicle_colour, vehicle_source)
+                        VALUES (%s, %s, 'open', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ticket_id,
@@ -75,6 +95,11 @@ class OpenTicket:
                             observed_at,
                             observed_at,
                             observed_at,
+                            plate,
+                            make,
+                            model,
+                            colour,
+                            source,
                         ),
                     )
                     event_type = "created"
@@ -86,7 +111,12 @@ class OpenTicket:
                         SET semantic_hash = %s,
                             receipt_json = %s,
                             last_modified_at = %s,
-                            last_seen_at = %s
+                            last_seen_at = %s,
+                            plate = %s,
+                            vehicle_make = %s,
+                            vehicle_model = %s,
+                            vehicle_colour = %s,
+                            vehicle_source = %s
                         WHERE ticket_id = %s
                         """,
                         (
@@ -94,6 +124,11 @@ class OpenTicket:
                             receipt_json_str,
                             observed_at,
                             observed_at,
+                            plate,
+                            make,
+                            model,
+                            colour,
+                            source,
                             ticket_id,
                         ),
                     )
