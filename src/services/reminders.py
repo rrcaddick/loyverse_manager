@@ -10,6 +10,12 @@ condition holds and are dropped when it stops holding.
 §8). Each section's SQL is written against the fixed tables and leans on the
 indexes the migration created (bookings.status/visit_date, email_messages
 review/booking, bank_transactions status/date, booking_reminders status/due).
+
+Stale rule (docs/research/01, "Reminders over 30 days old go to a Stale view"):
+a due reminder is flagged ``stale = 1`` when its ``due_on`` is more than
+``STALE_AFTER_DAYS`` in the past, or when the booking's proforma went out more
+than ``STALE_PROFORMA_DAYS`` ago and nothing has been paid. Live counts and the
+Work views exclude stale rows; the Stale view lists them for bulk dismissal.
 """
 
 from __future__ import annotations
@@ -29,6 +35,13 @@ logger = setup_logger("reminders")
 ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed")
 UNPAID_STATUSES = ("enquiry", "proforma_sent")
 REMINDER_KINDS = ("still_interested", "deposit_reminder", "final_details", "lapse")
+
+# Stale rule thresholds (days).
+STALE_AFTER_DAYS = 30
+STALE_PROFORMA_DAYS = 60
+
+# Due, not stale, and due today or earlier: the only rows a person must act on.
+LIVE_DUE_SQL = "r.status = 'due' AND r.stale = 0 AND r.due_on <= %s"
 
 KIND_TITLES = {
     "still_interested": "Still interested?",
@@ -150,8 +163,51 @@ def recompute_reminders() -> int:
             )
         else:
             removed = execute("DELETE FROM booking_reminders WHERE status <> 'sent'", conn=conn)
-    logger.info(f"Reminders recomputed: {len(desired)} applicable, {removed} stale removed")
+        stale = flag_stale(today, conn=conn)
+    logger.info(
+        f"Reminders recomputed: {len(desired)} applicable, {removed} removed, {stale} stale"
+    )
     return len(desired)
+
+
+def flag_stale(today: date | None = None, conn=None) -> int:
+    """Apply the stale rule to every reminder due today or earlier; returns how
+    many are stale.
+
+    Only rows that are due *now* can be stale (a future reminder is on nobody's
+    list). Idempotent: rows that no longer meet the rule (a hold extended, a
+    payment recorded) are un-flagged so they come back into the live counts.
+    """
+    today = today or get_today()
+    execute(
+        """
+        UPDATE booking_reminders r
+        JOIN bookings b ON b.id = r.booking_id
+        SET r.stale = (
+            r.status = 'due' AND r.due_on <= %s AND (
+                r.due_on < %s
+                OR (
+                    r.kind = 'still_interested'
+                    AND b.proforma_sent_at IS NOT NULL AND b.proforma_sent_at < %s
+                    AND NOT EXISTS (
+                        SELECT 1 FROM payments p WHERE p.booking_id = b.id AND p.amount > 0
+                    )
+                )
+            )
+        )
+        """,
+        (
+            today,
+            today - timedelta(days=STALE_AFTER_DAYS),
+            datetime.combine(today - timedelta(days=STALE_PROFORMA_DAYS), datetime.min.time()),
+        ),
+        conn=conn,
+    )
+    row = query_one(
+        "SELECT COUNT(*) AS n FROM booking_reminders WHERE status = 'due' AND stale = 1",
+        conn=conn,
+    )
+    return int(row["n"]) if row else 0
 
 
 def mark_sent(booking_id: int, kind: str) -> None:
@@ -172,36 +228,87 @@ def get_reminder(reminder_id: int) -> dict | None:
     return query_one("SELECT * FROM booking_reminders WHERE id = %s", (reminder_id,))
 
 
+def _dismiss_row(row: Mapping[str, Any], actor: int | None, conn) -> bool:
+    """Dismiss one due reminder inside ``conn``; False when it was not due."""
+    if row["status"] != "due":
+        return False
+    execute(
+        """
+        UPDATE booking_reminders
+        SET status = 'dismissed', stale = 0, dismissed_by = %s, dismissed_at = NOW()
+        WHERE id = %s AND status = 'due'
+        """,
+        (actor, row["id"]),
+        conn=conn,
+    )
+    execute(
+        """
+        INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
+        VALUES (%s, 'reminder_dismissed', %s, %s, %s)
+        """,
+        (
+            row["booking_id"],
+            f"Dismissed the '{KIND_TITLES.get(row['kind'], row['kind'])}' reminder",
+            dumps({"reminder_id": row["id"], "kind": row["kind"], "due_on": row["due_on"]}),
+            actor,
+        ),
+        conn=conn,
+    )
+    return True
+
+
 def dismiss_reminder(reminder_id: int, actor: int | None) -> dict | None:
     """Dismiss a due reminder. Returns the updated row, or None when unknown."""
     row = get_reminder(reminder_id)
     if row is None:
         return None
     with transaction() as conn:
-        if row["status"] == "due":
-            execute(
-                """
-                UPDATE booking_reminders
-                SET status = 'dismissed', dismissed_by = %s, dismissed_at = NOW()
-                WHERE id = %s
-                """,
-                (actor, reminder_id),
-                conn=conn,
-            )
-            execute(
-                """
-                INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
-                VALUES (%s, 'reminder_dismissed', %s, %s, %s)
-                """,
-                (
-                    row["booking_id"],
-                    f"Dismissed the '{KIND_TITLES.get(row['kind'], row['kind'])}' reminder",
-                    dumps({"reminder_id": reminder_id, "kind": row["kind"], "due_on": row["due_on"]}),
-                    actor,
-                ),
-                conn=conn,
-            )
+        _dismiss_row(row, actor, conn)
     return _ser(get_reminder(reminder_id))
+
+
+def bulk_dismiss(reminder_ids: list[int], actor: int | None) -> dict:
+    """Dismiss many due reminders in one transaction (the Stale view's button).
+
+    Unknown ids and rows that are not ``due`` are skipped, not errors. Returns
+    ``{"dismissed": n, "ids": [...], "skipped": [...]}``.
+    """
+    wanted = sorted({int(i) for i in reminder_ids})
+    if not wanted:
+        return {"dismissed": 0, "ids": [], "skipped": []}
+    marks = ",".join(["%s"] * len(wanted))
+    rows = query(f"SELECT * FROM booking_reminders WHERE id IN ({marks})", wanted)
+    done: list[int] = []
+    with transaction() as conn:
+        for row in rows:
+            if _dismiss_row(row, actor, conn):
+                done.append(int(row["id"]))
+    logger.info(f"Dismissed {len(done)} of {len(wanted)} reminders in bulk")
+    return {"dismissed": len(done), "ids": done, "skipped": [i for i in wanted if i not in done]}
+
+
+def stale_reminder_ids() -> list[int]:
+    return [int(r["id"]) for r in query(
+        "SELECT id FROM booking_reminders WHERE status = 'due' AND stale = 1 ORDER BY id"
+    )]
+
+
+def reschedule_lapse(booking_id: int, due_on: date, conn=None) -> int:
+    """Move the booking's ``lapse`` reminder to a new date after a hold is extended.
+
+    A dismissed row is revived (the new date is a new promise); a sent row is
+    left alone. The stale flag is cleared so the hold is live again; the daily
+    recompute re-evaluates it.
+    """
+    return execute(
+        """
+        UPDATE booking_reminders
+        SET due_on = %s, status = 'due', stale = 0, dismissed_by = NULL, dismissed_at = NULL
+        WHERE booking_id = %s AND kind = 'lapse' AND status <> 'sent'
+        """,
+        (due_on, booking_id),
+        conn=conn,
+    )
 
 
 # ---------------------------------------------------------------- queue ---
@@ -374,7 +481,7 @@ def _reminders_due(today: date) -> tuple[list[dict], int]:
                b.hold_expires_on, b.deposit_due
         FROM booking_reminders r
         JOIN bookings b ON b.id = r.booking_id
-        WHERE r.status = 'due' AND r.due_on <= %s
+        WHERE {LIVE_DUE_SQL}
         ORDER BY FIELD(r.kind, 'lapse', 'deposit_reminder', 'still_interested', 'final_details'),
                  r.due_on, b.visit_date
         """,
@@ -545,8 +652,9 @@ def build_queue() -> dict:
 
 
 def due_reminder_count(today: date | None = None) -> int:
+    """Live reminders: due today or earlier and not stale."""
     row = query_one(
-        "SELECT COUNT(*) AS n FROM booking_reminders WHERE status = 'due' AND due_on <= %s",
+        f"SELECT COUNT(*) AS n FROM booking_reminders r WHERE {LIVE_DUE_SQL}",
         (today or get_today(),),
     )
     return int(row["n"]) if row else 0

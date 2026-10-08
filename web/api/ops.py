@@ -1,7 +1,7 @@
 """Operations: run a job now, see the state of the background work, read logs.
 
     POST /api/v1/ops/run {name}      synchronous; add_inventory can take minutes
-    GET  /api/v1/ops/status
+    GET  /api/v1/ops/status          includes the compact ``system`` block Today shows
     GET  /api/v1/ops/logs?lines=200
 
 Jobs are imported lazily so the API boots even while a sibling module is still
@@ -23,6 +23,7 @@ from flask import request
 from config.settings import BASE_DIR
 from src.models.base import query, query_one, serialize_row
 from src.services import reminders
+from src.services import today as today_service
 from src.utils.date import get_today
 from src.utils.logging import setup_logger
 from web.api import ApiError, current_user, make_blueprint, ok, parse_json, require_role
@@ -171,6 +172,8 @@ def status():
                 "timezone": os.environ.get("TZ", "Africa/Johannesburg"),
             },
             "jobs": sorted(RUNNABLE),
+            # The same block the Today page shows, plus last_error per job.
+            "system": today_service.system_status(with_errors=True),
         }
     )
 

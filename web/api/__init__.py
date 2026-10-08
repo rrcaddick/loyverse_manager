@@ -173,6 +173,9 @@ API_MODULES = (
     "web.api.inbox",
     "web.api.payments",
     "web.api.queue",
+    "web.api.work",
+    "web.api.today",
+    "web.api.gate",
     "web.api.ops",
     "web.api.public",
 )
