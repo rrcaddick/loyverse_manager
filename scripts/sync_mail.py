@@ -38,6 +38,12 @@ def main() -> int:
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
     compact = {k: v for k, v in summary.items() if k != "folders"}
+    try:
+        from src.services.conversations import counts
+
+        compact["conversations"] = counts()
+    except Exception as exc:  # noqa: BLE001 - reporting only
+        compact["conversations"] = f"unavailable: {exc}"
     compact["folders"] = {
         f: {k: s[k] for k in ("mode", "fetched", "inserted", "matched", "pending", "errors", "last_uid") if k in s}
         for f, s in summary.get("folders", {}).items()

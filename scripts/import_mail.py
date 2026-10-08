@@ -21,6 +21,7 @@ import traceback
 from datetime import date
 
 from src.models import email_message as em
+from src.services import conversations
 from src.services.mail_ingest import link_current_threads, sync_mailbox
 
 
@@ -57,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {entry['reference']:<10} {entry['group_name'][:40]:<40} thread={entry['gmail_thrid']} "
                   f"msgs={entry['messages']} via={','.join(entry['reasons'])} latest={entry['latest']}")
         summary["counts"] = em.counts()
+        summary["conversations"] = conversations.counts()
+        print(f"conversations: {summary['conversations']}")
         status = "done" if not summary.get("sync", {}).get("errors") else "done_with_errors"
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()

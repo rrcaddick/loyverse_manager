@@ -54,6 +54,11 @@ INSERT_COLUMNS = (
     "snippet",
     "body_text",
     "body_html",
+    "body_new_html",
+    "body_new_text",
+    "body_quoted_html",
+    "signature_text",
+    "split_version",
     "has_attachments",
     "booking_id",
     "match_method",
@@ -77,10 +82,14 @@ _LIST_SELECT = """
 """
 
 _FULL_SELECT = """
-    SELECT m.*, b.reference AS booking_reference, b.group_name AS booking_group_name
+    SELECT m.*, b.reference AS booking_reference, b.group_name AS booking_group_name,
+           u.full_name AS sent_by_name
     FROM email_messages m
     LEFT JOIN bookings b ON b.id = m.booking_id
+    LEFT JOIN users u ON u.id = m.sent_by
 """
+
+SPLIT_COLUMNS = ("body_new_html", "body_new_text", "body_quoted_html", "signature_text", "split_version")
 
 # "Unmatched" = a real inbound message nobody has linked or dismissed yet.
 _UNMATCHED_WHERE = (
@@ -162,8 +171,14 @@ def to_api(row: dict | None, full: bool = False) -> dict | None:
                 "references_header": r.get("references_header"),
                 "body_text": r.get("body_text"),
                 "body_html": r.get("body_html"),
+                "body_new_html": r.get("body_new_html"),
+                "body_new_text": r.get("body_new_text"),
+                "body_quoted_html": r.get("body_quoted_html"),
+                "signature_text": r.get("signature_text"),
+                "split_version": int(r.get("split_version") or 0),
                 "send_error": r.get("send_error"),
                 "sent_by": r.get("sent_by"),
+                "sent_by_name": r.get("sent_by_name"),
                 "attachments_meta": r.get("attachments_meta") or [],
                 "resolved_by": r.get("resolved_by"),
                 "resolved_at": r.get("resolved_at"),
@@ -310,10 +325,12 @@ def update(message_id: int, conn=None, **fields) -> None:
     )
 
 
-def upsert_by_gmail_msgid(data: dict) -> tuple[int, str]:
-    """Store a fetched message. Returns (id, outcome) where outcome is
-    ``inserted``, ``updated`` (seen before, gmail/folder fields refreshed) or
-    ``claimed`` (a Sent-folder copy of a message we sent over SMTP).
+def upsert_by_gmail_msgid(data: dict) -> tuple[int, str, int | None]:
+    """Store a fetched message. Returns (id, outcome, previous_thrid) where
+    outcome is ``inserted``, ``updated`` (seen before, gmail/folder fields
+    refreshed) or ``claimed`` (a Sent-folder copy of a message we sent over
+    SMTP). ``previous_thrid`` is the thread the row sat in before this call
+    (None for a new row) so the caller can refresh a thread the row left.
 
     Booking links and review decisions on an existing row are never touched.
     """
@@ -329,13 +346,13 @@ def upsert_by_gmail_msgid(data: dict) -> tuple[int, str]:
         if data.get("direction") == "outbound" and existing.get("direction") != "outbound":
             fields["direction"] = "outbound"
         update(existing["id"], **fields)
-        return existing["id"], "updated"
+        return existing["id"], "updated", existing.get("gmail_thrid")
 
     header = (data.get("message_id_header") or "").strip()
     if header:
         own = query_one(
             """
-            SELECT id FROM email_messages
+            SELECT id, gmail_thrid FROM email_messages
             WHERE message_id_header = %s AND gmail_msgid IS NULL AND direction = 'outbound'
             ORDER BY id LIMIT 1
             """,
@@ -349,9 +366,34 @@ def upsert_by_gmail_msgid(data: dict) -> tuple[int, str]:
                 gmail_uid=data.get("gmail_uid"),
                 folder=data.get("folder"),
             )
-            return own["id"], "claimed"
+            return own["id"], "claimed", own.get("gmail_thrid")
 
-    return insert(data), "inserted"
+    return insert(data), "inserted", None
+
+
+def update_split(message_id: int, split: dict, conn=None) -> None:
+    """Store a ``quote_split.split_message`` result on the row."""
+    update(
+        message_id,
+        conn=conn,
+        body_new_html=split.get("new_html"),
+        body_new_text=split.get("new_text"),
+        body_quoted_html=split.get("quoted_html"),
+        signature_text=split.get("signature_text"),
+        split_version=int(split.get("split_version") or 0),
+    )
+
+
+def unsplit_rows(version: int, limit: int = 200, after_id: int = 0) -> list[dict]:
+    """Rows with id > ``after_id`` whose stored split is older than ``version``
+    (backfill input; page by id so a forced re-split cannot loop)."""
+    return query(
+        """
+        SELECT id, gmail_thrid, direction, kind, body_html, body_text, snippet
+        FROM email_messages WHERE split_version < %s AND id > %s ORDER BY id LIMIT %s
+        """,
+        (int(version), int(after_id), int(limit)),
+    )
 
 
 def insert_outbound(data: dict) -> int:
@@ -395,6 +437,74 @@ def detach(message_id: int, pending: bool) -> None:
         "UPDATE email_messages SET booking_id = NULL, match_method = NULL, review_status = %s WHERE id = %s",
         ("pending" if pending else "none", message_id),
     )
+
+
+def detach_thread(gmail_thrid: int, booking_id: int | None = None) -> int:
+    """Unlink every message of a thread (from ``booking_id`` when given, else
+    from any booking). Inbound mail goes back to ``pending`` review."""
+    where = "gmail_thrid = %s AND booking_id IS NOT NULL"
+    params: list[Any] = [int(gmail_thrid)]
+    if booking_id:
+        where += " AND booking_id = %s"
+        params.append(int(booking_id))
+    return execute(
+        f"""
+        UPDATE email_messages
+        SET booking_id = NULL, match_method = NULL,
+            review_status = CASE WHEN direction = 'inbound' AND is_auto_generated = 0 THEN 'pending' ELSE 'none' END
+        WHERE {where}
+        """,
+        tuple(params),
+    )
+
+
+def set_review_status_for_thread(
+    gmail_thrid: int, status: str, user_id: int | None, only_pending: bool = False
+) -> int:
+    """Legacy review flag kept in step with the thread state (inbound rows only)."""
+    if status not in REVIEW_STATUSES:
+        raise ValueError(f"Unknown review status: {status}")
+    resolved = status in ("resolved", "not_booking")
+    where = "gmail_thrid = %s AND direction = 'inbound'"
+    if only_pending:
+        where += " AND review_status = 'pending'"
+    return execute(
+        f"UPDATE email_messages SET review_status = %s, resolved_by = %s, resolved_at = %s WHERE {where}",
+        (status, user_id if resolved else None, _now() if resolved else None, int(gmail_thrid)),
+    )
+
+
+def latest_for_thread(gmail_thrid: int, inbound_only: bool = False, sendable_only: bool = False) -> dict | None:
+    """Newest message of a thread (full row), optionally inbound/non-automated
+    only, optionally restricted to rows a reply can thread onto."""
+    where = ["m.gmail_thrid = %s"]
+    if inbound_only:
+        where.append("m.direction = 'inbound' AND m.is_auto_generated = 0")
+    if sendable_only:
+        where.append("m.message_id_header IS NOT NULL AND m.message_id_header <> ''")
+        where.append("(m.send_status IS NULL OR m.send_status = 'sent')")
+    row = query_one(
+        _FULL_SELECT + " WHERE " + " AND ".join(where) + " ORDER BY m.sent_at DESC, m.id DESC LIMIT 1",
+        (int(gmail_thrid),),
+    )
+    return _decode(row)
+
+
+def messages_for_booking_threads(booking_id: int) -> list[dict]:
+    """Every message on the booking's threads (linked thread rows or linked
+    messages), full rows, oldest first."""
+    rows = query(
+        _FULL_SELECT
+        + """
+        WHERE m.booking_id = %s
+           OR m.gmail_thrid IN (SELECT t.gmail_thrid FROM email_threads t WHERE t.booking_id = %s)
+           OR m.gmail_thrid IN (SELECT DISTINCT x.gmail_thrid FROM email_messages x
+                                WHERE x.booking_id = %s AND x.gmail_thrid IS NOT NULL)
+        ORDER BY m.sent_at, m.id
+        """,
+        (int(booking_id), int(booking_id), int(booking_id)),
+    )
+    return [_decode(r) or {} for r in rows]
 
 
 def set_review_status(message_id: int, status: str, user_id: int | None) -> None:
@@ -647,6 +757,36 @@ def set_booking_thread(booking_id: int, gmail_thrid: int) -> None:
     execute("UPDATE bookings SET email_thread_id = %s WHERE id = %s", (gmail_thrid, booking_id))
 
 
+def clear_booking_thread_if(booking_id: int, gmail_thrid: int) -> bool:
+    """Drop ``bookings.email_thread_id`` when it points at ``gmail_thrid``."""
+    n = execute(
+        "UPDATE bookings SET email_thread_id = NULL WHERE id = %s AND email_thread_id = %s",
+        (booking_id, int(gmail_thrid)),
+    )
+    return bool(n)
+
+
+def bookings_pointing_at_thread(gmail_thrid: int) -> list[dict]:
+    return query(
+        f"SELECT {_BOOKING_COLS} FROM bookings WHERE email_thread_id = %s ORDER BY id DESC",
+        (int(gmail_thrid),),
+    )
+
+
+def booking_events_for(booking_id: int) -> list[dict]:
+    """Timeline rows with the actor's name, oldest first (for the conversation stream)."""
+    return query(
+        """
+        SELECT e.id, e.booking_id, e.kind, e.summary, e.data, e.actor_user_id, e.created_at,
+               u.full_name AS actor_name
+        FROM booking_events e LEFT JOIN users u ON u.id = e.actor_user_id
+        WHERE e.booking_id = %s
+        ORDER BY e.created_at, e.id
+        """,
+        (int(booking_id),),
+    )
+
+
 def candidate_bookings(days_back: int = 45, limit: int = 400) -> list[dict]:
     """Bookings worth scoring for suggestions / import linking: not cancelled or
     lapsed, visiting within ``days_back`` days ago or later."""
@@ -682,6 +822,20 @@ def messages_for_linking() -> list[dict]:
         FROM email_messages WHERE gmail_thrid IS NOT NULL
         ORDER BY sent_at, id
         """
+    )
+
+
+def link_unlinked_in_thread(gmail_thrid: int, booking_id: int, method: str) -> int:
+    """Give the booking every message of the thread that has none yet (never
+    steals a message linked elsewhere)."""
+    return execute(
+        """
+        UPDATE email_messages
+        SET booking_id = %s, match_method = %s,
+            review_status = CASE WHEN review_status = 'pending' THEN 'resolved' ELSE review_status END
+        WHERE gmail_thrid = %s AND booking_id IS NULL
+        """,
+        (booking_id, method, int(gmail_thrid)),
     )
 
 

@@ -23,7 +23,8 @@ from typing import Any, Iterable, Sequence
 from config.settings import BOOKING_FORM_URL, DEV_MAIL_RECIPIENT, ENV, GMAIL_ADDRESS, PUBLIC_BASE_URL
 from src.clients.gmail import GmailError, GmailSmtp
 from src.models import email_message as em
-from src.services.mail_ingest import add_booking_event, html_to_text, make_snippet
+from src.services import conversations
+from src.services.mail_ingest import add_booking_event, html_to_text, make_snippet, split_body
 from src.utils.logging import setup_logger
 
 logger = setup_logger("mail_send")
@@ -158,12 +159,18 @@ def send_email(
     actor: int | None,
     thread_message_id: str | None = None,
     cc: list[str] | tuple[str, ...] = (),
+    gmail_thrid: int | None = None,
 ) -> dict:
     """Send a rendered email and record it. Returns the stored row (API shape).
 
     ``rendered`` is any object with ``.subject``, ``.html`` and ``.text``.
     A transport failure is recorded as ``send_status="failed"`` with the error
     and an ``email_failed`` booking event; it does not raise.
+
+    ``gmail_thrid`` places the row in an existing conversation straight away
+    (a reply from the inbox); otherwise the row borrows the booking's primary
+    thread until the Sent-folder sync reports Gmail's real thread id. The
+    conversation row is refreshed either way.
     """
     if not _clean_addresses(to):
         raise MailSendError("At least one recipient is required")
@@ -206,9 +213,11 @@ def send_email(
         send_status, send_error = "failed", f"{type(exc).__name__}: {exc}"[:2000]
         logger.error(f"Send failed ({kind}) to {actual_to}: {exc}", exc_info=True)
 
+    thrid = int(gmail_thrid) if gmail_thrid else ((booking or {}).get("email_thread_id") if booking else None)
+    split = split_body(rendered.html, rendered.text, own_template=True)
     row_id = em.insert_outbound(
         {
-            "gmail_thrid": (booking or {}).get("email_thread_id") if booking else None,
+            "gmail_thrid": thrid,
             "message_id_header": message_id,
             "in_reply_to": in_reply_to,
             "references_header": references,
@@ -219,9 +228,14 @@ def send_email(
             "cc_emails": actual_cc,
             "subject": actual_subject[:500],
             "sent_at": now,
-            "snippet": make_snippet(rendered.text or ""),
+            "snippet": make_snippet(split["new_text"] or rendered.text or ""),
             "body_text": rendered.text,
             "body_html": rendered.html,
+            "body_new_html": split["new_html"],
+            "body_new_text": split["new_text"] or None,
+            "body_quoted_html": split["quoted_html"],
+            "signature_text": split["signature_text"],
+            "split_version": split["split_version"],
             "has_attachments": bool(attachments),
             "booking_id": booking_id,
             "match_method": "sent" if booking_id else None,
@@ -249,6 +263,11 @@ def send_email(
             },
             actor,
         )
+    if thrid:
+        try:
+            conversations.refresh_thread(int(thrid))
+        except Exception as exc:  # noqa: BLE001 - the send already happened; never fail it here
+            logger.error(f"Thread refresh after send failed for {thrid}: {exc}")
     logger.info(f"Email {kind} -> {actual_to}: {send_status} (row {row_id})")
     return em.to_api(em.get(row_id), full=True) or {"id": row_id, "send_status": send_status}
 
@@ -347,6 +366,7 @@ def send_bounce_back(message_id: int, actor: int | None) -> dict:
         if msg.get("gmail_thrid"):
             em.update(row["id"], gmail_thrid=msg["gmail_thrid"])
             row["gmail_thrid"] = str(msg["gmail_thrid"])
+            conversations.refresh_thread(int(msg["gmail_thrid"]))
     return row
 
 
@@ -362,8 +382,14 @@ def compose(
     actor: int | None,
     cc: list[str] | tuple[str, ...] = (),
     attachments: Sequence[Attachment] = (),
+    body_text: str | None = None,
+    thread_message_id: str | None = None,
+    gmail_thrid: int | None = None,
+    kind: str | None = None,
 ) -> dict:
-    """Free-text email from the inbox. kind 'reply' on a booking, else 'custom'."""
+    """Free-text email from the inbox. kind 'reply' on a booking, else 'custom'
+    (or the ``kind`` given). ``thread_message_id``/``gmail_thrid`` thread a
+    reply into an existing conversation."""
     from src.services.settings import get_settings
 
     settings = get_settings()
@@ -372,13 +398,18 @@ def compose(
         raise MailSendError(f"Booking {booking_id} not found")
     rendered = render("reply", booking, settings, subject=subject, body_html=body_html, logo_url=logo_url())
     if rendered is None:
-        rendered = RenderedEmail(subject=subject, html=body_html, text=html_to_text(body_html))
+        rendered = RenderedEmail(subject=subject, html=body_html, text=body_text or html_to_text(body_html))
+    elif body_text and body_text.strip():
+        # The template's own text rendering is fine, but the composer's plain text is truer.
+        rendered = RenderedEmail(subject=rendered.subject, html=rendered.html, text=body_text)
     return send_email(
         to=to,
         cc=cc,
         rendered=rendered,
         attachments=attachments,
         booking_id=booking_id,
-        kind="reply" if booking_id else "custom",
+        kind=kind or ("reply" if booking_id else "custom"),
         actor=actor,
+        thread_message_id=thread_message_id,
+        gmail_thrid=gmail_thrid,
     )

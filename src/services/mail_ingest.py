@@ -8,6 +8,10 @@
 
 The IMAP side is read-only (see src/clients/gmail.py). Nothing here sends mail.
 
+Every stored message carries its quote/signature split (src/services/quote_split.py,
+``split_version``) and keeps its ``email_threads`` row fresh
+(src/services/conversations.refresh_thread).
+
 Matching order (docs/booking-system.md §7): reference > thread > email > phone.
 """
 
@@ -30,9 +34,10 @@ import html2text
 import phonenumbers
 from phonenumbers import PhoneNumberMatcher, PhoneNumberType
 
-from config.settings import DATA_DIR, GMAIL_ADDRESS, GMAIL_IMPORT_SINCE
+from config.settings import DATA_DIR, GMAIL_ADDRESS, GMAIL_IMPORT_SINCE, PUBLIC_BASE_URL
 from src.clients.gmail import INBOX, SENT, GmailImap
 from src.models import email_message as em
+from src.services import conversations, quote_split
 from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
@@ -209,6 +214,43 @@ def sanitize_html(html: str | None) -> str | None:
 def make_snippet(text: str, limit: int = SNIPPET_CHARS) -> str:
     collapsed = re.sub(r"\s+", " ", text or "").strip()
     return collapsed[:limit]
+
+
+OWN_TEMPLATE_SIGNATURE_LINES = 20
+OWN_TEMPLATE_WORDMARKS = ("The Farmyard Park", "The Farmyard Park (Pty) Ltd")
+
+
+def split_body(body_html: str | None, body_text: str | None, own_template: bool = False) -> dict:
+    """quote_split.split_message with our own image host allowed to render.
+
+    ``own_template`` is for mail the app rendered itself: the signature rule
+    may swallow the company footer and the text version's leading wordmark
+    line is dropped, so the "You: …" snippet starts with the actual message.
+    """
+    try:
+        if own_template:
+            return quote_split.split_message(
+                body_html,
+                body_text,
+                allowed_image_prefixes=(PUBLIC_BASE_URL,),
+                max_signature_lines=OWN_TEMPLATE_SIGNATURE_LINES,
+                drop_leading_lines=OWN_TEMPLATE_WORDMARKS,
+                strict_signature_lines=False,
+            )
+        return quote_split.split_message(body_html, body_text, allowed_image_prefixes=(PUBLIC_BASE_URL,))
+    except Exception as exc:  # noqa: BLE001 - a splitter bug must never block ingest
+        logger.error(f"Quote split failed, storing everything as new: {exc}", exc_info=True)
+        text = (body_text or "").replace("\r\n", "\n")
+        return {
+            "new_html": body_html,
+            "new_text": text,
+            "quoted_html": None,
+            "quoted_text": None,
+            "signature_text": None,
+            "confidence": quote_split.CONFIDENCE_NONE,
+            "method": None,
+            "split_version": quote_split.SPLIT_VERSION,
+        }
 
 
 def safe_filename(name: str | None, fallback: str = "attachment") -> str:
@@ -510,7 +552,11 @@ def apply_match(message_id: int, row: dict, window_days: int) -> tuple[int | Non
     if booking_id:
         em.update(message_id, booking_id=booking_id, match_method=method, review_status="none")
         if row.get("gmail_thrid"):
-            em.set_booking_thread_if_null(booking_id, int(row["gmail_thrid"]))
+            thrid = int(row["gmail_thrid"])
+            em.set_booking_thread_if_null(booking_id, thrid)
+            # A conversation belongs to one booking: pull its unlinked siblings along.
+            em.link_unlinked_in_thread(thrid, booking_id, "thread")
+            conversations.refresh_thread(thrid)
         if row.get("direction") == "inbound" and not row.get("is_auto_generated"):
             add_booking_event(
                 booking_id,
@@ -658,6 +704,7 @@ def build_row(item: dict, parsed: ParsedMessage, folder: str) -> dict:
         {"filename": a.filename, "size": a.size, "content_type": a.content_type}
         for a in parsed.attachments
     ] + [dict(s, skipped=True) for s in parsed.skipped_attachments]
+    split = split_body(parsed.html, parsed.text)
     return {
         "gmail_msgid": item.get("gmail_msgid"),
         "gmail_thrid": item.get("gmail_thrid"),
@@ -674,9 +721,14 @@ def build_row(item: dict, parsed: ParsedMessage, folder: str) -> dict:
         "cc_emails": parsed.cc,
         "subject": parsed.subject or None,
         "sent_at": parsed.date or to_sast_naive(item.get("internaldate")),
-        "snippet": parsed.snippet or None,
+        "snippet": make_snippet(split["new_text"]) or parsed.snippet or None,
         "body_text": parsed.text or None,
         "body_html": parsed.html,
+        "body_new_html": split["new_html"],
+        "body_new_text": split["new_text"] or None,
+        "body_quoted_html": split["quoted_html"],
+        "signature_text": split["signature_text"],
+        "split_version": split["split_version"],
         "has_attachments": bool(parsed.attachments),
         "booking_id": None,
         "match_method": None,
@@ -726,8 +778,12 @@ def _sync_folder(
         try:
             parsed = parse_message(item["raw"], item.get("internaldate"))
             row = build_row(item, parsed, folder)
-            message_id, outcome = em.upsert_by_gmail_msgid(row)
+            message_id, outcome, previous_thrid = em.upsert_by_gmail_msgid(row)
             stats[outcome] += 1
+            # A claimed row keeps the split mail_send stored; only its thread ids changed.
+            conversations.refresh_thread(row.get("gmail_thrid"))
+            if previous_thrid and row.get("gmail_thrid") and int(previous_thrid) != int(row["gmail_thrid"]):
+                conversations.refresh_thread(int(previous_thrid))
             if outcome in ("inserted", "claimed") and parsed.attachments:
                 if not em.list_attachments(message_id):
                     stats["attachments"] += len(store_attachments(message_id, item["gmail_msgid"], parsed))
@@ -919,6 +975,7 @@ def link_current_threads(review_days: int = 14, dry_run: bool = False) -> dict:
         for entry in plan:
             linked_messages += em.link_thread(entry["gmail_thrid"], entry["booking_id"], "import")
             em.set_booking_thread(entry["booking_id"], entry["gmail_thrid"])
+            conversations.refresh_thread(entry["gmail_thrid"])
         pending = em.mark_pending_reviews(review_days)
     else:
         pending = None
