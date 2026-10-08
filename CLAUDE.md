@@ -14,8 +14,10 @@ Western Cape, South Africa. The repo is named `loyverse_manager` after its origi
 2. **Group bookings** — the whole pipeline from a customer's request to the visit day:
    public request form → proforma → deposit matched from the FNB bank feed → invoice →
    barcoded vehicle ticket (email + WhatsApp) → arrivals from Loyverse → final invoice.
-   A React admin app with a Gmail helpdesk, an action queue and a season calendar
-   replaced the old Gmail + Google Sheet + Excel workflow. See `docs/booking-system.md`.
+   A React admin app (Today, Work, Calendar, Bookings, Mail, Bank, Gate, Settings)
+   replaced the old Gmail + Google Sheet + Excel workflow. `docs/booking-system.md` is
+   the data/API contract; `docs/redesign-spec.md` and `docs/research/` are the UI
+   design authority — read them before changing a screen.
 3. **Payment auditing** — reconciles card takings from the AddPay/PayCloud terminals
    against both POS systems (Loyverse and Aronium), and tracks cash-bag blind counts.
 4. **Open-ticket observation** — webhook endpoints that record the lifecycle of Loyverse
@@ -245,9 +247,12 @@ README's `poppler-utils` requirement is stale; PDF→JPEG uses PyMuPDF.
 - **Style:** Python ≥3.10, 4-space indent, double quotes, 88-col, trailing commas —
   consistent with Ruff/Black defaults. Type hints are used in newer modules but are not
   applied uniformly; match the file you're editing.
-- **Frontend** conventions live in `docs/handoff/frontend-shell.md`: tokens in
-  `frontend/src/styles/tokens.css`, shadcn components, TanStack Query keys, zod forms.
-  No external CDNs except the Turnstile script on the public form.
+- **Frontend** conventions live in `docs/handoff/frontend-foundation-v2.md`: semantic
+  colour tokens and six themes in `frontend/src/styles/tokens.css` (colour is meaning,
+  the accent is interaction), type roles (`text-display`, `text-title`, ...), shadcn
+  components, TanStack Query keys, zod forms. One primary list per screen, counts in
+  rails, one filled verb per row, 15 px body, nothing below 12 px. No external CDNs
+  except the Turnstile script on the public form.
 - **API** conventions: `web/api/__init__.py` (`make_blueprint`, `ok`, `ApiError`,
   `parse_json`, `require_role`, `allow_manager`, `public_endpoint`). Errors are
   `{"error": {"code", "message", "fields"}}`; lists are `{"items", "total", "page", "page_size"}`.

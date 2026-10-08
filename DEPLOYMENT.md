@@ -67,7 +67,7 @@ IP and logged with the source address.
 
 | Public (no session) | Why |
 | --- | --- |
-| `/login`, `/request`, `/request/sent`, `/static/...`, `/healthz` | the app shell and the public form |
+| `/login`, `/request/*`, `/static/...`, `/healthz` | the app shell and the three-step public form |
 | `/api/v1/public/*` | the booking request form's endpoints (Turnstile, honeypot, rate limit) |
 | `/group-bookings/ticket/image/<barcode>` | **Meta fetches this** to render the WhatsApp ticket; its own 5-minute JWT |
 | `/open_tickets/*`, `/api/stock/*` | the Loyverse bridge; `BRIDGE_TOKEN` |
@@ -109,7 +109,8 @@ ticket URL and the links inside emails are built from it.
    past the highest one. Deposits recorded from the sheet are placeholders
    that the bank matcher absorbs when the real credit is seen.
 5. Point the website's "bookings by email" line at
-   `https://bookings.farmyardpark.co.za/request`.
+   `https://bookings.farmyardpark.co.za/request`. Decide in Settings › Booking form
+   whether the automatic acknowledgement email is on (it is off by default).
 6. Watch `docker compose logs -f worker` for the first few sync and poll runs.
 
 ## Day-to-day
