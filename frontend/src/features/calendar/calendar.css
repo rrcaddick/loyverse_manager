@@ -1,56 +1,44 @@
 /*
- * Calendar heat cells. The fill comes from the shell's --heat-* ramp (one hue,
- * light → dark, validated with the dataviz skill's validator). Text colour is
- * chosen per step from measured WCAG contrast:
- *   light: steps 1–4 keep --foreground (≥ 5.09:1), step 5 takes --primary-foreground (6.94:1)
- *   dark:  steps 1–3 keep --foreground (≥ 5.93:1), steps 4–5 take a deep green-black
- *          (4.9:1 / 6.2:1 — both standard tokens fall short on dark step 4).
- * The split bar swaps to currentColor once the fill is deeper than the accent.
+ * Calendar v2 sizing. The fills come from the shell's --heat-1…5 ramp and all
+ * text on a heat cell is full ink (--heat-text), so nothing here touches
+ * colour. Structural widths are px (the viewport maths in
+ * docs/handoff/frontend-calendar-v2.md assume them); type is rem so the
+ * text-size preference scales it.
+ *
+ *   --fy-week-col        week-summary column        128 px → 144 px at ≥ 1920
+ *   --fy-panel           side panel                 400 px → 440 px
+ *   --fy-interest        cell interest number       30 px → 36 px
+ *   --fy-week-interest   week-column interest       24 px → 28 px
  */
-.fy-heat {
-  --fy-bar-solid: var(--primary);
-  --fy-bar-track: color-mix(in oklch, var(--foreground) 10%, transparent);
-  --fy-heat-muted: color-mix(in oklch, currentColor 72%, transparent);
-  color: var(--foreground);
+.fy-cal {
+  --fy-week-col: 128px;
+  --fy-panel: 400px;
+  --fy-interest: 1.875rem;
+  --fy-week-interest: 1.5rem;
 }
-.fy-heat[data-heat="1"] { background-color: var(--heat-1); }
-.fy-heat[data-heat="2"] { background-color: var(--heat-2); }
-.fy-heat[data-heat="3"] { background-color: var(--heat-3); }
-.fy-heat[data-heat="4"] { background-color: var(--heat-4); }
-.fy-heat[data-heat="5"] { background-color: var(--heat-5); }
 
-.fy-heat[data-heat="3"],
-.fy-heat[data-heat="4"],
-.fy-heat[data-heat="5"] { --fy-heat-muted: color-mix(in oklch, currentColor 84%, transparent); }
+@media (min-width: 1920px) {
+  .fy-cal {
+    --fy-week-col: 144px;
+    --fy-panel: 440px;
+    --fy-interest: 2.25rem;
+    --fy-week-interest: 1.75rem;
+  }
+}
 
-.fy-heat[data-heat="4"],
-.fy-heat[data-heat="5"] { --fy-bar-solid: currentColor; --fy-bar-track: color-mix(in oklch, currentColor 18%, transparent); }
-.fy-heat[data-heat="5"] { color: var(--primary-foreground); }
-
-.dark .fy-heat[data-heat="3"] { --fy-bar-solid: currentColor; --fy-bar-track: color-mix(in oklch, currentColor 18%, transparent); }
-.dark .fy-heat[data-heat="4"],
-.dark .fy-heat[data-heat="5"] { color: oklch(0.12 0.02 150); }
-
-.fy-heat-muted { color: var(--fy-heat-muted); }
-.fy-bar-track { background-color: var(--fy-bar-track); }
-.fy-bar-confirmed { background-color: var(--fy-bar-solid); }
-.fy-bar-tentative { background-color: color-mix(in oklch, var(--fy-bar-solid) 38%, transparent); }
-
-/* Closed days: a fine diagonal hatch over whatever fill the day has. */
-.fy-closed {
+/* Legend hatch swatch: the same hatch as a closed cell, denser so it reads at 12 px. */
+.fy-swatch-hatched {
   background-image: repeating-linear-gradient(
     135deg,
-    transparent 0 5px,
-    color-mix(in oklch, var(--foreground) 9%, transparent) 5px 6px
+    transparent 0 3px,
+    color-mix(in oklch, var(--foreground) 22%, transparent) 3px 4px
   );
 }
 
-/* Legend swatches reuse the same tokens. */
-.fy-swatch-closed {
-  background-color: var(--muted);
-  background-image: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in oklch, var(--foreground) 22%, transparent) 3px 4px);
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .fy-heat { transition: background-color 150ms ease, box-shadow 150ms ease; }
+  .fy-cell {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
+  }
 }
