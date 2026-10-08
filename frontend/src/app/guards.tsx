@@ -28,8 +28,9 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
 }
 
 /**
- * Restricts a subtree to roles. Managers are only ever allowed on the
- * calendar paths; anything else sends them to their home.
+ * Restricts a subtree to roles. Managers are only ever allowed on the paths
+ * in MANAGER_PATHS (Today, Calendar, Gate, personal settings); anything else
+ * sends them to their home.
  */
 export function RequireRole({ roles, children }: { roles: Role[]; children?: ReactNode }) {
   const { user } = useAuth();

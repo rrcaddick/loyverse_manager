@@ -6,9 +6,16 @@
  * The session is a TanStack query (["auth", "session"]) so any component can
  * read it, and the API client's 401 / password_change_required events update
  * the same cache. Guards in src/app/guards.tsx turn that state into redirects.
+ *
+ * Cache hygiene: private data is removed when a signed-in user signs out or
+ * their session expires. An anonymous 401 (the first session check on the
+ * public form) never touches other queries — in the first build it removed
+ * the in-flight public form-config query and left the form on its skeleton
+ * (docs/research/06). Queries under the "auth" and "public" prefixes are
+ * never removed by auth events.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 
 import { api, isApiError } from "@/lib/api";
@@ -44,6 +51,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Query prefixes that survive sign-out: the session itself and public data. */
+const SHARED_PREFIXES = new Set(["auth", "public"]);
+
+/** Drop every cached query that belonged to the signed-in user. */
+export function clearPrivateQueries(queryClient: QueryClient): void {
+  queryClient.removeQueries({ predicate: (q) => !SHARED_PREFIXES.has(String(q.queryKey[0])) });
+}
+
 async function fetchSession(): Promise<Session | null> {
   try {
     const session = await api.get<Session>("/auth/session");
@@ -71,8 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onAuthEvent((event) => {
         if (event === "unauthenticated") {
           setCsrfToken(null);
+          const hadUser = !!queryClient.getQueryData<Session | null>(queryKeys.session)?.user;
           queryClient.setQueryData<Session | null>(queryKeys.session, null);
-          queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
+          // Only a real sign-out (a session that existed and expired) clears
+          // private data. An anonymous 401 is not a sign-out.
+          if (hadUser) clearPrivateQueries(queryClient);
         } else if (event === "password_change_required") {
           queryClient.setQueryData<Session | null>(queryKeys.session, (current) =>
             current ? { ...current, user: { ...current.user, must_change_password: true } } : current,
@@ -96,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSettled: () => {
       setCsrfToken(null);
       queryClient.setQueryData<Session | null>(queryKeys.session, null);
-      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "auth" });
+      clearPrivateQueries(queryClient);
     },
   });
 

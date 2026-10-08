@@ -1,4 +1,3 @@
-import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,13 +14,15 @@ interface SaveBarProps {
   /** Defaults to submitting the enclosing <form>. */
   onSave?: () => void;
   saveLabel?: string;
+  discardLabel?: string;
   message?: ReactNode;
   className?: string;
 }
 
 /**
- * Sticky bar at the bottom of the viewport that appears when a form has
- * unsaved changes. Rendered inside the <form> so the Save button submits it.
+ * The contextual save bar: "Unsaved changes · Discard · Save". Sticky at the
+ * bottom of the viewport while a form is dirty; rendered inside the <form>
+ * so Save submits it.
  */
 export function SaveBar({
   dirty,
@@ -29,8 +30,9 @@ export function SaveBar({
   disabled = false,
   onReset,
   onSave,
-  saveLabel = "Save changes",
-  message = "You have unsaved changes",
+  saveLabel = "Save",
+  discardLabel = "Discard",
+  message = "Unsaved changes",
   className,
 }: SaveBarProps) {
   return (
@@ -44,19 +46,18 @@ export function SaveBar({
         className,
       )}
     >
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-popover/95 px-4 py-2.5 text-sm shadow-md backdrop-blur supports-backdrop-filter:bg-popover/80">
-        <div className="flex items-center gap-2 text-foreground">
-          <span aria-hidden="true" className="size-2 rounded-full bg-warning" />
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-popover/95 py-2.5 pr-2.5 pl-4 text-body shadow-md backdrop-blur supports-backdrop-filter:bg-popover/80">
+        <div className="flex items-center gap-2.5 font-medium text-foreground">
+          <span aria-hidden="true" className="size-2 rounded-full bg-amber-solid" />
           {message}
         </div>
         <div className="flex items-center gap-2">
           {onReset ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onReset} disabled={saving}>
-              <RotateCcw data-icon="inline-start" />
-              Discard
+            <Button type="button" variant="ghost" onClick={onReset} disabled={saving}>
+              {discardLabel}
             </Button>
           ) : null}
-          <Button type={onSave ? "button" : "submit"} size="sm" onClick={onSave} disabled={disabled || saving}>
+          <Button type={onSave ? "button" : "submit"} onClick={onSave} disabled={disabled || saving}>
             {saving ? <Spinner data-icon="inline-start" /> : null}
             {saving ? "Saving…" : saveLabel}
           </Button>

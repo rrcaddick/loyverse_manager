@@ -1,5 +1,5 @@
 /**
- * /day/:date — the gate's operational screen for one day: who is coming,
+ * /today and /today/:date — the gate's operational screen for one day: who is coming,
  * who has arrived, what is still owed. Manager-allowed; built for a tablet.
  */
 
@@ -27,10 +27,12 @@ import { cn } from "@/lib/utils";
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function DayPage() {
-  const { date = "" } = useParams<{ date: string }>();
+  // /today shows today; /today/:date any day. (Routing v2: /day/:date redirects here.)
+  const { date: param } = useParams<{ date: string }>();
+  const date = param ?? todayIso();
   const valid = ISO_DAY.test(date);
-  useDocumentTitle(valid ? `${formatDateLong(date)} · Day` : "Day");
-  if (!valid) return <Navigate to={`/day/${todayIso()}`} replace />;
+  useDocumentTitle(valid ? (param ? `${formatDateLong(date)} · Day` : "Today") : "Today");
+  if (!valid) return <Navigate to="/today" replace />;
   return <DayView key={date} date={date} />;
 }
 
@@ -57,11 +59,11 @@ function DayView({ date }: { date: string }) {
         }
         title={
           <span className="flex items-center gap-2">
-            <Button variant="outline" size="icon-sm" aria-label="Previous day" onClick={() => navigate(`/day/${shiftDay(date, -1)}`)}>
+            <Button variant="outline" size="icon-sm" aria-label="Previous day" onClick={() => navigate(`/today/${shiftDay(date, -1)}`)}>
               <ChevronLeft />
             </Button>
             <span>{formatDateLong(date)}</span>
-            <Button variant="outline" size="icon-sm" aria-label="Next day" onClick={() => navigate(`/day/${shiftDay(date, 1)}`)}>
+            <Button variant="outline" size="icon-sm" aria-label="Next day" onClick={() => navigate(`/today/${shiftDay(date, 1)}`)}>
               <ChevronRight />
             </Button>
           </span>
@@ -82,7 +84,7 @@ function DayView({ date }: { date: string }) {
               </Link>
             </Button>
             {date !== today ? (
-              <Button variant="outline" onClick={() => navigate(`/day/${today}`)}>
+              <Button variant="outline" onClick={() => navigate("/today")}>
                 Today
               </Button>
             ) : null}

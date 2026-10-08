@@ -24,16 +24,16 @@ import { formatDate, formatDateTime, formatDuration, formatNumber, formatRelativ
 import { cn } from "@/lib/utils";
 import type { BookingStatus, OpsRunResult, OpsStatus } from "@/types/api";
 
-export default function OpsPage() {
-  useDocumentTitle("Ops");
+export default function SystemPage() {
+  useDocumentTitle("System");
   const status = useOpsStatus();
   const notAvailable = status.isError && isApiError(status.error) && status.error.status === 404;
 
   return (
     <>
       <PageHeader
-        title="Ops"
-        description="Background jobs, their last runs, and the application log. Nothing here changes a booking directly."
+        title="System"
+        description="Is everything running? Mail sync, the bank poll, the scheduler and the Loyverse morning sync, with their last runs and the log. Nothing here changes a booking directly."
         actions={
           <Button variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
             <RefreshCw data-icon="inline-start" className={cn(status.isFetching && "animate-spin")} />
@@ -45,7 +45,7 @@ export default function OpsPage() {
       {notAvailable ? (
         <Alert>
           <AlertCircle />
-          <AlertTitle>Ops endpoints are not available yet</AlertTitle>
+          <AlertTitle>System endpoints are not available yet</AlertTitle>
           <AlertDescription>
             The API behind this page (/ops/status, /ops/run, /ops/logs) has not been deployed. The page will light up once it is.
           </AlertDescription>

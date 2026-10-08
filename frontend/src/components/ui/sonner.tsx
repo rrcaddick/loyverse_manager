@@ -14,10 +14,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       closeButton
       duration={4000}
       icons={{
-        success: <CircleCheckIcon className="size-4 text-success" />,
-        info: <InfoIcon className="size-4 text-info" />,
-        warning: <TriangleAlertIcon className="size-4 text-warning-foreground" />,
-        error: <OctagonXIcon className="size-4 text-destructive" />,
+        success: <CircleCheckIcon className="size-4 text-green-text" />,
+        info: <InfoIcon className="size-4 text-blue-text" />,
+        warning: <TriangleAlertIcon className="size-4 text-amber-text" />,
+        error: <OctagonXIcon className="size-4 text-red-text" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
       style={
@@ -31,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast font-sans text-sm shadow-md",
+          toast: "cn-toast font-sans text-body shadow-md",
         },
       }}
       {...props}

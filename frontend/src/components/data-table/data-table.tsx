@@ -12,6 +12,11 @@
  * Client-side sorting and pagination by default. For server-side lists pass
  * `manualPagination` with `rowCount` and handle `onPaginationChange`.
  *
+ * Rows are 44 px (48 with two lines), the header 40 px and sticky with 12 px
+ * labels; `compact` drops rows to 36 px (pair with `useTableDensity` and
+ * `DataTableDensityToggle` in the toolbar). Numbers right-align and go
+ * tabular through `meta.align = "right"` / `meta.numeric`.
+ *
  * `onRowClick` makes rows focusable and activatable with Enter/Space, but the
  * row keeps its table semantics; give the primary cell a real <Link> as well
  * so screen-reader and middle-click users have a first-class target.
@@ -74,7 +79,9 @@ export interface DataTableProps<TData, TValue = unknown> {
   stickyHeader?: boolean;
   /** Constrain height and scroll within. */
   maxHeight?: string;
-  /** Dense rows. */
+  /** 36 px rows instead of 44. */
+  compact?: boolean;
+  /** Alias for `compact` (first build). */
   dense?: boolean;
   className?: string;
 }
@@ -105,9 +112,11 @@ export function DataTable<TData, TValue = unknown>({
   toolbar,
   stickyHeader = true,
   maxHeight,
+  compact,
   dense = false,
   className,
 }: DataTableProps<TData, TValue>) {
+  const isCompact = compact ?? dense;
   const [sortingState, setSortingState] = useState<SortingState>([]);
   const [visibilityState, setVisibilityState] = useState<VisibilityState>({});
   const [selectionState, setSelectionState] = useState<RowSelectionState>({});
@@ -172,7 +181,7 @@ export function DataTable<TData, TValue = unknown>({
                       colSpan={header.colSpan}
                       style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                       className={cn(
-                        "h-10 text-xs font-medium tracking-wide text-muted-foreground uppercase",
+                        "h-thead text-label text-muted-foreground uppercase",
                         meta?.align === "right" && "text-right",
                         meta?.align === "center" && "text-center",
                         meta?.className,
@@ -220,8 +229,8 @@ export function DataTable<TData, TValue = unknown>({
                     }
                     className={cn(
                       interactive &&
-                        "cursor-pointer outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
-                      active && "bg-primary/5",
+                        "cursor-pointer outline-none focus-visible:bg-nested focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset",
+                      active && "bg-selection-row",
                       rowClassName?.(row.original),
                     )}
                   >
@@ -231,7 +240,7 @@ export function DataTable<TData, TValue = unknown>({
                         <TableCell
                           key={cell.id}
                           className={cn(
-                            dense ? "py-1.5" : "py-2.5",
+                            isCompact ? "py-[0.4375rem]" : "py-[0.6875rem]",
                             meta?.align === "right" && "text-right tabular",
                             meta?.align === "center" && "text-center",
                             meta?.numeric && "tabular",

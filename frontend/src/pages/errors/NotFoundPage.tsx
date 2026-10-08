@@ -12,6 +12,7 @@ export default function NotFoundPage() {
   const { user } = useAuth();
   return (
     <EmptyState
+      variant="page"
       icon={FileQuestion}
       title="Page not found"
       description="The address may be out of date, or the record it pointed to has been removed."

@@ -10,11 +10,12 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query";
 import type { PriceTier, SeasonDay, Settings, SettingsResponse, SettingsSection } from "@/types/api";
 
-export function useSettings() {
+export function useSettings(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.settings,
     queryFn: () => api.get<SettingsResponse>("/settings"),
     staleTime: 60_000,
+    enabled: options.enabled ?? true,
   });
 }
 

@@ -12,9 +12,10 @@ export default function ForbiddenPage() {
   const { user } = useAuth();
   return (
     <EmptyState
+      variant="page"
       icon={ShieldOff}
       title="You do not have access to this"
-      description="Your account is a manager account, which covers the calendar and day view. Ask an administrator if you need more."
+      description="Your account is a manager account, which covers Today, the calendar and the gate. Ask an administrator if you need more."
       action={
         <Button asChild>
           <Link to={user ? homeFor(user.role) : "/"}>Back to start</Link>

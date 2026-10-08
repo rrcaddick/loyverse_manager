@@ -9,18 +9,18 @@ export function AuthLayout({ title, description, children }: { title: string; de
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <main className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 flex flex-col items-center gap-4 text-center">
-            <Logo className="h-14 text-foreground" />
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-              {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        <div className="w-full max-w-[26rem]">
+          <div className="mb-8 flex flex-col items-center gap-5 text-center">
+            <Logo className="h-16 text-foreground" />
+            <div className="space-y-1.5">
+              <h1 className="text-title">{title}</h1>
+              {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
             </div>
           </div>
-          <div className="rounded-xl bg-card p-6 ring-1 ring-foreground/10">{children}</div>
+          <div className="rounded-xl bg-card p-6 ring-1 ring-border sm:p-8">{children}</div>
         </div>
       </main>
-      <footer className="flex items-center justify-between px-6 py-4 text-xs text-muted-foreground">
+      <footer className="flex items-center justify-between px-6 py-4 text-sm text-muted-foreground">
         <span>
           {APP_NAME} · {PARK_LEGAL_NAME}
         </span>

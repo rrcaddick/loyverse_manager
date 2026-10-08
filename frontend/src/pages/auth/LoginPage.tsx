@@ -56,7 +56,7 @@ export default function LoginPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
           <FormError message={error} />
-          <TextField control={form.control} name="email" label="Email" type="email" autoComplete="username" autoFocus placeholder="you@farmyardpark.co.za" />
+          <TextField control={form.control} name="email" label="Email" type="email" autoComplete="username" autoFocus />
           <FormField
             control={form.control}
             name="password"
@@ -87,7 +87,7 @@ export default function LoginPage() {
             {form.formState.isSubmitting ? <Spinner data-icon="inline-start" /> : null}
             Sign in
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground">
             Forgotten your password? Ask an administrator to reset it.
           </p>
         </form>

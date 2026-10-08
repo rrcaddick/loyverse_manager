@@ -5,6 +5,13 @@
 
 export type Role = "admin" | "manager";
 
+/** Appearance preference stored per user (PUT /users/me/preferences). */
+export interface UserPreferences {
+  theme: string;
+  mode: "light" | "dark" | "system";
+  text_size: "default" | "large" | "xlarge";
+}
+
 export interface User {
   id: number;
   email: string;
@@ -14,6 +21,8 @@ export interface User {
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
+  /** Absent until the preferences endpoint is deployed. */
+  preferences?: UserPreferences;
 }
 
 export interface Session {

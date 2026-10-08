@@ -1,5 +1,5 @@
-import { Search } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
+import { CircleHelp, Search } from "lucide-react";
+import { Fragment, useRef, useState, type FormEvent } from "react";
 import { Link, useMatches, useNavigate } from "react-router";
 
 import {
@@ -15,7 +15,10 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Kbd } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useShortcut } from "@/hooks/use-keyboard";
 import { useAuth } from "@/lib/auth";
+import { useShell } from "@/layouts/shell-context";
 
 /** Route `handle` shape read by the breadcrumb. */
 export interface RouteHandle {
@@ -35,15 +38,17 @@ function useCrumbs() {
     });
 }
 
+/** 56 px header: sidebar toggle, breadcrumb, search (admin) and help. */
 export function AppHeader() {
   const crumbs = useCrumbs();
   const { isAdmin } = useAuth();
+  const { openHelp } = useShell();
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-6">
-      <SidebarTrigger className="-ml-1.5" aria-label="Toggle navigation" />
-      <Separator orientation="vertical" className="mr-1 h-4!" />
+    <header className="sticky top-0 z-20 flex h-header shrink-0 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-6">
+      <SidebarTrigger className="-ml-1.5 size-9" aria-label="Toggle navigation" />
+      <Separator orientation="vertical" className="mr-1 h-5!" />
       <Breadcrumb className="min-w-0 flex-1">
-        <BreadcrumbList className="flex-nowrap text-sm">
+        <BreadcrumbList className="flex-nowrap text-body">
           {crumbs.map((crumb, index) => {
             const last = index === crumbs.length - 1;
             return (
@@ -66,6 +71,16 @@ export function AppHeader() {
         </BreadcrumbList>
       </Breadcrumb>
       {isAdmin ? <GlobalSearch /> : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts" onClick={openHelp}>
+            <CircleHelp className="size-5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Keyboard shortcuts <Kbd>?</Kbd>
+        </TooltipContent>
+      </Tooltip>
     </header>
   );
 }
@@ -79,17 +94,7 @@ function GlobalSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.closest("input, textarea, select, [contenteditable=true]") || target.isContentEditable)) return;
-      event.preventDefault();
-      inputRef.current?.focus();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  useShortcut("/", () => inputRef.current?.focus());
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -100,29 +105,29 @@ function GlobalSearch() {
 
   return (
     <>
-      <Button variant="ghost" size="icon-sm" className="sm:hidden" aria-label="Search bookings" onClick={() => navigate("/bookings")}>
-        <Search />
+      <Button variant="ghost" size="icon" className="sm:hidden" aria-label="Search bookings" onClick={() => navigate("/bookings")}>
+        <Search className="size-5" />
       </Button>
-      <form role="search" onSubmit={onSubmit} className="hidden w-64 sm:block">
-      <InputGroup className="h-8 bg-card/60">
-        <InputGroupAddon>
-          <Search aria-hidden="true" className="size-4 text-muted-foreground" />
-        </InputGroupAddon>
-        <InputGroupInput
-          ref={inputRef}
-          type="search"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="Search bookings"
-          aria-label="Search bookings by reference, group or contact"
-          autoComplete="off"
-          className="text-sm"
-        />
-        <InputGroupAddon align="inline-end">
-          <Kbd aria-hidden="true">/</Kbd>
-        </InputGroupAddon>
-      </InputGroup>
-    </form>
+      <form role="search" onSubmit={onSubmit} className="hidden w-72 sm:block">
+        <InputGroup className="h-9 bg-card/60">
+          <InputGroupAddon>
+            <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
+            ref={inputRef}
+            type="search"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="Search bookings"
+            aria-label="Search bookings by reference, group or contact"
+            autoComplete="off"
+            className="text-body"
+          />
+          <InputGroupAddon align="inline-end">
+            <Kbd aria-hidden="true">/</Kbd>
+          </InputGroupAddon>
+        </InputGroup>
+      </form>
     </>
   );
 }
