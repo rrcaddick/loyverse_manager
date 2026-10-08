@@ -25,6 +25,10 @@ from src.repositories.mysql import get_db_connection
 
 Params = tuple | list | dict | None
 
+# Columns holding 64-bit identifiers that must reach the browser as strings.
+BIG_ID_COLUMNS = frozenset({"gmail_thrid", "gmail_msgid", "email_thread_id"})
+JS_MAX_SAFE_INT = 2**53 - 1
+
 
 @contextmanager
 def transaction() -> Iterator[pymysql.connections.Connection]:
@@ -118,7 +122,12 @@ def serialize_row(row: dict | None) -> dict | None:
         return None
     out = {}
     for k, v in row.items():
-        if isinstance(v, Decimal):
+        if k in BIG_ID_COLUMNS and v is not None:
+            # Gmail ids exceed JavaScript's safe integer range; always send strings.
+            out[k] = str(v)
+        elif isinstance(v, int) and not isinstance(v, bool) and abs(v) > JS_MAX_SAFE_INT:
+            out[k] = str(v)
+        elif isinstance(v, Decimal):
             out[k] = float(v)
         elif isinstance(v, datetime):
             out[k] = v.isoformat(timespec="seconds")

@@ -8,7 +8,7 @@
       {% if title %}<p class="summary-title">{{ title }}</p>{% endif %}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         {% for row in rows %}
-        {% if row[1] is not none and row[1] != "" %}
+        {% if row and row[1] is not none and row[1] != "" %}
         <tr>
           <td class="row-k">{{ row[0] }}</td>
           <td class="row-v{% if row|length > 2 and row[2] %} row-v-strong{% endif %}">{{ row[1] }}</td>
