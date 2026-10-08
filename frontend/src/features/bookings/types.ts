@@ -61,6 +61,8 @@ export interface BookingRow {
   completed_at: string | null;
   cancelled_at: string | null;
   lapsed_at: string | null;
+  billing_address: string | null;
+  customer_vat_number: string | null;
   legacy_sheet_row: Record<string, string> | null;
   created_by: number | null;
   created_at: string;
@@ -74,6 +76,21 @@ export interface BookingListItem extends BookingRow {
   balance_due: number;
   deposit_covered: boolean;
   status_label: string;
+  /** Reason of the last status change (requested from the backend; absent today). */
+  status_reason?: string | null;
+}
+
+/** GET /bookings/counts: per-status counts plus the list tabs' buckets. */
+export type BookingBucket = "pending" | "confirmed" | "lapsed" | "past" | "all";
+export const BOOKING_BUCKETS: BookingBucket[] = ["pending", "confirmed", "lapsed", "past", "all"];
+
+export interface BookingCounts {
+  counts: Partial<Record<BookingStatus, number>>;
+  pending: number;
+  confirmed: number;
+  lapsed: number;
+  past: number;
+  all: number;
 }
 
 export interface BookingFinance {
@@ -133,6 +150,9 @@ export type BookingEventKind =
   | "email_sent"
   | "email_failed"
   | "email_received"
+  | "payment_matched"
+  | "payment_unmatched"
+  | "reminder_dismissed"
   | (string & {});
 
 export interface BookingEvent {
@@ -340,6 +360,7 @@ export interface ArrivalsCheck {
 }
 
 export interface BookingListParams {
+  bucket?: BookingBucket;
   status?: string;
   from?: string;
   to?: string;
@@ -376,6 +397,8 @@ export interface BookingInput {
   hold_expires_on?: string | null;
   customer_notes?: string | null;
   internal_notes?: string | null;
+  billing_address?: string | null;
+  customer_vat_number?: string | null;
   enquiry_date?: string | null;
   questions?: string[];
   source?: BookingSource;
@@ -427,10 +450,11 @@ export const SOURCE_LABELS: Record<BookingSource, string> = {
   manual: "Entered manually",
 };
 
+/** Labels per docs/handoff/backend-v2-misc.md §2: the deposit-stage document is a statement; the tax invoice is final. */
 export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
   proforma: "Proforma",
-  invoice: "Invoice",
-  final_invoice: "Final invoice",
+  invoice: "Statement",
+  final_invoice: "Tax invoice",
 };
 
 export const REMINDER_KIND_LABELS: Record<ReminderKind, string> = {

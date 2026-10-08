@@ -7,7 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusPill } from "@/components/status-pill";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { humanise } from "@/lib/format";
@@ -57,12 +57,12 @@ function StatusDialogInner({ booking, target, open, onOpenChange }: StatusDialog
       }}
     >
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-sm">
-          <StatusBadge status={booking.status} />
+        <div className="flex items-center gap-2 text-body">
+          <StatusPill status={booking.status} />
           <span aria-hidden="true" className="text-muted-foreground">
             →
           </span>
-          <StatusBadge status={target} />
+          <StatusPill status={target} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="status-reason">
@@ -79,7 +79,7 @@ function StatusDialogInner({ booking, target, open, onOpenChange }: StatusDialog
             placeholder={target === "cancelled" ? "e.g. customer phoned to cancel" : undefined}
           />
           {touched && missing ? (
-            <p id="status-reason-error" role="alert" className="text-sm text-destructive">
+            <p id="status-reason-error" role="alert" className="text-sm text-red-text">
               Give a reason — it is recorded on the booking.
             </p>
           ) : null}

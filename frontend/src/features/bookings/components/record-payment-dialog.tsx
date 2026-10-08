@@ -66,7 +66,14 @@ function PaymentForm({ booking, gate, onClose }: { booking: RecordPaymentDialogP
     schema,
     defaultValues: {
       kind: gate ? "cash" : "eft",
-      amount: booking.finance && booking.finance.balance_due > 0 ? Number(booking.finance.balance_due.toFixed(2)) : Number.NaN,
+      // While the deposit is outstanding that is what normally arrives; afterwards the balance.
+      amount: booking.finance
+        ? !booking.finance.deposit_covered && booking.finance.deposit_outstanding > 0
+          ? Number(booking.finance.deposit_outstanding.toFixed(2))
+          : booking.finance.balance_due > 0
+            ? Number(booking.finance.balance_due.toFixed(2))
+            : Number.NaN
+        : Number.NaN,
       paid_on: todayIso(),
       reference: "",
       note: "",

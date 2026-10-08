@@ -19,6 +19,7 @@ import type {
   ArrivalSource,
   ArrivalsCheck,
   BookingAction,
+  BookingCounts,
   BookingDetail,
   BookingInput,
   BookingListItem,
@@ -34,18 +35,29 @@ export const bookingKeys = {
   list: (params: BookingListParams) => ["bookings", "list", params] as const,
   counts: ["bookings", "counts"] as const,
   detail: (id: number) => ["bookings", id] as const,
+  conversation: (id: number) => ["bookings", id, "conversation"] as const,
   message: (id: number) => ["inbox", "message", id] as const,
 };
 
-/** Everything a booking change can affect. */
+/**
+ * Everything a booking change can affect: the bookings lists and counts, the
+ * calendar and day views, Work and Today (and the nav badges they feed), the
+ * legacy queue and, when a detail came back, its conversation.
+ */
 export function invalidateBookingWorld(qc: QueryClient, detail?: BookingDetail) {
   if (detail) qc.setQueryData(bookingKeys.detail(detail.id), detail);
   void qc.invalidateQueries({ queryKey: ["bookings", "list"] });
   void qc.invalidateQueries({ queryKey: bookingKeys.counts });
   void qc.invalidateQueries({ queryKey: ["calendar"] });
   void qc.invalidateQueries({ queryKey: ["day"] });
+  void qc.invalidateQueries({ queryKey: ["work"] });
+  void qc.invalidateQueries({ queryKey: ["today"] });
   void qc.invalidateQueries({ queryKey: ["queue"] });
-  if (detail) void qc.invalidateQueries({ queryKey: ["inbox"] });
+  if (detail) {
+    void qc.invalidateQueries({ queryKey: ["inbox"] });
+    void qc.invalidateQueries({ queryKey: ["mail"] });
+    void qc.invalidateQueries({ queryKey: bookingKeys.conversation(detail.id) });
+  }
 }
 
 // ----------------------------------------------------------------- queries
@@ -59,10 +71,11 @@ export function useBookings(params: BookingListParams, enabled = true) {
   });
 }
 
+/** Per-status counts plus the tab buckets (pending, confirmed, lapsed, past, all). */
 export function useBookingCounts() {
   return useQuery({
     queryKey: bookingKeys.counts,
-    queryFn: () => api.get<{ counts: Partial<Record<BookingStatus, number>> }>("/bookings/counts").then((r) => r.counts),
+    queryFn: () => api.get<BookingCounts>("/bookings/counts"),
   });
 }
 

@@ -1,7 +1,12 @@
 /**
- * Which actions a booking allows right now, with the reason when it does not.
+ * Which actions a booking allows right now, and why not when it does not.
  * Mirrors the preconditions in docs/handoff/bookings.md so the UI never
- * offers something the API will refuse (and explains why in a tooltip).
+ * offers something the API will refuse.
+ *
+ * Two kinds of "no" (spec §6): an action the *status* makes meaningless is
+ * `hidden` (a ticket for an enquiry, a tax invoice before the visit); one a
+ * person can unblock is `enabled: false` with the `reason` shown beneath it
+ * (no email address yet, no payment yet, no answered question).
  */
 
 import type { BookingStatus } from "@/types/api";
@@ -27,60 +32,79 @@ export type ActionId =
 
 export interface Availability {
   enabled: boolean;
-  /** Shown in a tooltip when disabled. */
+  /** Shown beneath a disabled item. */
   reason?: string;
+  /** The status makes the action meaningless: leave it out of menus. */
+  hidden?: boolean;
 }
 
-const NO_EMAIL = "Add a contact email address first";
-const NO_MOBILE = "Add a contact mobile number first";
+/** Menu and button labels: verb + object, the same words everywhere. */
+export const ACTION_LABELS: Record<ActionId, string> = {
+  "send-proforma": "Send proforma",
+  "send-invoice": "Send statement",
+  "send-final-invoice": "Send tax invoice",
+  "send-ticket-email": "Email vehicle ticket",
+  "send-ticket-whatsapp": "WhatsApp vehicle ticket",
+  "send-payment-confirmation": "Send payment confirmation",
+  "send-acknowledgement": "Send acknowledgement",
+  "send-answers": "Send answers",
+  "send-expiry": "Send expiry notice",
+  "reminder:still_interested": "Send “Still interested?”",
+  "reminder:deposit_reminder": "Send deposit reminder",
+  "reminder:final_details": "Send final details",
+  confirm: "Confirm booking",
+  "record-payment": "Record payment",
+  "record-arrivals": "Record arrivals",
+};
+
+export const NO_EMAIL = "Add an email address first";
+const NO_MOBILE = "Add a mobile number first";
+const OK: Availability = { enabled: true };
 
 function requireEmail(b: BookingDetail): Availability | null {
   return b.contact_email ? null : { enabled: false, reason: NO_EMAIL };
 }
 
-function requireStatus(b: BookingDetail, allowed: BookingStatus[], reason: string): Availability | null {
-  return allowed.includes(b.status) ? null : { enabled: false, reason };
+function hiddenUnless(b: BookingDetail, allowed: BookingStatus[]): Availability | null {
+  return allowed.includes(b.status) ? null : { enabled: false, hidden: true, reason: `Not while the booking is ${b.status_label.toLowerCase()}` };
 }
-
-const OK: Availability = { enabled: true };
 
 export function availability(b: BookingDetail, action: ActionId): Availability {
   switch (action) {
     case "send-proforma":
+      return hiddenUnless(b, ACTIVE_STATUSES) ?? requireEmail(b) ?? OK;
     case "send-acknowledgement":
-      return requireStatus(b, ACTIVE_STATUSES, `Not available while the booking is ${b.status_label.toLowerCase()}`) ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, ["enquiry"]) ?? requireEmail(b) ?? OK;
     case "send-invoice":
-      if (b.finance.paid_total <= 0) return { enabled: false, reason: "Record a payment first — an invoice follows money received" };
+      if (b.finance.paid_total <= 0) return { enabled: false, reason: "Record a payment first — the statement shows money received" };
       return requireEmail(b) ?? OK;
     case "send-final-invoice":
-      if (b.arrived_count === null) return { enabled: false, reason: "Record the arrivals first — the final invoice bills the people who came" };
+      if (b.arrived_count === null) return hiddenUnless(b, FIRM_STATUSES) ?? { enabled: false, reason: "Record the arrivals first — the tax invoice bills the people who came" };
       return requireEmail(b) ?? OK;
     case "send-ticket-email":
-      return requireStatus(b, FIRM_STATUSES, "The vehicle ticket is only sent once the booking is confirmed") ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, FIRM_STATUSES) ?? requireEmail(b) ?? OK;
     case "send-ticket-whatsapp":
-      return (
-        requireStatus(b, FIRM_STATUSES, "The vehicle ticket is only sent once the booking is confirmed") ??
-        (b.contact_mobile ? OK : { enabled: false, reason: NO_MOBILE })
-      );
+      return hiddenUnless(b, FIRM_STATUSES) ?? (b.contact_mobile ? OK : { enabled: false, reason: NO_MOBILE });
     case "send-payment-confirmation":
       if (b.payments.length === 0) return { enabled: false, reason: "No payment has been recorded yet" };
       return requireEmail(b) ?? OK;
     case "send-answers":
+      if (b.questions.length === 0) return { enabled: false, hidden: true, reason: "No questions on this booking" };
       if (!b.questions.some((q) => q.answer)) return { enabled: false, reason: "Answer at least one question first" };
       return requireEmail(b) ?? OK;
     case "send-expiry":
-      return requireStatus(b, TENTATIVE_STATUSES, "Only tentative bookings can lapse") ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, TENTATIVE_STATUSES) ?? requireEmail(b) ?? OK;
     case "reminder:still_interested":
     case "reminder:deposit_reminder":
-      return requireStatus(b, TENTATIVE_STATUSES, "Only for tentative bookings") ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, TENTATIVE_STATUSES) ?? requireEmail(b) ?? OK;
     case "reminder:final_details":
-      return requireStatus(b, FIRM_STATUSES, "Only for confirmed bookings") ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, FIRM_STATUSES) ?? requireEmail(b) ?? OK;
     case "confirm":
-      return requireStatus(b, TENTATIVE_STATUSES, b.status === "confirmed" ? "Already confirmed" : `Cannot confirm a ${b.status_label.toLowerCase()} booking`) ?? OK;
+      return hiddenUnless(b, TENTATIVE_STATUSES) ?? OK;
     case "record-payment":
       return OK;
     case "record-arrivals":
-      return requireStatus(b, FIRM_STATUSES, "Arrivals are recorded against confirmed bookings") ?? OK;
+      return hiddenUnless(b, FIRM_STATUSES) ?? OK;
     default:
       return OK;
   }
@@ -116,10 +140,10 @@ export function statusChangeNeedsReason(target: BookingStatus): boolean {
 
 export const STATUS_CHANGE_COPY: Partial<Record<BookingStatus, { label: string; description: string; destructive?: boolean }>> = {
   proforma_sent: { label: "Mark proforma sent", description: "Records that a proforma went out by other means. Nothing is emailed." },
-  confirmed: { label: "Confirm", description: "Confirms without a recorded deposit. Give the reason." },
+  confirmed: { label: "Confirm booking", description: "Confirms without a recorded deposit. Give the reason." },
   completed: { label: "Mark completed", description: "Closes the booking as visited. Normally this happens when arrivals are recorded." },
   cancelled: { label: "Cancel booking", description: "The customer is not coming. Nothing is emailed; the day frees up on the calendar.", destructive: true },
-  lapsed: { label: "Mark lapsed", description: "The hold expired without a deposit. To email the customer as well, use “Send expiry notice” instead.", destructive: true },
+  lapsed: { label: "Mark lapsed", description: "The hold expired without a deposit. To email the customer as well, use “Send expiry notice”.", destructive: true },
   no_show: { label: "Mark no-show", description: "Confirmed but nobody arrived on the day.", destructive: true },
   enquiry: { label: "Reopen as enquiry", description: "Brings a cancelled or lapsed booking back as a live enquiry." },
 };

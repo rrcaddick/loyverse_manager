@@ -1,51 +1,51 @@
 /**
- * /bookings — every group booking, server-paged and sorted, with the filter
- * state in the URL (see features/bookings/list-params.ts). The header search
- * lands here as ?q=.
+ * /bookings — one list split by status (spec §6): SegmentedTabs with counts
+ * from GET /bookings/counts (Pending · Confirmed · Lapsed · Past · All),
+ * one search box, an Upcoming / This month / Past / All dates range, a
+ * per-tab default sort, 25 rows a page. State lives in the URL
+ * (features/bookings/list-params.ts); the header search lands as ?q=.
+ * Cards on a phone, a 48 px DataTable otherwise.
  */
 
-import type { ColumnDef, SortingState } from "@tanstack/react-table";
-import { BookOpenText, Check, ChevronDown, Plus, Search, X } from "lucide-react";
+import type { SortingState } from "@tanstack/react-table";
+import { BookOpenText, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
-import { DataTable, DataTableColumnHeader } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
-import { Section } from "@/components/section";
-import { BOOKING_STATUS_META, StatusBadge } from "@/components/status-badge";
+import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBookingCounts, useBookings } from "@/features/bookings/api";
 import { BookingFormDialog } from "@/features/bookings/components/booking-form-dialog";
-import {
-  PAGE_SIZES,
-  RANGE_OPTIONS,
-  SORTABLE_COLUMNS,
-  hasActiveFilters,
-  parseListState,
-  toApiParams,
-  writeListState,
-  type ListState,
-  type RangePreset,
-} from "@/features/bookings/list-params";
-import { HoldExpiryNotice, ProvenanceBadge } from "@/features/bookings/shared";
-import type { BookingListItem } from "@/features/bookings/types";
+import { BookingCards } from "@/features/bookings/components/list-cards";
+import { columnsFor } from "@/features/bookings/components/list-columns";
+import { PAGE_SIZE, RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
+import type { BookingBucket } from "@/features/bookings/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { errorMessage } from "@/lib/api";
-import { formatDate, formatDateTime, formatMoney, formatNumber, formatRelativeDay, formatWeekday, pluralise } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { BOOKING_STATUSES, type BookingStatus } from "@/types/api";
+
+const TAB_LABELS: Record<BookingBucket, string> = { pending: "Pending", confirmed: "Confirmed", lapsed: "Lapsed", past: "Past", all: "All" };
+
+const EMPTY_COPY: Record<BookingBucket, { title: string; hint: string }> = {
+  pending: { title: "Nothing pending", hint: "New requests from the form, the inbox or the phone land here until the deposit arrives." },
+  confirmed: { title: "No confirmed visits", hint: "A booking moves here when its deposit is recorded or matched from the bank." },
+  lapsed: { title: "Nothing lapsed or cancelled", hint: "Holds that expire without a deposit, and cancellations, are kept here." },
+  past: { title: "No past visits yet", hint: "Completed visits and no-shows are kept here." },
+  all: { title: "No bookings yet", hint: "New requests from the form, the inbox or the phone will show up here." },
+};
 
 export default function BookingsPage() {
   useDocumentTitle("Bookings");
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [params, setParams] = useSearchParams();
   const state = useMemo(() => parseListState(params), [params]);
   const apiParams = useMemo(() => toApiParams(state), [state]);
@@ -63,137 +63,35 @@ export default function BookingsPage() {
     return [{ id: desc ? state.sort.slice(1) : state.sort, desc }];
   }, [state.sort]);
 
-  const columns = useMemo<ColumnDef<BookingListItem>[]>(
-    () => [
-      {
-        accessorKey: "reference",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Ref" />,
-        cell: ({ row }) => (
-          <a
-            href={`/bookings/${row.original.id}`}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-              e.preventDefault();
-              navigate(`/bookings/${row.original.id}`);
-            }}
-            className="font-mono text-sm font-medium text-foreground underline-offset-3 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm"
-          >
-            {row.original.reference}
-          </a>
-        ),
-        meta: { className: "w-24" },
-      },
-      {
-        accessorKey: "group_name",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Group" />,
-        cell: ({ row }) => (
-          <div className="grid min-w-0 leading-tight">
-            <span className="truncate font-medium text-foreground">{row.original.group_name}</span>
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="truncate">
-                {row.original.contact_name}
-                {row.original.area ? ` · ${row.original.area}` : ""}
-              </span>
-              <ProvenanceBadge source={row.original.source} iconOnly />
-            </span>
-          </div>
-        ),
-        meta: { className: "min-w-56 max-w-[28rem]" },
-      },
-      {
-        accessorKey: "visit_date",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Visit" />,
-        cell: ({ row }) => {
-          const relative = formatRelativeDay(row.original.visit_date);
-          const isRelative = !/\d{4}/.test(relative);
-          return (
-            <div className="grid leading-tight whitespace-nowrap">
-              <span className="tabular text-foreground">{formatDate(row.original.visit_date)}</span>
-              <span className={cn("text-xs", isRelative && relative === "Today" ? "font-medium text-primary" : "text-muted-foreground")}>
-                {formatWeekday(row.original.visit_date)}
-                {isRelative ? ` · ${relative}` : ""}
-              </span>
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "people_booked",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="People" align="right" />,
-        cell: ({ row }) => formatNumber(row.original.people_booked),
-        meta: { align: "right", numeric: true },
-      },
-      {
-        accessorKey: "status",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-        cell: ({ row }) => (
-          <div className="flex flex-col items-start gap-0.5">
-            <StatusBadge status={row.original.status} />
-            <HoldExpiryNotice booking={row.original} urgentOnly className="text-[11px] leading-4" />
-          </div>
-        ),
-      },
-      {
-        id: "deposit_due",
-        accessorFn: (b) => b.deposit_due,
-        header: "Deposit",
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.deposit_waived ? (
-            <span className="text-muted-foreground">Waived</span>
-          ) : (
-            <span className={cn(row.original.deposit_covered && "text-success")}>{formatMoney(row.original.deposit_due, { compact: true })}</span>
-          ),
-        meta: { align: "right", numeric: true, label: "Deposit due" },
-      },
-      {
-        id: "paid_total",
-        accessorFn: (b) => b.paid_total,
-        header: "Paid",
-        enableSorting: false,
-        cell: ({ row }) => (row.original.paid_total > 0 ? formatMoney(row.original.paid_total, { compact: true }) : <span className="text-muted-foreground">—</span>),
-        meta: { align: "right", numeric: true },
-      },
-      {
-        id: "balance_due",
-        accessorFn: (b) => b.balance_due,
-        header: "Balance",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <span className={cn(row.original.balance_due <= 0 && row.original.total_amount > 0 && "text-success")}>
-            {formatMoney(row.original.balance_due, { compact: true })}
-          </span>
-        ),
-        meta: { align: "right", numeric: true },
-      },
-      {
-        accessorKey: "updated_at",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Last activity" />,
-        cell: ({ row }) => (
-          <span className="whitespace-nowrap text-muted-foreground" title={formatDateTime(row.original.updated_at)}>
-            {formatRelativeDay(row.original.updated_at)}
-          </span>
-        ),
-      },
-    ],
-    [navigate],
-  );
-
+  const columns = useMemo(() => columnsFor(state.tab), [state.tab]);
   const total = list.data?.total ?? 0;
   const items = list.data?.items ?? [];
+  const c = counts.data;
 
   return (
     <>
       <PageHeader
         title="Bookings"
-        description="Search and filter every group booking. Click a row to open it."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus data-icon="inline-start" />
             New booking
           </Button>
         }
-      />
+      >
+        <SegmentedTabs
+          aria-label="Booking buckets"
+          value={state.tab}
+          onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
+          items={[
+            { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
+            { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
+            { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
+            { value: "past", label: TAB_LABELS.past, count: c?.past },
+            { value: "all", label: TAB_LABELS.all, count: c?.all },
+          ]}
+        />
+      </PageHeader>
 
       {list.isError ? (
         <Alert variant="destructive">
@@ -207,66 +105,92 @@ export default function BookingsPage() {
         </Alert>
       ) : null}
 
-      <Section flush className={cn("transition-opacity", list.isPlaceholderData && "opacity-80")}>
-        <div className="px-4 pt-4 sm:px-5">
+      <Toolbar state={state} onChange={update} summary={list.data ? `${formatNumber(total)} ${total === 1 ? "booking" : "bookings"}` : null} />
+
+      {isMobile ? (
+        list.isPending ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : items.length === 0 ? (
+          <EmptyBookings state={state} onClear={() => update({ range: TAB_DEFAULTS[state.tab].range, q: "" })} onCreate={() => setCreateOpen(true)} />
+        ) : (
+          <>
+            <BookingCards items={items} tab={state.tab} />
+            {total > PAGE_SIZE ? (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <Button variant="outline" size="sm" disabled={state.page <= 1} onClick={() => update({ page: state.page - 1 }, false)}>
+                  Previous
+                </Button>
+                <span className="tabular">
+                  Page {state.page} of {Math.ceil(total / PAGE_SIZE)}
+                </span>
+                <Button variant="outline" size="sm" disabled={state.page * PAGE_SIZE >= total} onClick={() => update({ page: state.page + 1 }, false)}>
+                  Next
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )
+      ) : (
+        <section className={cn("rounded-xl bg-card px-4 pt-1 pb-3 ring-1 ring-border transition-opacity sm:px-5", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
           <DataTable
+            key={state.tab}
             columns={columns}
             data={items}
             isLoading={list.isPending}
             getRowId={(b) => String(b.id)}
             onRowClick={(b) => navigate(`/bookings/${b.id}`)}
+            rowClassName={() => "h-row-lg"}
             manualPagination
             rowCount={total}
-            paginationState={{ pageIndex: state.page - 1, pageSize: state.pageSize }}
+            pageSize={PAGE_SIZE}
+            pageSizeOptions={[PAGE_SIZE]}
+            paginationState={{ pageIndex: state.page - 1, pageSize: PAGE_SIZE }}
             onPaginationChange={(updater) => {
-              const current = { pageIndex: state.page - 1, pageSize: state.pageSize };
+              const current = { pageIndex: state.page - 1, pageSize: PAGE_SIZE };
               const next = typeof updater === "function" ? updater(current) : updater;
-              const sizeChanged = next.pageSize !== state.pageSize;
-              update({ page: sizeChanged ? 1 : next.pageIndex + 1, pageSize: next.pageSize }, false);
+              update({ page: next.pageIndex + 1 }, false);
             }}
-            pageSizeOptions={PAGE_SIZES}
             manualSorting
             sorting={sorting}
             onSortingChange={(updater) => {
               const next = typeof updater === "function" ? updater(sorting) : updater;
               const first = next[0];
               if (!first || !SORTABLE_COLUMNS.has(first.id)) {
-                update({ sort: state.range === "upcoming" ? "visit_date" : "-visit_date" });
+                update({ sort: TAB_DEFAULTS[state.tab].sort });
                 return;
               }
               update({ sort: `${first.desc ? "-" : ""}${first.id}` });
             }}
-            toolbar={
-              <Toolbar
-                state={state}
-                counts={counts.data}
-                onChange={update}
-                summary={list.data ? `${formatNumber(total)} ${total === 1 ? "booking" : "bookings"}` : null}
-              />
-            }
-            emptyState={
-              <EmptyState
-                compact
-                icon={BookOpenText}
-                title={hasActiveFilters(state) ? "No bookings match these filters" : "No bookings yet"}
-                description={hasActiveFilters(state) ? "Try a wider date range or clear the status filter." : "New requests from the form, the inbox or the phone will show up here."}
-                action={
-                  hasActiveFilters(state) ? (
-                    <Button variant="outline" onClick={() => update({ statuses: [], range: "upcoming", q: "", from: "", to: "" })}>
-                      Clear filters
-                    </Button>
-                  ) : (
-                    <Button onClick={() => setCreateOpen(true)}>New booking</Button>
-                  )
-                }
-              />
-            }
+            emptyState={<EmptyBookings state={state} onClear={() => update({ range: TAB_DEFAULTS[state.tab].range, q: "" })} onCreate={() => setCreateOpen(true)} />}
           />
-        </div>
-      </Section>
+        </section>
+      )}
 
       <BookingFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </>
+  );
+}
+
+function EmptyBookings({ state, onClear, onCreate }: { state: ListState; onClear: () => void; onCreate: () => void }) {
+  const filtered = hasActiveFilters(state);
+  const copy = EMPTY_COPY[state.tab];
+  return (
+    <EmptyState
+      variant="card"
+      icon={BookOpenText}
+      title={filtered ? "No bookings match" : copy.title}
+      hint={filtered ? "Try a wider date range or clear the search." : copy.hint}
+      action={
+        filtered ? (
+          <Button variant="outline" onClick={onClear}>
+            Clear filters
+          </Button>
+        ) : (
+          <Button onClick={onCreate}>New booking</Button>
+        )
+      }
+      link={state.tab !== "all" && !filtered ? { to: "/bookings?tab=all", label: "All bookings" } : undefined}
+    />
   );
 }
 
@@ -274,12 +198,11 @@ export default function BookingsPage() {
 
 interface ToolbarProps {
   state: ListState;
-  counts: Partial<Record<BookingStatus, number>> | undefined;
   onChange: (patch: Partial<ListState>) => void;
   summary: string | null;
 }
 
-function Toolbar({ state, counts, onChange, summary }: ToolbarProps) {
+function Toolbar({ state, onChange, summary }: ToolbarProps) {
   const [q, setQ] = useState(state.q);
   const [syncedQ, setSyncedQ] = useState(state.q);
   if (state.q !== syncedQ) {
@@ -288,20 +211,18 @@ function Toolbar({ state, counts, onChange, summary }: ToolbarProps) {
     setQ(state.q);
   }
   useEffect(() => {
-    if (q === state.q) return;
+    if (q.trim() === state.q) return;
     const timer = window.setTimeout(() => onChange({ q: q.trim() }), 350);
     return () => window.clearTimeout(timer);
     // onChange is recreated per render; the debounce only cares about q.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const active = hasActiveFilters(state);
-
   return (
-    <div className="flex w-full flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <form
         role="search"
-        className="w-full lg:w-72"
+        className="w-full sm:w-80"
         onSubmit={(e) => {
           e.preventDefault();
           onChange({ q: q.trim() });
@@ -311,17 +232,10 @@ function Toolbar({ state, counts, onChange, summary }: ToolbarProps) {
           <InputGroupAddon>
             <Search aria-hidden="true" className="size-4 text-muted-foreground" />
           </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Reference, group, contact, area…"
-            aria-label="Search bookings"
-            autoComplete="off"
-          />
+          <InputGroupInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, group, contact, phone, area" aria-label="Search bookings" autoComplete="off" />
           {q ? (
             <InputGroupAddon align="inline-end">
-              <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50">
+              <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-selection-ring">
                 <X className="size-3.5" />
               </button>
             </InputGroupAddon>
@@ -329,10 +243,8 @@ function Toolbar({ state, counts, onChange, summary }: ToolbarProps) {
         </InputGroup>
       </form>
 
-      <StatusFilter value={state.statuses} counts={counts} onChange={(statuses) => onChange({ statuses })} />
-
-      <Select value={state.range} onValueChange={(v) => onChange({ range: v as RangePreset, sort: v === "upcoming" ? "visit_date" : "-visit_date" })}>
-        <SelectTrigger className="w-full lg:w-40" aria-label="Date range">
+      <Select value={state.range} onValueChange={(v) => onChange({ range: v as RangePreset })}>
+        <SelectTrigger className="w-full sm:w-40" aria-label="Date range">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -344,96 +256,18 @@ function Toolbar({ state, counts, onChange, summary }: ToolbarProps) {
         </SelectContent>
       </Select>
 
-      {state.range === "custom" ? (
-        <div className="flex items-center gap-2">
-          <Label htmlFor="bookings-from" className="sr-only">
-            From
-          </Label>
-          <Input id="bookings-from" type="date" value={state.from} max={state.to || undefined} onChange={(e) => onChange({ from: e.target.value })} className="w-36 tabular" aria-label="From date" />
-          <span className="text-sm text-muted-foreground" aria-hidden="true">
-            –
-          </span>
-          <Label htmlFor="bookings-to" className="sr-only">
-            To
-          </Label>
-          <Input id="bookings-to" type="date" value={state.to} min={state.from || undefined} onChange={(e) => onChange({ to: e.target.value })} className="w-36 tabular" aria-label="To date" />
-        </div>
-      ) : null}
-
-      {active ? (
-        <Button variant="ghost" size="sm" onClick={() => onChange({ statuses: [], range: "upcoming", q: "", from: "", to: "", sort: "visit_date" })}>
+      {hasActiveFilters(state) ? (
+        <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
           <X data-icon="inline-start" />
           Clear
         </Button>
       ) : null}
 
       {summary ? (
-        <span className="text-sm text-muted-foreground tabular lg:ml-auto" aria-live="polite">
+        <span className="text-sm tabular text-muted-foreground sm:ml-auto" aria-live="polite">
           {summary}
         </span>
       ) : null}
     </div>
-  );
-}
-
-function StatusFilter({
-  value,
-  counts,
-  onChange,
-}: {
-  value: BookingStatus[];
-  counts: Partial<Record<BookingStatus, number>> | undefined;
-  onChange: (next: BookingStatus[]) => void;
-}) {
-  const label =
-    value.length === 0 ? "Any status" : value.length === 1 ? BOOKING_STATUS_META[value[0]!].label : `${value.length} statuses`;
-  const activeSet: BookingStatus[] = ["enquiry", "proforma_sent", "confirmed"];
-  const isActiveSet = value.length === activeSet.length && activeSet.every((s) => value.includes(s));
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className={cn("w-full justify-between lg:w-44", value.length > 0 && "border-primary/40 bg-primary/5")} aria-label={`Filter by status: ${label}`}>
-          <span className="truncate">{label}</span>
-          <ChevronDown data-icon="inline-end" className="text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 gap-1 p-2">
-        <button
-          type="button"
-          onClick={() => onChange(isActiveSet ? [] : activeSet)}
-          className={cn(
-            "flex h-8 items-center justify-between rounded-md px-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
-            isActiveSet && "bg-primary/10 font-medium",
-          )}
-        >
-          Active (enquiry, proforma, confirmed)
-          {isActiveSet ? <Check aria-hidden="true" className="size-4 text-primary" /> : null}
-        </button>
-        <div className="my-1 h-px bg-border" role="separator" />
-        {BOOKING_STATUSES.map((status) => {
-          const id = `status-${status}`;
-          const checked = value.includes(status);
-          return (
-            <div key={status} className="flex h-8 items-center gap-2 rounded-md px-2 hover:bg-muted">
-              <Checkbox
-                id={id}
-                checked={checked}
-                onCheckedChange={(next) => onChange(next ? [...value, status] : value.filter((s) => s !== status))}
-              />
-              <Label htmlFor={id} className="flex flex-1 cursor-pointer items-center justify-between font-normal">
-                <StatusBadge status={status} />
-                <span className="text-xs text-muted-foreground tabular">{counts ? formatNumber(counts[status] ?? 0) : ""}</span>
-              </Label>
-            </div>
-          );
-        })}
-        {value.length > 0 ? (
-          <Button variant="ghost" size="sm" className="mt-1 justify-start" onClick={() => onChange([])}>
-            Clear status filter
-          </Button>
-        ) : null}
-        <p className="sr-only">{pluralise(value.length, "status selected", "statuses selected")}</p>
-      </PopoverContent>
-    </Popover>
   );
 }

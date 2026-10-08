@@ -1,38 +1,40 @@
 /**
- * /bookings/:id — the heart of the system. Header, action bar, then tabs
- * (?tab=overview|timeline|emails|documents|payments|questions).
+ * /bookings/:id — the booking record (spec §6).
+ *
+ * Header (group name, status pill, facts line, one primary button, Edit, ⋯)
+ * then two tabs: Booking — next-step strip, money ladder, questions (when
+ * any), activity timeline, with the rail (details, contact, documents, hold
+ * & reminders, internal note, record) beside it — and Conversation, which
+ * mounts the Mail agent's ConversationView. Keys: E edit, N note.
  */
 
-import { AlertCircle, ArrowLeft, CalendarDays, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
+import { Suspense, lazy } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { StatusBadge } from "@/components/status-badge";
+import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBooking } from "@/features/bookings/api";
-import { ActionBar, SendDialog } from "@/features/bookings/components/action-bar";
-import { BookingFormDialog } from "@/features/bookings/components/booking-form-dialog";
-import { DocumentsTab } from "@/features/bookings/components/documents-tab";
-import { EmailsTab } from "@/features/bookings/components/emails-tab";
-import { OverviewTab } from "@/features/bookings/components/overview-tab";
-import { PaymentsTab } from "@/features/bookings/components/payments-tab";
-import { QuestionsTab } from "@/features/bookings/components/questions-tab";
-import { TimelineTab } from "@/features/bookings/components/timeline-tab";
-import { relativeDayLabel, useGroupTypeLabel } from "@/features/bookings/lib";
-import { ContactChips, HoldExpiryNotice, ProvenanceBadge } from "@/features/bookings/shared";
+import { Activity } from "@/features/bookings/components/activity";
+import { BookingActionsProvider } from "@/features/bookings/components/booking-actions";
+import { useBookingActions } from "@/features/bookings/use-booking-actions";
+import { MoneyCard } from "@/features/bookings/components/money-card";
+import { QuestionsCard } from "@/features/bookings/components/questions-card";
+import { Rail } from "@/features/bookings/components/rail";
+import { NextStepCard, RecordHeader } from "@/features/bookings/components/record-header";
 import type { BookingDetail } from "@/features/bookings/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { useShortcut } from "@/hooks/use-keyboard";
 import { errorMessage, isApiError } from "@/lib/api";
-import { formatDateLong, formatNumber, pluralise } from "@/lib/format";
 
-const TABS = ["overview", "timeline", "emails", "documents", "payments", "questions"] as const;
-type Tab = (typeof TABS)[number];
+const ConversationView = lazy(() => import("@/features/mail/conversation-view").then((m) => ({ default: m.ConversationView })));
+
+type Tab = "booking" | "conversation";
 
 export default function BookingDetailPage() {
   const { id: raw } = useParams<{ id: string }>();
@@ -47,11 +49,11 @@ export default function BookingDetailPage() {
     return (
       <>
         <div className="space-y-3">
-          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-4 w-32" />
           <Skeleton className="h-8 w-80 max-w-full" />
-          <Skeleton className="h-4 w-96 max-w-full" />
+          <Skeleton className="h-5 w-[32rem] max-w-full" />
         </div>
-        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-14 w-full rounded-lg" />
         <PageSkeleton rows={8} />
       </>
     );
@@ -64,9 +66,10 @@ export default function BookingDetailPage() {
         <PageHeader title={notFound ? "Booking not found" : "Booking"} />
         {notFound ? (
           <EmptyState
+            variant="page"
             icon={AlertCircle}
             title="There is no booking with this id"
-            description="It may have been removed, or the link is wrong."
+            hint="It may have been removed, or the link is wrong."
             action={
               <Button asChild variant="outline">
                 <Link to="/bookings">
@@ -93,22 +96,29 @@ export default function BookingDetailPage() {
     );
   }
 
-  return <Detail booking={booking.data} />;
+  return (
+    <BookingActionsProvider booking={booking.data}>
+      <Record booking={booking.data} />
+    </BookingActionsProvider>
+  );
 }
 
-function Detail({ booking }: { booking: BookingDetail }) {
+function Record({ booking }: { booking: BookingDetail }) {
   const [params, setParams] = useSearchParams();
-  const tabParam = params.get("tab");
-  const tab: Tab = (TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as Tab) : "overview";
-  const [editOpen, setEditOpen] = useState(false);
-  const groupType = useGroupTypeLabel();
-  const [answersOpen, setAnswersOpen] = useState(false);
+  const tab: Tab = params.get("tab") === "conversation" ? "conversation" : "booking";
+  const actions = useBookingActions();
 
-  function setTab(next: string) {
+  useShortcut("e", () => actions.openEdit());
+  useShortcut("n", () => {
+    if (tab !== "booking") setTab("booking");
+    window.setTimeout(actions.focusNote, tab === "booking" ? 0 : 150);
+  });
+
+  function setTab(next: Tab) {
     setParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        if (next === "overview") p.delete("tab");
+        if (next === "booking") p.delete("tab");
         else p.set("tab", next);
         return p;
       },
@@ -116,95 +126,41 @@ function Detail({ booking }: { booking: BookingDetail }) {
     );
   }
 
-  const counts: Record<Tab, number | null> = {
-    overview: null,
-    timeline: booking.events.length + booking.emails.length,
-    emails: booking.emails.length,
-    documents: booking.documents.length,
-    payments: booking.payments.length,
-    questions: booking.questions.length,
-  };
-  const unanswered = booking.questions.filter((q) => !q.answer).length;
-
   return (
     <>
-      <PageHeader
-        eyebrow={
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono">{booking.reference}</span>
-            <ProvenanceBadge source={booking.source} className="normal-case tracking-normal" />
-          </span>
-        }
-        title={
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>{booking.group_name}</span>
-            <StatusBadge status={booking.status} className="h-6 px-2 text-sm" />
-          </span>
-        }
-        description={
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <Link to={`/day/${booking.visit_date}`} className="inline-flex items-center gap-1.5 font-medium text-foreground underline-offset-3 hover:underline">
-                <CalendarDays aria-hidden="true" className="size-4 text-muted-foreground" />
-                {formatDateLong(booking.visit_date)}
-              </Link>
-              {relativeDayLabel(booking.visit_date) ? <span className="text-muted-foreground">· {relativeDayLabel(booking.visit_date)}</span> : null}
-              <span className="text-muted-foreground" aria-hidden="true">
-                ·
-              </span>
-              <span className="tabular">{pluralise(booking.people_booked, "person", "people")}</span>
-              {booking.group_type ? (
-                <>
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    ·
-                  </span>
-                  <span>{groupType(booking.group_type)}</span>
-                </>
-              ) : null}
-              {booking.arrived_count !== null ? (
-                <>
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="text-primary tabular">{formatNumber(booking.arrived_count)} arrived</span>
-                </>
-              ) : null}
-              <HoldExpiryNotice booking={booking} />
-            </div>
-            <ContactChips booking={booking} />
-          </div>
-        }
+      <RecordHeader booking={booking} />
+
+      <SegmentedTabs
+        aria-label="Booking record tabs"
+        variant="line"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { value: "booking", label: "Booking" },
+          { value: "conversation", label: "Conversation", count: booking.emails.length },
+        ]}
       />
 
-      <ActionBar booking={booking} onEdit={() => setEditOpen(true)} />
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList variant="line" className="-mb-px h-auto w-full justify-start overflow-x-auto border-b border-border pb-px">
-          {TABS.map((t) => (
-            <TabsTrigger key={t} value={t} className="h-9 flex-none gap-1.5 px-3 capitalize">
-              {t}
-              {counts[t] !== null && counts[t]! > 0 ? (
-                <span className="rounded-full bg-muted px-1.5 text-xs text-muted-foreground tabular">{formatNumber(counts[t]!)}</span>
-              ) : null}
-              {t === "questions" && unanswered > 0 ? <span className="size-1.5 rounded-full bg-warning" aria-label={`${unanswered} unanswered`} /> : null}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      <div key={tab}>
-        {tab === "overview" ? <OverviewTab booking={booking} onEdit={() => setEditOpen(true)} /> : null}
-        {tab === "timeline" ? <TimelineTab booking={booking} /> : null}
-        {tab === "emails" ? <EmailsTab booking={booking} /> : null}
-        {tab === "documents" ? <DocumentsTab booking={booking} /> : null}
-        {tab === "payments" ? <PaymentsTab booking={booking} /> : null}
-        {tab === "questions" ? (
-          <QuestionsTab booking={booking} onSendAnswers={() => setAnswersOpen(true)} />
-        ) : null}
-      </div>
-
-      <BookingFormDialog open={editOpen} onOpenChange={setEditOpen} booking={booking} />
-      <SendDialog booking={booking} action={answersOpen ? "send-answers" : null} onClose={() => setAnswersOpen(false)} />
+      {tab === "booking" ? (
+        <div className="grid gap-card-gap xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <div className="flex min-w-0 flex-col gap-card-gap xl:col-start-1">
+            <NextStepCard booking={booking} />
+            <MoneyCard booking={booking} />
+            {booking.questions.length > 0 ? <QuestionsCard booking={booking} /> : null}
+          </div>
+          {/* Phones: strip, money, rail accordions, then activity last (research note 04). */}
+          <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+            <Rail booking={booking} />
+          </div>
+          <div className="min-w-0 xl:col-start-1">
+            <Activity booking={booking} />
+          </div>
+        </div>
+      ) : (
+        <Suspense fallback={<PageSkeleton rows={6} />}>
+          <ConversationView bookingId={booking.id} />
+        </Suspense>
+      )}
     </>
   );
 }
