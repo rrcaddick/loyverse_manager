@@ -40,7 +40,9 @@ docker compose ps
 
 The image builds the React app in a Node stage, so the server needs no Node
 installed. `migrate` runs automatically before `web` and `worker` start and is
-idempotent.
+idempotent. On a network that cannot reach `deb.debian.org`, build with
+`--build-arg DEBIAN_MIRROR=https://mirror.lstn.net --build-arg DEBIAN_SECURITY_MIRROR=https://cdn-aws.deb.debian.org`
+(`docker compose build --build-arg ...`); production uses the defaults.
 
 Two things in `.env` will bite you otherwise:
 

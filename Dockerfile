@@ -42,7 +42,13 @@ ENV PYTHONUNBUFFERED=1 \
 # curl: container healthchecks.
 # libpango/harfbuzz/ffi/jpeg/openjp2/fontconfig: WeasyPrint (PDF documents).
 # default-mysql-client: nightly mysqldump in scripts/backup_db.sh.
-RUN apt-get update \
+# DEBIAN_MIRROR lets a build on a network that cannot reach deb.debian.org use
+# another mirror, e.g. --build-arg DEBIAN_MIRROR=https://mirror.lstn.net
+ARG DEBIAN_MIRROR=http://deb.debian.org
+ARG DEBIAN_SECURITY_MIRROR=http://deb.debian.org
+RUN sed -i -e "s|^URIs: http://deb.debian.org/debian-security$|URIs: ${DEBIAN_SECURITY_MIRROR}/debian-security|" \
+           -e "s|^URIs: http://deb.debian.org/debian$|URIs: ${DEBIAN_MIRROR}/debian|" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         tzdata curl ca-certificates \
         libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 \
