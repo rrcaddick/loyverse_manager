@@ -13,7 +13,9 @@
 
 FROM node:22-bookworm-slim AS frontend
 ENV CI=1
-RUN corepack enable
+# Pin pnpm to the version the lockfile was written with (pnpm 10 adds a
+# minimum-release-age policy that rejects freshly published packages).
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
