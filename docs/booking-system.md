@@ -381,3 +381,23 @@ Do not edit another owner's files; if you need a change there, write it in
 `docs/handoff/<your-name>.md` and the lead integrates. Never touch
 `web/routes/open_tickets.py`, `web/routes/stock.py`, `web/routes/bridge_auth.py`,
 `src/models/open_ticket.py` (the bridge session owns them on another branch).
+
+## 15. Redesign additions (October 2026)
+
+The redesign (`docs/redesign-spec.md`) added these surfaces; their exact JSON
+shapes live in the handoff notes named here, which are authoritative.
+
+| Area | Endpoints | Handoff |
+| --- | --- | --- |
+| Today and Work | `GET /today?date=` (manager-allowed, money and work stripped), `GET /work?view=`, `GET /work/counts`, `POST /work/reminders/dismiss`, `POST /work/holds/:id/extend`, `PUT /users/me/preferences` | `docs/handoff/work-today.md` |
+| Conversations | `GET /inbox/conversations?view=needs_reply|unmatched|waiting|done|all`, `GET /inbox/conversations/:thrid`, `POST …/done|reopen|not-booking|attach|detach|notes|reply`, `GET …/suggestions`, `GET /bookings/:id/conversation`, `GET /inbox/messages/:id/original`, `GET /inbox/templates` | `docs/handoff/mail-v2.md` |
+| Bank | `GET /payments/bank-transactions?view=needs_attention|matched|all` (suggestions carry a confidence sentence), `POST …/ignore {reason, create_rule}`, `GET/POST/DELETE /payments/ignore-rules`, unmatch reverts `confirmed → proforma_sent` | `docs/handoff/backend-v2-misc.md` |
+| Bookings | `GET /bookings/counts` buckets, `?bucket=`, billing fields | `docs/handoff/backend-v2-misc.md` |
+| Public form | `visitors`, `arrival_time` slots, `POST /public/booking-request` → `{id, token}`, `GET /public/requests/:id?token=`, acknowledgement toggle | `docs/handoff/backend-v2-misc.md` |
+| Gate | `GET /gate` (manager-allowed) | `docs/handoff/backend-v2-misc.md` |
+
+Schema: migrations 008 (email_threads, quote-split columns, `booking_reminders.stale`,
+`users.theme`) and 009 (`users.preferences`, `bookings.billing_address`,
+`bookings.customer_vat_number`, `bank_ignore_rules`). Documents: the deposit-stage
+document is a **Statement** (`FY1703-S`, not a tax invoice); the final document is the
+only **Tax invoice** (`INV1703`). A booking counts **visitors** only.
