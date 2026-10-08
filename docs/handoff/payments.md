@@ -191,3 +191,14 @@ chain holds, so no money is missing. Expect the occasional warning of this kind.
    proposes nothing until bookings exist. After the sheet import, run
    `POST /payments/sync` or wait 5 minutes and the 12 `FY`-referenced credits
    should auto-match where the imported bookings keep their sheet numbers.
+
+## Lead addendum (2026-10-08): imported deposits and bank matches
+
+The sheet import records each "DEP PD" amount as a placeholder payment with
+reference "Imported from booking sheet". When a bank credit is later matched
+to the same booking, `confirm_match` calls `_absorb_import_placeholder`:
+the placeholder shrinks by the credit and is deleted once the bank has
+accounted for all of it, so the deposit is never counted twice. Where the
+bank shows more than the sheet said (several part payments), the bank wins.
+The first local import had already produced duplicates; they were repaired
+by the same rule.

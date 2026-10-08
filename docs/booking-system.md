@@ -123,7 +123,8 @@ Computed in the service, never stored: `total_amount = people_booked × price`,
 `id, booking_id, kind VARCHAR(40), summary VARCHAR(255), data JSON NULL,
 actor_user_id INT NULL, created_at`. Kinds: created, updated, status_changed,
 override, note, document_issued, email_sent, email_received, email_failed,
-payment_recorded, payment_matched, ticket_sent, arrivals_recorded, reminder_dismissed.
+payment_recorded, payment_matched, payment_deleted, payment_unmatched, ticket_sent,
+arrivals_recorded, reminder_dismissed.
 
 ### documents
 `id, booking_id, kind ENUM('proforma','invoice','final_invoice'), number VARCHAR(20),
@@ -220,7 +221,7 @@ Helpers in `web/api/__init__.py` (lead): `api_bp`, `ok(data, status=200)`,
 | auth | `GET /auth/session`, `POST /auth/login {email,password}`, `POST /auth/logout`, `POST /auth/change-password` | lead |
 | users | `GET /users`, `POST /users`, `PATCH /users/:id`, `POST /users/:id/reset-password` → temp password | lead |
 | settings | `GET /settings`, `PUT /settings/:section`, `GET/PUT /settings/price-tiers`, `GET/PUT /settings/season-days` | lead |
-| bookings | `GET /bookings?status&from&to&q&page&page_size&sort`, `POST /bookings`, `GET /bookings/:id`, `PATCH /bookings/:id`, `POST /bookings/:id/status {status, reason}`, `POST /bookings/:id/notes {text}`, `POST /bookings/:id/questions {question}`, `POST /bookings/:id/questions/:qid {answer}`, `POST /bookings/:id/payments`, `DELETE /bookings/:id/payments/:pid`, `GET /bookings/:id/arrivals` (Loyverse fetch), `POST /bookings/:id/arrivals {count, source}`, `GET /bookings/:id/events`, `GET /bookings/:id/emails` | bookings agent |
+| bookings | `GET /bookings?status&from&to&q&page&page_size&sort`, `GET /bookings/counts`, `POST /bookings`, `GET /bookings/:id`, `PATCH /bookings/:id`, `POST /bookings/:id/status {status, reason}`, `POST /bookings/:id/notes {text}`, `POST /bookings/:id/questions {question}`, `POST /bookings/:id/questions/:qid {answer}`, `POST /bookings/:id/payments`, `DELETE /bookings/:id/payments/:pid`, `GET /bookings/:id/arrivals` (Loyverse fetch), `POST /bookings/:id/arrivals {count, source}`, `GET /bookings/:id/events`, `GET /bookings/:id/emails` | bookings agent |
 | booking actions | `POST /bookings/:id/actions/<action>` where action ∈ `send-acknowledgement, issue-proforma, send-proforma, send-invoice, send-final-invoice, send-ticket-email, send-ticket-whatsapp, send-payment-confirmation, send-reminder {kind}, send-expiry, send-answers, confirm {reason}`; `POST /bookings/:id/emails/reply {subject?, body_html, attach_document_ids[]}` | bookings agent (orchestrates services from documents + mail agents) |
 | documents | `GET /documents/:id/pdf`, `GET /bookings/:id/documents`, `POST /bookings/:id/documents/preview {kind}` → PDF bytes | documents agent |
 | calendar | `GET /calendar?from&to` → `{days:[{date, day_type, is_closed, is_avoid, is_peak, label, total_people, confirmed_people, tentative_people, capacity_warning, bookings:[{id,reference,group_name,status,people_booked,group_type}]}]}`; `GET /days/:date` (manager-allowed) → bookings with arrivals/payments summary | bookings agent |

@@ -420,6 +420,39 @@ def match_transaction(
     return MatchResult("none")
 
 
+
+IMPORT_PLACEHOLDER_REF = "Imported from booking sheet"
+
+
+def _absorb_import_placeholder(booking_id: int, amount: Decimal) -> dict | None:
+    """Fold a bank credit into the deposit the sheet import recorded.
+
+    The one-off import wrote a placeholder payment per booking for the deposit
+    the old sheet said had been paid. When the bank later shows the real
+    credit, that money must not count twice: the placeholder shrinks by the
+    credit and disappears once the bank has accounted for all of it.
+    Returns what was done, or None when there was no placeholder.
+    """
+    row = query_one(
+        """
+        SELECT id, amount FROM payments
+        WHERE booking_id = %s AND bank_transaction_id IS NULL AND reference = %s
+        ORDER BY id LIMIT 1
+        """,
+        (booking_id, IMPORT_PLACEHOLDER_REF),
+    )
+    if row is None:
+        return None
+    remaining = Decimal(str(row["amount"])) - amount
+    if remaining <= 0:
+        execute("DELETE FROM payments WHERE id = %s", (row["id"],))
+        return {"payment_id": row["id"], "action": "removed", "was": float(row["amount"])}
+    execute(
+        "UPDATE payments SET amount = %s, note = %s WHERE id = %s",
+        (remaining, "Remainder of the deposit recorded on the booking sheet", row["id"]),
+    )
+    return {"payment_id": row["id"], "action": "reduced", "was": float(row["amount"]), "now": float(remaining)}
+
 # ------------------------------------------------------------------ actions ---
 
 def confirm_match(
@@ -461,6 +494,7 @@ def confirm_match(
     if existing is not None:
         payment = serialize_row(existing) or {}
     else:
+        absorbed = _absorb_import_placeholder(booking_id, amount)
         payment = _record_payment(
             booking_id,
             amount=amount,
@@ -482,6 +516,7 @@ def confirm_match(
             "description": tx.get("description"),
             "method": method,
             "payment_id": payment.get("id") if payment else None,
+            "placeholder_adjusted": absorbed if existing is None else None,
         },
         actor,
     )
