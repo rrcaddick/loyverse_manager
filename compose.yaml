@@ -25,6 +25,7 @@ x-app: &app
     # Container-local overrides. These deliberately win over .env so a stale
     # PythonAnywhere MYSQL_HOST in the operator's file cannot be picked up.
     MYSQL_HOST: db
+    MYSQL_PORT: "3306"
     SELENIUM_REMOTE_URL: http://chrome:4444
     PREFERRED_URL_SCHEME: ${PREFERRED_URL_SCHEME:-https}
     TZ: ${TZ:-Africa/Johannesburg}
