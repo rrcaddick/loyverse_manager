@@ -1,110 +1,185 @@
 /**
- * Client-side mirror of src/services/public_form.validate_request so most
- * mistakes are caught before the request; the server stays authoritative and
- * its 422 field messages are mapped straight onto the same fields.
+ * Per-screen validation for the public request form. The schemas take the
+ * draft's string values (what the text boxes hold) and produce the typed
+ * payload; the server stays authoritative and its 422 messages are mapped
+ * back onto the same field names (see draft.ts and the Check screen).
+ *
+ * Wording follows docs/research/06: no "please", no "invalid", the same
+ * sentence inline and in the error summary.
  */
 
 import { z } from "zod";
 
-import { WEEKDAYS, formatDate, formatWeekday } from "@/lib/format";
+import { dateProblem, parseDmy } from "./dates";
+import type { BookingRequestInput, FormConfig } from "./types";
 
-import type { FormConfig } from "./types";
+export const STEPS = ["visit", "group", "contact"] as const;
+export type Step = (typeof STEPS)[number];
 
-const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-const PHONE = /^\+?[\d\s()-]{9,20}$/;
+/** Which screen each field lives on (server 422 keys included). */
+export const FIELD_STEP: Record<string, Step> = {
+  visit_date: "visit",
+  alternative_date: "visit",
+  visitors: "visit",
+  adults: "visit",
+  children: "visit",
+  arrival_time: "visit",
+  group_name: "group",
+  group_type: "group",
+  area: "group",
+  vehicles: "group",
+  gazebos: "group",
+  questions: "group",
+  customer_notes: "group",
+  contact_name: "contact",
+  contact_email: "contact",
+  contact_mobile: "contact",
+};
 
-/** Python weekday (0 = Monday) of an ISO date. */
-export function pyWeekday(iso: string): number {
-  const d = new Date(`${iso}T12:00:00`);
-  return (d.getDay() + 6) % 7;
+const WHOLE = /^\d+$/;
+const PHONE = /^\+?[\d\s()./-]{9,24}$/;
+
+function wholeNumber(raw: string): number | null {
+  const s = raw.trim().replace(/\s+/g, "");
+  return WHOLE.test(s) ? Number(s) : null;
 }
 
-function listWeekdays(days: number[]): string {
-  const names = days.map((d) => `${WEEKDAYS[d]?.label ?? "?"}s`);
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+/** A typed date: "" (when optional) or dd/mm/yyyy that the park can take. */
+function dateField(config: FormConfig, required: boolean) {
+  return z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (!value) {
+        if (required) ctx.addIssue({ code: "custom", message: "Enter your preferred date" });
+        return;
+      }
+      const iso = parseDmy(value);
+      if (!iso) {
+        ctx.addIssue({ code: "custom", message: "Enter the date as dd/mm/yyyy, for example 07/11/2026" });
+        return;
+      }
+      const problem = dateProblem(iso, config);
+      if (problem) ctx.addIssue({ code: "custom", message: problem });
+    })
+    .transform((value) => (value ? (parseDmy(value) ?? "") : ""));
 }
 
-/** Why a day cannot be booked, in the customer's words; null when it can. */
-export function dateProblem(iso: string, config: FormConfig): string | null {
-  if (iso < config.min_date) return `The earliest date we can take is ${formatDate(config.min_date)}`;
-  if (config.max_date && iso > config.max_date) return `The season ends on ${formatDate(config.max_date)}`;
-  if (config.closed_weekdays.includes(pyWeekday(iso))) return `We are closed on ${listWeekdays(config.closed_weekdays)}`;
-  if (config.closed_days.includes(iso)) return `The park is closed on ${formatDate(iso)}`;
-  return null;
-}
-
-export function dayNote(iso: string, config: FormConfig): string {
-  const parts = [formatWeekday(iso)];
-  if (config.peak_days.includes(iso)) parts.push("peak day, peak rates apply");
-  return parts.join(" · ");
-}
-
-const count = (label: string) => z.number({ error: label }).int(label).min(0, "Cannot be negative");
-
-export function buildSchema(config: FormConfig) {
-  const dateField = (required: boolean) =>
-    z
-      .string()
-      .refine((v) => (required ? isoDate.test(v) : v === "" || isoDate.test(v)), required ? "Choose your preferred date" : "Choose a date")
-      .superRefine((v, ctx) => {
-        const problem = v ? dateProblem(v, config) : null;
-        if (problem) ctx.addIssue({ code: "custom", message: problem });
-      });
-
+export function visitSchema(config: FormConfig) {
+  const phone = config.park.phone ? ` on ${config.park.phone}` : "";
   return z
     .object({
-      group_name: z.string().trim().min(1, "Tell us the name of your group").max(255, "Keep it under 255 characters"),
-      group_type: z.string().min(1, "Choose the kind of group"),
-      area: z.string().trim().max(255, "Keep it under 255 characters"),
-      contact_name: z.string().trim().min(1, "Enter your name").max(255, "Keep it under 255 characters"),
-      contact_email: z.string().trim().min(1, "Enter your email address").email("Enter a valid email address"),
-      contact_mobile: z.string().trim().min(1, "Enter a mobile number").regex(PHONE, "Enter a valid mobile number"),
-      visit_date: dateField(true),
-      alternative_date: dateField(false),
-      arrival_time: z.string().trim().max(20, "Keep it short, for example 10:00"),
-      vehicles: count("Enter the number of vehicles"),
-      gazebos: count("Enter the number of gazebos"),
-      adults: count("Enter the number of adults"),
-      children: count("Enter the number of children"),
-      questions: z.array(z.object({ text: z.string().trim().max(500, "Keep each question under 500 characters") })).max(config.max_questions, `Up to ${config.max_questions} questions`),
-      customer_notes: z.string().trim().max(2000, "Keep notes under 2 000 characters"),
-      policy_accepted: z.boolean().refine((v) => v, "Please accept the booking policy to continue"),
-      /** Honeypot: must stay empty. */
-      website: z.string().max(0),
+      visit_date: dateField(config, true),
+      alternative_date: dateField(config, false),
+      visitors: z
+        .string()
+        .trim()
+        .superRefine((value, ctx) => {
+          if (!value) {
+            ctx.addIssue({ code: "custom", message: "Enter how many visitors are coming" });
+            return;
+          }
+          const n = wholeNumber(value);
+          if (n === null) {
+            ctx.addIssue({ code: "custom", message: "Enter a whole number, for example 45" });
+            return;
+          }
+          if (n < config.min_group_size) {
+            ctx.addIssue({ code: "custom", message: `Group bookings are for ${config.min_group_size} or more people. For smaller groups, buy day tickets on Quicket.` });
+          } else if (config.max_group_size && n > config.max_group_size) {
+            ctx.addIssue({ code: "custom", message: `For more than ${config.max_group_size} people please phone us${phone}.` });
+          }
+        })
+        .transform((value) => wholeNumber(value) ?? 0),
+      arrival_time: z
+        .string()
+        .trim()
+        .refine((value) => value === "" || config.arrival_slots.includes(value), "Choose an arrival time from the list"),
     })
-    .superRefine((v, ctx) => {
-      if (v.adults + v.children < config.min_group_size) {
-        ctx.addIssue({ code: "custom", path: ["adults"], message: `Group bookings are for ${config.min_group_size} or more people` });
-      }
-      if (v.alternative_date && v.alternative_date === v.visit_date) {
+    .superRefine((value, ctx) => {
+      if (value.alternative_date && value.alternative_date === value.visit_date) {
         ctx.addIssue({ code: "custom", path: ["alternative_date"], message: "Choose a different day from your preferred date" });
       }
     });
 }
 
-export type RequestSchema = ReturnType<typeof buildSchema>;
-export type RequestFormValues = z.input<RequestSchema>;
-export type RequestFormOutput = z.output<RequestSchema>;
+export function groupSchema(config: FormConfig) {
+  const codes = new Set(config.group_types.map((g) => g.code));
+  const optionalCount = (label: string, max?: number, maxMessage?: string) =>
+    z
+      .string()
+      .trim()
+      .superRefine((value, ctx) => {
+        if (!value) return;
+        const n = wholeNumber(value);
+        if (n === null) {
+          ctx.addIssue({ code: "custom", message: label });
+          return;
+        }
+        if (max !== undefined && n > max) ctx.addIssue({ code: "custom", message: maxMessage ?? label });
+      })
+      .transform((value) => (value ? (wholeNumber(value) ?? 0) : 0));
 
-export function emptyValues(): RequestFormValues {
+  return z.object({
+    group_name: z.string().trim().min(1, "Enter the name of your group").max(255, "Keep the group name under 255 characters"),
+    group_type: z.string().refine((value) => codes.has(value), "Choose the kind of group"),
+    area: z.string().trim().max(255, "Keep the area under 255 characters"),
+    vehicles: optionalCount("Enter a whole number of vehicles, for example 2"),
+    gazebos: optionalCount("Enter a whole number of gazebos, for example 1", config.max_gazebos, `We have ${config.max_gazebos} gazebos to hire`),
+    questions: z
+      .array(z.string().trim().max(500, "Keep each question under 500 characters"))
+      .transform((items) => items.filter((q) => q.length > 0))
+      .refine((items) => items.length <= config.max_questions, `You can ask up to ${config.max_questions} questions`),
+    customer_notes: z.string().trim().max(2000, "Keep this under 2 000 characters"),
+  });
+}
+
+export function contactSchema() {
+  return z.object({
+    contact_name: z.string().trim().min(1, "Enter your name").max(255, "Keep your name under 255 characters"),
+    contact_email: z
+      .string()
+      .trim()
+      .min(1, "Enter your email address")
+      .refine((value) => z.email().safeParse(value).success, "Enter an email address in the format name@example.com"),
+    contact_mobile: z.string().trim().min(1, "Enter a mobile number").refine((value) => PHONE.test(value), "Enter a mobile number, for example 082 123 4567"),
+  });
+}
+
+export type VisitInput = z.input<ReturnType<typeof visitSchema>>;
+export type VisitOutput = z.output<ReturnType<typeof visitSchema>>;
+export type GroupInput = z.input<ReturnType<typeof groupSchema>>;
+export type GroupOutput = z.output<ReturnType<typeof groupSchema>>;
+export type ContactInput = z.input<ReturnType<typeof contactSchema>>;
+export type ContactOutput = z.output<ReturnType<typeof contactSchema>>;
+
+/** The POST body from the three parsed screens (Turnstile and honeypot added by the Check screen). */
+export function buildPayload(visit: VisitOutput, group: GroupOutput, contact: ContactOutput): Omit<BookingRequestInput, "website" | "turnstile_token"> {
   return {
-    group_name: "",
-    group_type: "",
-    area: "",
-    contact_name: "",
-    contact_email: "",
-    contact_mobile: "",
-    visit_date: "",
-    alternative_date: "",
-    arrival_time: "",
-    vehicles: 0,
-    gazebos: 0,
-    adults: Number.NaN,
-    children: Number.NaN,
-    questions: [],
-    customer_notes: "",
-    policy_accepted: false,
-    website: "",
+    visit_date: visit.visit_date,
+    alternative_date: visit.alternative_date || undefined,
+    visitors: visit.visitors,
+    arrival_time: visit.arrival_time || undefined,
+    group_name: group.group_name,
+    group_type: group.group_type,
+    area: group.area || undefined,
+    vehicles: group.vehicles,
+    gazebos: group.gazebos,
+    questions: group.questions,
+    customer_notes: group.customer_notes || undefined,
+    contact_name: contact.contact_name,
+    contact_email: contact.contact_email,
+    contact_mobile: contact.contact_mobile,
+    policy_accepted: true,
   };
+}
+
+/** First message per field from a zod failure, keyed by the top-level field name. */
+export function issuesByField(error: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "");
+    if (key && !(key in out)) out[key] = issue.message;
+  }
+  return out;
 }
