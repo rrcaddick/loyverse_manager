@@ -112,8 +112,12 @@ def test_alternative_date_rules(settings):
 
 
 def test_group_size_minimum(settings):
+    _, errors = validate(settings, visitors=9)
+    assert errors["visitors"] == "Group bookings are for 10 or more visitors"
     _, errors = validate(settings, adults=4, children=5)
-    assert errors["adults"] == "Group bookings are for 10 or more people"
+    assert errors["visitors"] == "Group bookings are for 10 or more visitors"
+    clean, errors = validate(settings, visitors=10)
+    assert errors == {} and clean["people_booked"] == 10
     clean, errors = validate(settings, adults=None, children=10)
     assert errors == {} and clean["adults"] == 0 and clean["people_booked"] == 10
 

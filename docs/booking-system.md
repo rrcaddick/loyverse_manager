@@ -98,7 +98,9 @@ doc_number INT UNIQUE               -- 1703; proforma FY1703, invoice INV1703
 status ENUM('enquiry','proforma_sent','confirmed','completed','cancelled','lapsed','no_show')
 group_name, group_type VARCHAR(32), area, contact_name, contact_email, contact_mobile (E164 digits, no +)
 visit_date DATE, alternative_date DATE NULL, arrival_time VARCHAR(20) NULL
-adults INT, children INT, people_booked INT, vehicles INT, gazebos INT
+people_booked INT (visitors; the public field is `visitors`), vehicles INT, gazebos INT
+(adults/children columns remain but are unused: a booking counts visitors only; school parents
+pay at the gate through Loyverse and are not part of the booking)
 price_tier_code VARCHAR(32) NULL, price_per_person DECIMAL(12,2),
 price_overridden TINYINT(1), price_override_reason VARCHAR(255) NULL
 deposit_due DECIMAL(12,2), deposit_overridden TINYINT(1), deposit_waived TINYINT(1),
@@ -333,7 +335,6 @@ arrivals), `lapsing` (hold_expires_on ≤ today + 3, unpaid).
 
 Price tiers 2026/27 (code, label, day_type, price, min size):
 `school_weekday` Schools & children's groups weekday 70 (incl. teachers);
-`school_parents_weekday` School parents weekday 90;
 `adult_small_weekday` Approved adult groups under 40 weekday 95;
 `adult_large_weekday` Approved adult groups 40+ weekday 90;
 `pensioners_weekday` Pensioner groups weekday 90;

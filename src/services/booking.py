@@ -530,6 +530,18 @@ def stamp(booking_id: int, column: str, when: datetime | None = None) -> None:
 
 # ------------------------------------------------------------------ create ----
 
+
+def _apply_visitors_alias(data: dict) -> dict:
+    """``visitors`` is the public name for ``people_booked``; bookings count visitors only."""
+    if "visitors" not in data:
+        return data
+    out = dict(data)
+    visitors = out.pop("visitors")
+    if out.get("people_booked") in (None, "") and visitors not in (None, ""):
+        out["people_booked"] = visitors
+    return out
+
+
 def create_booking(
     data: Mapping[str, Any],
     source: str,
@@ -540,6 +552,7 @@ def create_booking(
     if source not in SOURCES:
         raise BookingError(f"Unknown source '{source}'", {"source": "Unknown source"})
     s = get_settings()
+    data = _apply_visitors_alias(data)
     clean = validate_booking_data(data, partial=False, settings=s)
 
     if clean.get("people_booked") is None:
@@ -658,6 +671,7 @@ def update_booking(booking_id: int, data: Mapping[str, Any], actor: int | None) 
     """Apply an edit, recalculating price/deposit unless they are overridden."""
     current = _require(booking_id)
     s = get_settings()
+    data = _apply_visitors_alias(data)
     clean = validate_booking_data(data, partial=True, settings=s)
     if not clean:
         return current

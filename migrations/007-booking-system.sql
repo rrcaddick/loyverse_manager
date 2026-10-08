@@ -330,7 +330,6 @@ CREATE TABLE IF NOT EXISTS import_runs (
 -- Seed: price tiers 2026/27 (from the price policy tab of the old sheet)
 INSERT IGNORE INTO price_tiers (code, label, day_type, price, min_group_size, notes, sort_order) VALUES
 ('school_weekday', 'Schools and children''s groups', 'weekday', 70.00, 0, 'Including teachers and facilitators', 10),
-('school_parents_weekday', 'School parents', 'weekday', 90.00, 0, 'Family joining a school group separately', 20),
 ('adult_small_weekday', 'Approved adult groups under 40', 'weekday', 95.00, 0, 'Work functions, team building', 30),
 ('adult_large_weekday', 'Approved adult groups 40 and over', 'weekday', 90.00, 40, 'Work functions, team building', 40),
 ('pensioners_weekday', 'Pensioner groups', 'weekday', 90.00, 0, NULL, 50),

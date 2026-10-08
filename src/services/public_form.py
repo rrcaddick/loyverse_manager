@@ -276,16 +276,24 @@ def validate_request(
         clean[field] = value
         return value
 
+    # A booking counts visitors only. "visitors" is the field the form sends;
+    # adults + children is accepted as a fallback for older clients.
+    visitors = count("visitors", default=None) if data.get("visitors") not in (None, "") else None
     adults = count("adults", default=0)
     children = count("children", default=0)
     count("vehicles", default=0)
     count("gazebos", default=0)
     min_size = int(form.get("min_group_size") or 0)
-    if adults is not None and children is not None:
+    if visitors is not None:
+        clean["people_booked"] = visitors
+        clean.pop("visitors", None)
+        if visitors < min_size:
+            errors["visitors"] = f"Group bookings are for {min_size} or more visitors"
+    elif adults is not None and children is not None:
         people = adults + children
         clean["people_booked"] = people
         if people < min_size:
-            errors["adults"] = f"Group bookings are for {min_size} or more people"
+            errors["visitors"] = f"Group bookings are for {min_size} or more visitors"
 
     # questions
     max_q = int(form.get("max_questions") or 0)
