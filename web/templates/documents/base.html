@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.number }} · {{ doc.title }} · {{ company.trading_name }}</title>
+<style>
+{% include "documents/document.css" %}
+</style>
+</head>
+<body>
+
+<table class="masthead">
+  <tr>
+    <td class="masthead-brand">
+      <img class="logo" src="{{ logo_url }}" alt="{{ company.trading_name }}">
+    </td>
+    <td class="masthead-doc">
+      <h1 class="doc-title">{{ doc.title }}</h1>
+      <table class="meta">
+        <tr><th>Number</th><td>{{ doc.number }}</td></tr>
+        <tr><th>Date</th><td>{{ doc.issued_on_long }}</td></tr>
+        <tr><th>Booking ref</th><td>{{ booking.reference }}</td></tr>
+        {% if doc.version > 1 %}
+        <tr><th>Version</th><td>{{ doc.version }}</td></tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div class="rule"></div>
+
+<table class="parties">
+  <tr>
+    <td class="party">
+      <h2>From</h2>
+      <p class="name">{{ company.company_name }}</p>
+      <p>{{ company.address_line1 }}, {{ company.address_line2 }}</p>
+      <p class="muted">Reg {{ company.company_reg }}<br>VAT {{ company.vat_no }}</p>
+    </td>
+    <td class="party">
+      <h2>Bill to</h2>
+      <p class="name">{{ booking.group_name }}</p>
+      {% if booking.area %}<p>{{ booking.area }}</p>{% endif %}
+    </td>
+    <td class="party">
+      <h2>Booked by</h2>
+      <p class="name">{{ booking.contact_name }}</p>
+      {% if booking.contact_mobile_display %}<p>{{ booking.contact_mobile_display }}</p>{% endif %}
+      {% if booking.contact_email %}<p>{{ booking.contact_email }}</p>{% endif %}
+    </td>
+  </tr>
+</table>
+
+<table class="visit">
+  <tr>
+    <td class="visit-cell">
+      <h2>Visit date</h2>
+      <p class="big">{{ booking.visit_date_long }}</p>
+    </td>
+    <td class="visit-cell">
+      <h2>{% if doc.is_final and finance.uses_arrivals %}Visitors arrived{% else %}Group size{% endif %}</h2>
+      <p class="big">{% if doc.is_final and finance.uses_arrivals %}{{ finance.arrived_count|plural("visitor") }}{% else %}{{ booking.people_booked|plural("visitor") }}{% endif %}</p>
+    </td>
+    {% if booking.vehicles %}
+    <td class="visit-cell">
+      <h2>Vehicles</h2>
+      <p class="big">{{ booking.vehicles }}</p>
+    </td>
+    {% endif %}
+    {% if booking.arrival_time %}
+    <td class="visit-cell">
+      <h2>Arrival</h2>
+      <p class="big">{{ booking.arrival_time }}</p>
+    </td>
+    {% endif %}
+  </tr>
+</table>
+
+{% block body %}{% endblock %}
+
+<table class="foot">
+  <tr>
+    <td class="pay">
+      <h2>Payment details</h2>
+      <table class="kv">
+        <tr><th>Bank</th><td>{{ company.bank_name }} {{ company.bank_account_type }}</td></tr>
+        <tr><th>Account name</th><td>{{ company.bank_account_name }}</td></tr>
+        <tr><th>Account number</th><td class="num">{{ company.bank_account_number }}</td></tr>
+        {% if company.bank_branch_code %}
+        <tr><th>Branch code</th><td class="num">{{ company.bank_branch_code }}</td></tr>
+        {% endif %}
+        <tr class="ref"><th>Payment reference</th><td>{{ doc.payment_reference }}</td></tr>
+      </table>
+      <p class="pop">Proof of payment to <strong>{{ company.pop_email }}</strong></p>
+    </td>
+    <td class="terms">
+      <h2>Booking terms</h2>
+      <p>{{ company.payment_terms }}</p>
+      {% block terms %}{% endblock %}
+      <p class="thanks">Thank you for choosing {{ company.trading_name }}.</p>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

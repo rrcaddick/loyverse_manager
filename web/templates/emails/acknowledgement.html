@@ -1,0 +1,22 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Thanks for your booking request</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you for choosing {{ company.trading_name }} for {{ booking.group_name }}. We have received your request and your booking reference is <span class="strong">{{ booking.reference }}</span>. Please quote it whenever you contact us.</p>
+{{ summary([
+  ("Reference", booking.reference),
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ (" (" ~ booking.adults ~ " adults, " ~ booking.children ~ " children)" if booking.adults or booking.children else "")),
+  ("Vehicles", booking.vehicles if booking.vehicles else none),
+  ("Gazebos", booking.gazebos if booking.gazebos else none),
+  ("Contact", booking.contact_name ~ (", " ~ booking.contact_mobile_display if booking.contact_mobile_display else "")),
+], "Your request") }}
+<h2>What happens next</h2>
+<p>We will check the date and send you a proforma with the price for your group, the deposit and our bank details. The date is reserved once the deposit has been paid.</p>
+{% if form_url %}
+<p class="small muted">Spotted a mistake? Reply to this email, or send an updated request at <a href="{{ form_url }}">{{ form_url }}</a>.</p>
+{% else %}
+<p class="small muted">Spotted a mistake in the details above? Just reply to this email and we will correct it.</p>
+{% endif %}
+{% endblock %}

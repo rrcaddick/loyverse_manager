@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1>Your provisional booking has lapsed</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>We held <span class="strong">{{ booking.visit_date_long }}</span> for {{ booking.group_name }} while we waited for the deposit on proforma {{ booking.reference }}. As it has not reached us, the date is no longer reserved and is open to other groups.</p>
+<p>If you would still like to visit, just reply to this email. If the date is still free we will gladly reinstate the booking, and if not we will suggest alternatives.</p>
+<p class="small muted">If you did pay the deposit, please send us the proof of payment and we will match it straight away.</p>
+{% endblock %}

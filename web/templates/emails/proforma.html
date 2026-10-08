@@ -1,0 +1,21 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary, bank_details %}
+{% block body %}
+<h1>Your proforma for {{ booking.visit_date_long }}</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you for your enquiry. Proforma <span class="strong">{{ document.number }}</span> for {{ booking.group_name }}'s visit to {{ company.trading_name }} is attached.</p>
+{{ summary([
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
+  ("Total", finance.total_display),
+  ("Deposit due", finance.deposit_outstanding_display if not finance.deposit_waived else "Waived", true),
+  ("Balance on the day", finance.balance_on_day_display),
+], "Proforma " ~ document.number) }}
+{% if finance.deposit_waived %}
+<p>No deposit is needed for this booking. Reply to confirm you would like to go ahead and we will reserve the date; the full amount is payable on the day.</p>
+{% else %}
+<p>To secure the date, please pay the deposit by EFT using <span class="strong">{{ booking.reference }}</span> as your reference and send proof of payment to <a href="mailto:{{ company.pop_email }}">{{ company.pop_email }}</a>.{% if hold_expires_on %} We are holding {{ booking.visit_date_long }} for you until <span class="strong">{{ hold_expires_on_long }}</span>.{% endif %} The balance of {{ finance.balance_on_day_display }} is payable on the day of your visit.</p>
+{{ bank_details(company, booking.reference) }}
+{% endif %}
+<p class="small muted">If your group size or date changes, let us know and we will send an updated proforma.</p>
+{% endblock %}

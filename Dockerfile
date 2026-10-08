@@ -44,7 +44,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tzdata curl ca-certificates \
         libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 \
-        libffi8 libjpeg62-turbo libopenjp2-7 fontconfig fonts-dejavu-core \
+        libffi8 libjpeg62-turbo libopenjp2-7 fontconfig fonts-dejavu-core shared-mime-info \
         default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 

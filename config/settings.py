@@ -150,3 +150,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 # Public hostname of the booking request form; "/" on this host redirects to
 # the form. The admin app answers on every other host.
 BOOKING_FORM_HOST = os.getenv("BOOKING_FORM_HOST", "bookings.farmyardpark.co.za")
+
+# Absolute origin of the admin app, used for links and images inside emails
+# (the logo in the header, document links). No trailing slash.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://admin.farmyardpark.co.za").rstrip("/")
+BOOKING_FORM_URL = os.getenv("BOOKING_FORM_URL", f"https://{BOOKING_FORM_HOST}/request")

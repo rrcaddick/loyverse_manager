@@ -1,0 +1,32 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>See you on {{ booking.visit_date_long }}</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>{{ booking.group_name }}'s visit to {{ company.trading_name }} is {% if days_left is not none %}{{ days_left|plural("day") }} away{% else %}almost here{% endif %}. Here is everything you need for the day.</p>
+{{ summary([
+  ("Visit date", booking.visit_date_long),
+  ("Arrival", booking.arrival_time),
+  ("Group size", booking.people_booked|plural("visitor")),
+  ("Vehicles", booking.vehicles if booking.vehicles else none),
+  ("Gazebos reserved", booking.gazebos if booking.gazebos else none),
+  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
+], "Your visit") }}
+<h2>Before you arrive</h2>
+<ul>
+  {% if ticket_attached %}
+  <li>Your vehicle entry ticket is attached. Please send it to the driver of each vehicle.</li>
+  {% else %}
+  <li>Your vehicle entry ticket was sent earlier. Please make sure the driver of each vehicle has a copy.</li>
+  {% endif %}
+  <li>Each driver presents the ticket at the gate; we scan the barcode and count your group in.</li>
+  {% if finance.due > 0 %}
+  <li>The balance of {{ finance.due_display }} is payable at the gate by card or cash. To pay by EFT beforehand, use reference {{ booking.reference }} and send us the proof of payment.</li>
+  {% else %}
+  <li>Your account is settled, so there is nothing to pay on the day.</li>
+  {% endif %}
+  <li>If your numbers have changed, let us know. The final invoice is based on the visitors counted at the gate.</li>
+  <li>Park rules: <a href="{{ rules_url }}">{{ rules_url }}</a></li>
+</ul>
+<p>We look forward to welcoming you.</p>
+{% endblock %}

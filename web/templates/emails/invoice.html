@@ -1,0 +1,18 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Your date is confirmed</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you, we have received your deposit and {{ booking.group_name }} is booked for <span class="strong">{{ booking.visit_date_long }}</span>. Your tax invoice {{ document.number }} is attached.</p>
+{{ summary([
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
+  ("Total", finance.total_display),
+  ("Paid to date", finance.paid_display),
+  ("Balance due on the day", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
+], "Invoice " ~ document.number) }}
+{% if finance.due > 0 %}
+<p>The balance is payable at the gate on the day by card or cash, or by EFT beforehand using reference <span class="strong">{{ booking.reference }}</span>.</p>
+{% endif %}
+<p>Your vehicle entry ticket will follow closer to the date. If your numbers change, please tell us as soon as you can: the final invoice is based on the visitors counted at the gate.</p>
+{% endblock %}

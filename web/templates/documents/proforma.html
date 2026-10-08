@@ -1,0 +1,40 @@
+{% extends "documents/base.html" %}
+
+{% block body %}
+{% include "documents/_lines.html" %}
+
+<table class="totals-wrap">
+  <tr>
+    <td class="totals-aside">
+      <p class="note">This proforma is not a tax invoice. A tax invoice follows once your deposit has been received.</p>
+    </td>
+    <td class="totals-cell">
+      <table class="totals">
+        <tr><th>Subtotal</th><td>{{ finance.subtotal_display }}</td></tr>
+        <tr><th>VAT {{ finance.vat_rate_display }}%</th><td>{{ finance.vat_display }}</td></tr>
+        <tr class="total"><th>Total</th><td>{{ finance.total_display }}</td></tr>
+        {% if finance.paid > 0 %}
+        <tr class="minor"><th>Paid to date</th><td>&minus;{{ finance.paid_display }}</td></tr>
+        {% endif %}
+        {% if finance.deposit_waived %}
+        <tr class="settled"><th>Deposit</th><td>Waived</td></tr>
+        <tr class="due"><th>Balance due on the day</th><td>{{ finance.due_display }}</td></tr>
+        {% elif finance.deposit_outstanding > 0 %}
+        <tr class="due"><th>Deposit due</th><td>{{ finance.deposit_outstanding_display }}</td></tr>
+        <tr class="minor"><th>Balance due on the day</th><td>{{ finance.balance_on_day_display }}</td></tr>
+        {% else %}
+        <tr class="settled"><th>Deposit</th><td>Received</td></tr>
+        <tr class="due"><th>Balance due on the day</th><td>{{ finance.balance_on_day_display }}</td></tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+{% endblock %}
+
+{% block terms %}
+{% if booking.hold_expires_on and not finance.deposit_waived and finance.deposit_outstanding > 0 %}
+<p>We are holding {{ booking.visit_date_long }} for you until {{ booking.hold_expires_on_long }}. If the deposit has not reached us by then, the date is released.</p>
+{% endif %}
+<p>Please use the payment reference above so we can match your deposit to this booking.</p>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Payment received, thank you</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>We have received your payment of <span class="strong">{{ payment.amount_display }}</span>{% if payment.paid_on_display %} on {{ payment.paid_on_display }}{% endif %} for booking {{ booking.reference }}.</p>
+{{ summary([
+  ("Amount received", payment.amount_display),
+  ("Received on", payment.paid_on_display),
+  ("Reference", payment.reference),
+  ("Paid to date", finance.paid_display),
+  ("Balance due", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
+], "Payment") }}
+{% if finance.deposit_outstanding > 0 %}
+<p>{{ finance.deposit_outstanding_display }} of the deposit is still outstanding. The date is reserved once the full deposit of {{ finance.deposit_due_display }} has been received.</p>
+{% else %}
+<p>Your deposit is covered and <span class="strong">{{ booking.visit_date_long }}</span> is confirmed for {{ booking.group_name }}.{% if invoice_attached %} Your tax invoice is attached.{% endif %}{% if finance.due > 0 %} The balance of {{ finance.due_display }} is payable on the day.{% endif %}</p>
+{% endif %}
+{% endblock %}
