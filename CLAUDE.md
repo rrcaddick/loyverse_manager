@@ -151,6 +151,25 @@ held in other open tickets (`OpenTicket.held_quantity`, thousandths). All three 
 require `Authorization: Bearer $BRIDGE_TOKEN` when `BRIDGE_TOKEN` is set
 (`web/routes/bridge_auth.py`).
 
+### POS staff (self-managed employees for the Loyverse bridge)
+
+Migration 007 adds `pos_roles`, `pos_employees`, `pos_devices`, `pos_auth_params` and the
+append-only `pos_employee_events`. The terminals no longer trust Loyverse's employee list:
+`POST /api/pos/roster` hands each enrolled terminal the active employees with their role's
+permissions and a *per-device verifier* (HMAC-SHA256 of the stored PBKDF2 PIN hash under that
+device's secret), and `POST /api/pos/events` receives the terminal's audit trail (login,
+logout, login_failed, locked, approval, approval_failed, permission_denied, sale, refund,
+ticket_replaced; de-duplicated on the event's UUID). Both need the bridge token **and** the
+device's `device_id` + `device_secret` in the body (`PosStaffService.authenticate_device`,
+constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: the service
+hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
+makes shared PINs impossible, and `validate_pin` rejects runs and repeats. Permission names are
+Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`); `DEFAULT_ROLES` are created on the
+first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
+PINs, device enrolment, events) until the portal pages exist; UI work goes through
+`PosStaffService`, never straight to the tables. Enrolling a device prints its secret once; it
+goes into that terminal's bridge config as `staff.deviceSecret`.
+
 ## Commands
 
 Normal operation is through Docker — see `DEPLOYMENT.md` for the full story.

@@ -45,6 +45,9 @@ PUBLIC_ENDPOINTS = {
     "open_tickets.open_ticket_events",
     "open_tickets.open_ticket_heartbeat",
     "stock.availability",
+    # Also require the terminal's own enrolment secret - see web/routes/pos_staff.py.
+    "pos_staff.roster",
+    "pos_staff.events",
 }
 
 SESSION_KEY = "authenticated_as"
