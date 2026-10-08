@@ -60,3 +60,6 @@ temp/
 
 # reopmix
 repomix*.md
+# Booking system runtime data (documents, attachments, backups)
+data/
+compose.override.yaml

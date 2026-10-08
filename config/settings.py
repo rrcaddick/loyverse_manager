@@ -25,6 +25,7 @@ LOYVERSE_API_KEY = os.getenv("LOYVERSE_API_KEY")
 
 # MySQL Database
 MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DB")
@@ -111,3 +112,41 @@ PAYCLOUD_APP_PRIVATE_KEY = load_key_file("paycloud/app_private_key.pem")
 PAYCLOUD_GATEWAY_PUBLIC_KEY = load_key_file("paycloud/gateway_public_key.pem")
 
 ARONIUM_PATH = BASE_DIR / "db" / "aronium" / "pos.db"
+
+
+# ---------------------------------------------------------------------------
+# Booking system (feat/booking). See docs/booking-system.md.
+# ---------------------------------------------------------------------------
+
+# Where generated documents, mail attachments and backups are stored. A docker
+# volume in production; a gitignored folder locally.
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
+
+# Bookings mailbox (Gmail over IMAP + SMTP with an app password).
+GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+GMAIL_IMPORT_SINCE = os.getenv("GMAIL_IMPORT_SINCE", "2026-06-01")
+GMAIL_IMAP_HOST = os.getenv("GMAIL_IMAP_HOST", "imap.gmail.com")
+GMAIL_SMTP_HOST = os.getenv("GMAIL_SMTP_HOST", "smtp.gmail.com")
+GMAIL_SMTP_PORT = int(os.getenv("GMAIL_SMTP_PORT", "587"))
+
+# Outside production every outbound email is redirected here (see MailSender).
+DEV_MAIL_RECIPIENT = os.getenv("DEV_MAIL_RECIPIENT", "rrcaddick@gmail.com")
+
+# FNB transaction-history API (production gateway).
+FNB_BASE_URL = os.getenv("FNB_BASE_URL", "https://api.fnb.co.za/apigateway")
+FNB_CLIENT_ID = os.getenv("FNB_CLIENT_ID")
+FNB_CLIENT_SECRET = os.getenv("FNB_CLIENT_SECRET")
+FNB_ACCOUNT_NUMBER = os.getenv("FNB_ACCOUNT_NUMBER")
+
+# Cloudflare Turnstile for the public booking request form. Empty = honeypot
+# plus rate limiting only.
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY")
+
+# Optional: field extraction from enquiry emails.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+# Public hostname of the booking request form; "/" on this host redirects to
+# the form. The admin app answers on every other host.
+BOOKING_FORM_HOST = os.getenv("BOOKING_FORM_HOST", "bookings.farmyardpark.co.za")

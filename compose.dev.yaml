@@ -1,0 +1,25 @@
+# Local development overrides. Never used in production.
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d db   # database only
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d      # whole stack on :8010
+#
+# Publishes MySQL on 127.0.0.1:3307 so the Flask dev server (python -m web) and
+# the scripts can run from the virtualenv against it, and moves the web port
+# off 8000 which other local projects already use.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
+  web:
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8010}:8000"
+    environment:
+      ENV: dev
+      SESSION_COOKIE_SECURE: "false"
+      PREFERRED_URL_SCHEME: http
+  worker:
+    environment:
+      ENV: dev
+  scheduler:
+    environment:
+      ENV: dev
