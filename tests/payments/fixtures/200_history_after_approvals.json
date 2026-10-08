@@ -1,0 +1,524 @@
+[
+  {
+    "entryId": "20261010000001",
+    "bookingDate": {
+      "Date": "2026-10-10"
+    },
+    "valueDate": {
+      "Date": "2026-10-10"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "UNDEFINED.858517"
+        },
+        "reference": {
+          "endToEndId": "UNDEFINED.858517"
+        }
+      }
+    },
+    "amount": {
+      "amount": "1000.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "CREDIT",
+    "availability": {
+      "amount": "101744821.39",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261010000002",
+    "bookingDate": {
+      "Date": "2026-10-10"
+    },
+    "valueDate": {
+      "Date": "2026-10-10"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "UNDEFINED.862527"
+        },
+        "reference": {
+          "endToEndId": "UNDEFINED.862527"
+        }
+      }
+    },
+    "amount": {
+      "amount": "1000.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "CREDIT",
+    "availability": {
+      "amount": "101745821.39",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261010000003",
+    "bookingDate": {
+      "Date": "2026-10-10"
+    },
+    "valueDate": {
+      "Date": "2026-10-10"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FNB OB PMT            SALARY-TEST-3"
+        },
+        "reference": {
+          "endToEndId": "SALARY-TEST-3"
+        }
+      }
+    },
+    "amount": {
+      "amount": "5000.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "CREDIT",
+    "availability": {
+      "amount": "101750821.39",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261010000004",
+    "bookingDate": {
+      "Date": "2026-10-10"
+    },
+    "valueDate": {
+      "Date": "2026-10-10"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "UNDEFINED.689980"
+        },
+        "reference": {
+          "endToEndId": "UNDEFINED.689980"
+        }
+      }
+    },
+    "amount": {
+      "amount": "1000.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "CREDIT",
+    "availability": {
+      "amount": "101751821.39",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261012000001",
+    "bookingDate": {
+      "Date": "2026-10-12"
+    },
+    "valueDate": {
+      "Date": "2026-10-12"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "UNDEFINED.678141"
+        },
+        "reference": {
+          "endToEndId": "UNDEFINED.678141"
+        }
+      }
+    },
+    "amount": {
+      "amount": "1001.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "CREDIT",
+    "availability": {
+      "amount": "101752822.39",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000001",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0001"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0001"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.01",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752820.38",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000002",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0002"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0002"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.02",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752818.36",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000003",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0003"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0003"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.03",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752816.33",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000004",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0004"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0004"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.04",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752814.29",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000005",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0005"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0005"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.05",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752812.24",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000006",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "IN-2026-00328"
+        },
+        "reference": {
+          "endToEndId": "IN-2026-00328"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-2.06",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752810.18",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000007",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FM20260915182842"
+        },
+        "reference": {
+          "endToEndId": "FM20260915182842"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-1.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752809.18",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000008",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT3-DUP-A"
+        },
+        "reference": {
+          "endToEndId": "FMT3-DUP-A"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-4.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752805.18",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000009",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT3-DUP-B"
+        },
+        "reference": {
+          "endToEndId": "FMT3-DUP-B"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-4.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752801.18",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000010",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT2-CONSOL-170124"
+        },
+        "reference": {
+          "endToEndId": "FMT2-CONSOL-170124"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-9.06",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752792.12",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000011",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT1-INV-0001"
+        },
+        "reference": {
+          "endToEndId": "FMT1-INV-0001"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-4.50",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752787.62",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261013000012",
+    "bookingDate": {
+      "Date": "2026-10-13"
+    },
+    "valueDate": {
+      "Date": "2026-10-13"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT5-LONGREF-ABCDEFGHIJKLMNOPQ"
+        },
+        "reference": {
+          "endToEndId": "FMT5-LONGREF-ABCDEFG"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-6.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "101752781.62",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  },
+  {
+    "entryId": "20261014000001",
+    "bookingDate": {
+      "Date": "2026-10-14"
+    },
+    "valueDate": {
+      "Date": "2026-10-14"
+    },
+    "entryDetails": {
+      "transactionDetails": {
+        "remittanceInfo": {
+          "unstructured": "FMT4-ONED"
+        },
+        "reference": {
+          "endToEndId": "FMT4-ONED"
+        }
+      }
+    },
+    "amount": {
+      "amount": "-5.00",
+      "currency": "ZAR"
+    },
+    "creditDebitIndicator": "DEBIT",
+    "availability": {
+      "amount": "0.00",
+      "currency": "ZAR",
+      "creditDebitIndicator": "CREDIT"
+    }
+  }
+]

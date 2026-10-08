@@ -1,0 +1,43 @@
+{
+  "status": 200,
+  "headers": {
+    "Server": "IIS",
+    "parent_trace_id": "0e081aa2-9a77-4490-a45c-753abc732126",
+    "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+    "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+    "content-type": "application/json;charset=UTF-8",
+    "X-Pool-Used": "login_stress_jboss",
+    "Strict-Transport-Security": "max-age=31536000",
+    "x-ratelimit-limit": "170",
+    "x-ratelimit-reset": "60",
+    "X-TARGET-HOST": "apigateway.p.onlineapps.fnbsp.co.za",
+    "expires": "0",
+    "pragma": "no-cache",
+    "x-xss-protection": "0",
+    "x-content-type-options": "nosniff",
+    "X-Node-Used": "Forward Proxy:0",
+    "x-frame-options": "DENY",
+    "X-UA-Compatible": "IE=EDGE",
+    "X-Powered-By": "Sun One",
+    "x-ratelimit-remaining": "163",
+    "referrer-policy": "no-referrer",
+    "content-length": "89"
+  },
+  "body": {
+    "entry": null,
+    "groupHeader": {
+      "pagination": {
+        "lastPageIndicator": true,
+        "lastItemKey": null
+      }
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/transaction-history/retrieve/v2/63002461513",
+    "params": {
+      "fromDate": "2026-10-06",
+      "toDate": "2026-09-01"
+    }
+  }
+}

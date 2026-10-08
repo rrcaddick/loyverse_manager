@@ -17,6 +17,8 @@ invoice) or ``arrived_count`` (final invoice); ``vat = total × r / (100 + r)``;
 
 from __future__ import annotations
 
+import time
+
 import os
 import re
 from datetime import date, datetime
@@ -482,7 +484,7 @@ def preview_document(booking_id: int, kind: str, settings=None) -> bytes:
     return render_document_pdf(booking, kind, settings, payments, number=number, version=version)
 
 
-def issue_document(booking_id: int, kind: str, actor: int | None, settings=None) -> dict:
+def _issue_document_once(booking_id: int, kind: str, actor: int | None, settings=None) -> dict:
     """Render, store and record a new version of ``kind`` for the booking.
 
     Returns the serialized ``documents`` row. Raises ``DocumentError`` when the
@@ -601,3 +603,25 @@ def document_bytes(document_id: int) -> tuple[str, bytes]:
     if not path.exists():
         raise DocumentError(f"File for document {document_id} is missing: {row['file_path']}")
     return document_filename(row), path.read_bytes()
+
+
+def issue_document(booking_id: int, kind: str, actor: int | None, settings=None) -> dict:
+    """Render, store and record a new version of ``kind`` for the booking.
+
+    Returns the serialized ``documents`` row. Raises ``DocumentError`` when the
+    booking does not exist or the kind is unknown. The booking row is locked
+    while the version is minted; a MySQL deadlock (1213) against a concurrent
+    writer is retried twice before surfacing.
+    """
+    import pymysql
+
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            return _issue_document_once(booking_id, kind, actor, settings)
+        except pymysql.err.OperationalError as exc:
+            if exc.args and exc.args[0] == 1213 and attempt < attempts:
+                time.sleep(0.2 * attempt)
+                continue
+            raise
+    raise RuntimeError("unreachable")
