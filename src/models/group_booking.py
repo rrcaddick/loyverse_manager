@@ -1,19 +1,41 @@
+"""Read-only adapter that presents a ``bookings`` row with the legacy
+``GroupBooking`` attribute names.
+
+The original ``group_bookings`` table is no longer written (migration 007
+copied it into ``bookings``). The ticket PDF (``src/services/pdf.py``), the
+Chatwoot WhatsApp send (``src/services/chatwoot.py``), the public ticket image
+route and the morning inventory sync all still read ``group_name``,
+``contact_person``, ``mobile_number``, ``visit_date`` and ``barcode`` from an
+object of this class, so it stays. Writes go through ``src/services/booking.py``.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, Mapping
+
 import phonenumbers
 from phonenumbers import NumberParseException
 
-from src.repositories.mysql import get_db_connection
-from src.services.barcode import generate_barcode
+from src.models import booking as booking_model
+
+# The morning sync only materialises bookings that are actually happening.
+SYNC_STATUSES = ("confirmed", "completed")
 
 
 class GroupBooking:
     def __init__(
         self,
-        id=None,
-        group_name=None,
-        contact_person=None,
-        mobile_number=None,
-        visit_date=None,
-        barcode=None,
+        id: int | None = None,
+        group_name: str | None = None,
+        contact_person: str | None = None,
+        mobile_number: str | None = None,
+        visit_date: date | None = None,
+        barcode: str | None = None,
+        reference: str | None = None,
+        status: str | None = None,
+        people_booked: int | None = None,
+        vehicles: int | None = None,
     ):
         self.id = id
         self.group_name = group_name
@@ -21,69 +43,25 @@ class GroupBooking:
         self.mobile_number = mobile_number
         self.visit_date = visit_date
         self.barcode = barcode
-        if mobile_number:
-            self.validate_mobile_number()  # Run validation on init if provided
+        self.reference = reference
+        self.status = status
+        self.people_booked = people_booked
+        self.vehicles = vehicles
 
-    def validate(self):
-        """Validate all fields (call before save/update)."""
-        if not all(
-            [self.group_name, self.contact_person, self.mobile_number, self.visit_date]
-        ):
-            raise ValueError(
-                "All fields (group_name, contact_person, mobile_number, visit_date) are required."
-            )
-        self.validate_mobile_number()
-
-    def validate_mobile_number(self):
-        """Validate and normalize mobile number."""
-        try:
-            parsed = phonenumbers.parse(self.mobile_number, "ZA")
-            if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Invalid mobile number.")
-            self.mobile_number = phonenumbers.format_number(
-                parsed, phonenumbers.PhoneNumberFormat.E164
-            ).replace("+", "")
-        except NumberParseException:
-            raise ValueError("Invalid mobile number format.")
-
-    def requires_new_ticket(self, new_group_name, new_visit_date, new_mobile_number):
-        """
-        Check if ticket-related fields have changed (group_name, visit_date, mobile_number),
-        that require sending an updated ticket
-        """
-        existing_group_name = (self.group_name or "").strip()
-        new_group_name = (new_group_name or "").strip()
-
-        existing_visit_raw = self.visit_date
-        if hasattr(existing_visit_raw, "isoformat"):
-            existing_visit_date = existing_visit_raw.isoformat()
-        else:
-            existing_visit_date = str(existing_visit_raw or "").strip()
-        new_visit_date = str(new_visit_date or "").strip()
-
-        existing_mobile = (self.mobile_number or "").strip()
-        new_mobile = (
-            new_mobile_number or ""
-        ).strip()  # Compare before normalization, as in original
-
-        return (
-            existing_group_name != new_group_name
-            or existing_visit_date != new_visit_date
-            or existing_mobile != new_mobile
-        )
+    # ------------------------------------------------------------ display --
 
     @property
-    def mobile_number_display(self):
-        """Formatter for display (national format)."""
+    def mobile_number_display(self) -> str:
+        """National format for display, e.g. ``082 123 4567``."""
         if not self.mobile_number:
             return ""
-        parsed = phonenumbers.parse(self.mobile_number, "ZA")
-        return phonenumbers.format_number(
-            parsed, phonenumbers.PhoneNumberFormat.NATIONAL
-        )
+        try:
+            parsed = phonenumbers.parse(str(self.mobile_number), "ZA")
+        except NumberParseException:
+            return str(self.mobile_number)
+        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL)
 
-    def to_dict(self):
-        """Convert to dict for serialization or DB ops."""
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "group_name": self.group_name,
@@ -92,155 +70,44 @@ class GroupBooking:
             "visit_date": self.visit_date,
             "barcode": self.barcode,
             "mobile_number_display": self.mobile_number_display,
+            "reference": self.reference,
+            "status": self.status,
+            "people_booked": self.people_booked,
+            "vehicles": self.vehicles,
         }
 
+    # ------------------------------------------------------------ loading --
+
     @classmethod
-    def from_dict(cls, data):
-        """Create instance from DB row dict."""
+    def from_row(cls, row: Mapping[str, Any] | None) -> "GroupBooking | None":
+        """Build from a ``bookings`` row (legacy ``group_bookings`` keys also accepted)."""
+        if row is None:
+            return None
         return cls(
-            id=data.get("id"),
-            group_name=data.get("group_name"),
-            contact_person=data.get("contact_person"),
-            mobile_number=data.get("mobile_number"),
-            visit_date=data.get("visit_date"),
-            barcode=data.get("barcode"),
+            id=row.get("id"),
+            group_name=row.get("group_name"),
+            contact_person=row.get("contact_name", row.get("contact_person")),
+            mobile_number=row.get("contact_mobile", row.get("mobile_number")),
+            visit_date=row.get("visit_date"),
+            barcode=row.get("barcode"),
+            reference=row.get("reference"),
+            status=row.get("status"),
+            people_booked=row.get("people_booked"),
+            vehicles=row.get("vehicles"),
         )
 
-    @classmethod
-    def create(cls, group_name, contact_person, mobile_number, visit_date):
-        """Create a new group booking."""
-        barcode = generate_barcode()
-
-        booking = cls(
-            group_name=group_name,
-            contact_person=contact_person,
-            mobile_number=mobile_number,
-            visit_date=visit_date,
-            barcode=barcode,
-        )
-        booking.validate()
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = """
-                    INSERT INTO group_bookings 
-                    (group_name, contact_person, mobile_number, visit_date, barcode)
-                    VALUES (%s, %s, %s, %s, %s)
-                """
-                cursor.execute(
-                    sql,
-                    (
-                        booking.group_name,
-                        booking.contact_person,
-                        booking.mobile_number,
-                        booking.visit_date,
-                        booking.barcode,
-                    ),
-                )
-                conn.commit()
-                booking.id = cursor.lastrowid
-        return booking
-
-    def save(self):
-        """Update an existing group booking (instance method for updates)."""
-        self.validate()
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = """
-                    UPDATE group_bookings 
-                    SET group_name = %s,
-                        contact_person = %s,
-                        mobile_number = %s,
-                        visit_date = %s
-                    WHERE id = %s
-                """
-                cursor.execute(
-                    sql,
-                    (
-                        self.group_name,
-                        self.contact_person,
-                        self.mobile_number,
-                        self.visit_date,
-                        self.id,
-                    ),
-                )
-                conn.commit()
-                return cursor.rowcount > 0
-
-    def update(
-        self, group_name=None, contact_person=None, mobile_number=None, visit_date=None
-    ):
-        """
-        Update the instance with new values, validate, save, and return
-        the fresh updated instance (or None on failure).
-        """
-        if group_name is not None:
-            self.group_name = group_name
-        if contact_person is not None:
-            self.contact_person = contact_person
-        if mobile_number is not None:
-            self.mobile_number = mobile_number
-        if visit_date is not None:
-            self.visit_date = visit_date
-
-        self.validate()
-
-        success = self.save()
-        if success:
-            # Reload fresh from DB and return it
-            return self.__class__.get_by_id(self.id)
-        return None
+    from_dict = from_row
 
     @classmethod
-    def get_all(cls):
-        """Get all group bookings as list of GroupBooking instances."""
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = "SELECT * FROM group_bookings ORDER BY visit_date DESC"
-                cursor.execute(sql)
-                rows = cursor.fetchall()
-                return [cls.from_dict(row) for row in rows]
+    def get_by_barcode(cls, barcode: str) -> "GroupBooking | None":
+        return cls.from_row(booking_model.get_by_barcode(barcode))
 
     @classmethod
-    def get_formatted(cls):
-        """Get all bookings with formatting (uses model properties)."""
-        return [booking.to_dict() for booking in cls.get_all()]
+    def get_by_id(cls, booking_id: int) -> "GroupBooking | None":
+        return cls.from_row(booking_model.get(booking_id))
 
     @classmethod
-    def get_by_barcode(cls, barcode):
-        """Get a specific booking by barcode as GroupBooking instance."""
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = "SELECT * FROM group_bookings WHERE barcode = %s"
-                cursor.execute(sql, (barcode,))
-                row = cursor.fetchone()
-                return cls.from_dict(row) if row else None
-
-    @classmethod
-    def get_by_id(cls, booking_id):
-        """Get a specific booking by ID as GroupBooking instance."""
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = "SELECT * FROM group_bookings WHERE id = %s"
-                cursor.execute(sql, (booking_id,))
-                row = cursor.fetchone()
-                return cls.from_dict(row) if row else None
-
-    @classmethod
-    def get_by_date(cls, visit_date):
-        """Get all group bookings for a specific date as list of GroupBooking instances."""
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = "SELECT * FROM group_bookings WHERE visit_date = %s"
-                cursor.execute(sql, (visit_date,))
-                rows = cursor.fetchall()
-                return [cls.from_dict(row) for row in rows]
-
-    @classmethod
-    def delete(cls, booking_id):
-        """Delete a group booking by ID."""
-        with get_db_connection() as conn:  # Use shared connection
-            with conn.cursor() as cursor:
-                sql = "DELETE FROM group_bookings WHERE id = %s"
-                cursor.execute(sql, (booking_id,))
-                conn.commit()
-                return cursor.rowcount > 0
+    def get_by_date(cls, visit_date: date) -> list["GroupBooking"]:
+        """Confirmed (or completed) bookings visiting on ``visit_date``."""
+        rows = booking_model.list_for_date(visit_date, SYNC_STATUSES)
+        return [cls.from_row(r) for r in rows]
