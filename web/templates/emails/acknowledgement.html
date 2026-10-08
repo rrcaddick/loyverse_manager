@@ -5,15 +5,18 @@
 <p>Hi {{ booking.contact_first_name or "there" }},</p>
 <p>Thank you for choosing {{ company.trading_name }} for {{ booking.group_name }}. We have received your request and your booking reference is <span class="strong">{{ booking.reference }}</span>. Please quote it whenever you contact us.</p>
 {{ summary([
-  ("Reference", booking.reference),
+  ("Reference", booking.reference, true),
   ("Visit date", booking.visit_date_long),
-  ("Group size", booking.people_booked|plural("visitor") ~ (" (" ~ booking.adults ~ " adults, " ~ booking.children ~ " children)" if booking.adults or booking.children else "")),
+  ("Alternative date", booking.alternative_date|date_long if booking.alternative_date else none),
+  ("Visitors", booking.people_booked|plural("visitor")),
+  ("Arrival", booking.arrival_time),
   ("Vehicles", booking.vehicles if booking.vehicles else none),
   ("Gazebos", booking.gazebos if booking.gazebos else none),
   ("Contact", booking.contact_name ~ (", " ~ booking.contact_mobile_display if booking.contact_mobile_display else "")),
 ], "Your request") }}
 <h2>What happens next</h2>
-<p>We will check the date and send you a proforma with the price for your group, the deposit and our bank details. The date is reserved once the deposit has been paid.</p>
+<p>We reply by email within one working day with a proforma: the price for your group, the deposit and our bank details. The date is reserved once the deposit has been paid. Nothing is paid now.</p>
+<p class="small muted">We are closed on Mondays and Tuesdays, so a request sent over the weekend may be answered on Wednesday.</p>
 {% if form_url %}
 <p class="small muted">Spotted a mistake? Reply to this email, or send an updated request at <a href="{{ form_url }}">{{ form_url }}</a>.</p>
 {% else %}

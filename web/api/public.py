@@ -1,12 +1,14 @@
 """Public booking-request form endpoints. No session, no CSRF.
 
-    GET  /api/v1/public/form-config      what the form needs to render
-    POST /api/v1/public/booking-request  create an enquiry
+    GET  /api/v1/public/form-config          what the form needs to render
+    POST /api/v1/public/booking-request      create an enquiry → {id, token, ...}
+    GET  /api/v1/public/requests/<id>?token=  the public summary for the confirmation page
 
-Both views are ``@public_endpoint``: the app guard skips them. Abuse control is
+All views are ``@public_endpoint``: the app guard skips them. Abuse control is
 the honeypot + Turnstile + per-IP rate limit in ``src/services/public_form.py``.
-Nothing is emailed from here; the enquiry lands in the queue under
-``new_requests`` and the team sends the acknowledgement by hand.
+Nothing is emailed from here unless Settings › Booking form has
+"acknowledgement_enabled" on (off by default); the enquiry lands in Work
+under new requests either way.
 """
 
 from __future__ import annotations
@@ -57,6 +59,10 @@ def form_config():
         "peak_days": [d.isoformat() for d in sorted(peak) if in_range(d)],
         "max_questions": int(s["form"].get("max_questions") or 0),
         "min_group_size": int(s["form"].get("min_group_size") or 0),
+        "max_group_size": int(s["form"].get("max_group_size") or public_form.DEFAULT_MAX_GROUP_SIZE),
+        "max_gazebos": public_form.MAX_GAZEBOS,
+        "arrival_slots": [str(x) for x in (s["form"].get("arrival_slots") or public_form.DEFAULT_ARRIVAL_SLOTS)],
+        "acknowledgement_enabled": bool(s["form"].get("acknowledgement_enabled")),
         "turnstile_site_key": TURNSTILE_SITE_KEY or None,
         "park": {
             "name": s["documents"].get("trading_name") or s["email"].get("sender_name"),
@@ -105,13 +111,25 @@ def booking_request():
     public_form.record_submission(booking_id, data, ip, user_agent, True)
     logger.info(f"Form enquiry {booking.get('reference')} created for '{clean['group_name']}' from {ip}")
 
-    visit = booking.get("visit_date") or clean["visit_date"]
-    return ok(
-        {
-            "reference": booking.get("reference"),
-            "group_name": booking.get("group_name") or clean["group_name"],
-            "visit_date": visit.isoformat() if hasattr(visit, "isoformat") else str(visit),
-            "contact_email": booking.get("contact_email") or clean["contact_email"],
-        },
-        201,
-    )
+    sent = public_form.send_acknowledgement_if_enabled(booking, settings)
+    summary = public_form.public_summary(booking)
+    if sent is not None and sent.get("send_status", "sent") == "sent":
+        summary["acknowledged"] = True
+    summary["token"] = public_form.request_receipt_token(booking_id)
+    return ok(summary, 201)
+
+
+@bp.get("/requests/<int:booking_id>")
+@public_endpoint
+def request_receipt(booking_id: int):
+    """The confirmation page's data, gated by the signed token from the POST."""
+    ok_token, error = public_form.verify_request_receipt_token(request.args.get("token"), booking_id)
+    if not ok_token:
+        code = "token_expired" if error == "expired" else "invalid_token"
+        raise ApiError(code, "This link is no longer valid", 403)
+    row = public_form.booking_row(booking_id)
+    if row is None:
+        raise ApiError("not_found", "Request not found", 404)
+    response, status = ok(public_form.public_summary(row))
+    response.headers["Cache-Control"] = "no-store"
+    return response, status

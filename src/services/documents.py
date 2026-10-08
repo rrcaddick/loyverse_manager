@@ -1,4 +1,10 @@
-"""Finance documents: proforma, invoice and final invoice as PDFs.
+"""Finance documents: proforma, deposit statement and tax invoice as PDFs.
+
+Three kinds (docs/redesign-spec.md §9): ``proforma`` (FY1703, not a tax
+invoice), ``invoice`` — the *deposit receipt and statement* issued when the
+deposit lands (FY1703-S, a statement of account, deliberately not a tax
+invoice) — and ``final_invoice``, the only tax invoice (INV1703), issued at
+the visit for the counted visitors so no credit note is ever needed.
 
 Rendering is pure (``render_document_pdf``) so previews and tests need no
 database; ``issue_document`` is the side-effecting path that versions the
@@ -37,18 +43,26 @@ from src.utils.logging import setup_logger
 logger = setup_logger("documents")
 
 KINDS = document_model.KINDS
+# Short labels: the UI, file names and event summaries ("Statement FY1703-S issued").
 KIND_LABELS = {
     "proforma": "Proforma",
-    "invoice": "Invoice",
-    "final_invoice": "Final invoice",
+    "invoice": "Statement",
+    "final_invoice": "Tax invoice",
 }
 # What the document itself is headed. "Tax invoice" is the wording SARS
-# expects on a VAT invoice; a proforma is explicitly not one.
+# expects on a VAT invoice; the proforma and the statement are explicitly not one.
 KIND_TITLES = {
     "proforma": "Proforma invoice",
-    "invoice": "Tax invoice",
-    "final_invoice": "Final tax invoice",
+    "invoice": "Statement of account",
+    "final_invoice": "Tax invoice",
 }
+# The long name used in prose ("Your deposit receipt and statement is attached").
+KIND_DESCRIPTIONS = {
+    "proforma": "Proforma invoice",
+    "invoice": "Deposit receipt and statement",
+    "final_invoice": "Tax invoice",
+}
+DEFAULT_STATEMENT_SUFFIX = "S"
 PAYMENT_KIND_LABELS = {"eft": "EFT", "cash": "Cash", "card": "Card", "other": "Payment"}
 
 TEMPLATES_DIR = Path(BASE_DIR) / "web" / "templates"
@@ -87,6 +101,12 @@ def money(value: Any, symbol: str = "R") -> str:
     return f"{sign}{symbol}{grouped}.{frac}"
 
 
+def money_short(value: Any, symbol: str = "R") -> str:
+    """R3 800 when there are no cents, R3 800.50 otherwise (email subjects)."""
+    text = money(value, symbol)
+    return text[:-3] if text.endswith(".00") else text
+
+
 def as_date(value: Any) -> date | None:
     if value is None or value == "":
         return None
@@ -117,6 +137,18 @@ def date_short(value: Any) -> str:
     """7 Nov 2026."""
     d = as_date(value)
     return f"{d.day} {d:%b %Y}" if d else ""
+
+
+def date_day_month(value: Any) -> str:
+    """7 Nov (email subjects)."""
+    d = as_date(value)
+    return f"{d.day} {d:%b}" if d else ""
+
+
+def date_weekday_short(value: Any) -> str:
+    """Sat 7 Nov (email subjects and preheaders)."""
+    d = as_date(value)
+    return f"{d:%a} {d.day} {d:%b}" if d else ""
 
 
 def phone_display(value: Any) -> str:
@@ -157,6 +189,7 @@ def jinja_env() -> Environment:
         )
         env.filters.update(
             money=money,
+            money_short=money_short,
             date_long=date_long,
             date_medium=date_medium,
             date_short=date_short,
@@ -171,16 +204,25 @@ def jinja_env() -> Environment:
 # ---------------------------------------------------------------- finance ---
 
 
+def statement_suffix(settings) -> str:
+    raw = settings.documents.get("statement_suffix", DEFAULT_STATEMENT_SUFFIX)
+    return str(raw if raw is not None else DEFAULT_STATEMENT_SUFFIX).strip() or DEFAULT_STATEMENT_SUFFIX
+
+
 def document_number(booking: dict, kind: str, settings) -> str:
-    """FY1703 for a proforma, INV1703 for an invoice or final invoice."""
+    """FY1703 for a proforma, FY1703-S for the deposit statement, INV1703 for the tax invoice."""
     if kind not in KINDS:
         raise DocumentError(f"Unknown document kind: {kind}")
     number = booking.get("doc_number")
     if number is None or number == "":
         # Legacy/imported rows without a number fall back to the reference.
-        return str(booking.get("reference") or "")
-    prefix = settings.documents.proforma_prefix if kind == "proforma" else settings.documents.invoice_prefix
-    return f"{prefix}{int(number)}"
+        base = str(booking.get("reference") or "")
+        return f"{base}-{statement_suffix(settings)}" if kind == "invoice" and base else base
+    if kind == "proforma":
+        return f"{settings.documents.proforma_prefix}{int(number)}"
+    if kind == "invoice":
+        return f"{settings.documents.proforma_prefix}{int(number)}-{statement_suffix(settings)}"
+    return f"{settings.documents.invoice_prefix}{int(number)}"
 
 
 def compute_finance(booking: dict, kind: str, settings, payments: list[dict] | None = None) -> dict:
@@ -271,6 +313,8 @@ def sample_booking() -> dict:
         "people_booked": 67,
         "vehicles": 3,
         "gazebos": 1,
+        "billing_address": "Hillside Community Church\n14 Protea Avenue\nKuils River\n7580",
+        "customer_vat_number": "4123456789",
         "price_tier_code": "church_weekend",
         "price_per_person": Decimal("95.00"),
         "price_overridden": 0,
@@ -319,6 +363,10 @@ def booking_display(booking: dict) -> dict:
     b["gazebos"] = int(b.get("gazebos") or 0)
     b["price_per_person_display"] = money(b.get("price_per_person"))
     b["deposit_due_display"] = money(b.get("deposit_due"))
+    b["billing_address_lines"] = [
+        line.strip() for line in str(b.get("billing_address") or "").splitlines() if line.strip()
+    ]
+    b["customer_vat_number"] = str(b.get("customer_vat_number") or "").strip() or None
     return b
 
 
@@ -354,11 +402,17 @@ def build_document_context(
     number = number or document_number(booking, kind, settings)
     b = booking_display(booking)
 
-    description = f"Visitors @ {money(finance['price'])}"
+    # The supply, described as SARS wants it: what and when, prices as quoted
+    # (VAT inclusive), one line per document.
+    description = f"Group day admission, {b['visit_date_long']}".rstrip(", ")
+    equation = f"{finance['qty']} × {money(finance['price'])} = {money(finance['total'])}"
     lines = [
         {
             "qty": finance["qty"],
             "description": description,
+            "equation": equation,
+            "unit_price": finance["price"],
+            "unit_price_display": money(finance["price"]),
             "unit_ex_vat": finance["unit_ex_vat"],
             "unit_ex_vat_display": money(finance["unit_ex_vat"]),
             # One line per document, so the line VAT is the VAT total: it is
@@ -374,20 +428,32 @@ def build_document_context(
 
     company = dict(settings.documents)
     company.setdefault("trading_name", company.get("company_name"))
+    company.setdefault("deposit_statement_label", KIND_DESCRIPTIONS["invoice"])
+
+    is_final = kind == "final_invoice"
+    reference = b.get("reference") or number
 
     return {
         "doc": {
             "kind": kind,
             "label": KIND_LABELS[kind],
             "title": KIND_TITLES[kind],
+            "description": (
+                company["deposit_statement_label"] if kind == "invoice" else KIND_DESCRIPTIONS[kind]
+            ),
             "number": number,
             "version": int(version),
             "issued_on": issued_on,
             "issued_on_long": date_medium(issued_on),
             "is_proforma": kind == "proforma",
             "is_invoice": kind == "invoice",
-            "is_final": kind == "final_invoice",
-            "payment_reference": b.get("reference") or number,
+            "is_final": is_final,
+            "is_tax_invoice": is_final,
+            "payment_reference": reference,
+            # The booking reference only earns a row when it differs from the number.
+            "show_booking_ref": reference != number,
+            # No bank box on a settled tax invoice: nothing is left to pay.
+            "show_bank_box": not (is_final and finance["due"] <= 0),
         },
         "booking": b,
         "company": company,
@@ -454,7 +520,7 @@ def _serialize_document(row: dict, with_snapshot: bool = False) -> dict:
 
 
 def document_filename(row: dict) -> str:
-    """Attachment-friendly name: 'FY1703 Proforma.pdf', 'INV1703 Final invoice.pdf'."""
+    """Attachment-friendly name: 'FY1703 Proforma.pdf', 'FY1703-S Statement.pdf', 'INV1703 Tax invoice.pdf'."""
     return f"{row['number']} {KIND_LABELS.get(row['kind'], row['kind'])}.pdf"
 
 

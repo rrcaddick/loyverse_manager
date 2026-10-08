@@ -14,8 +14,14 @@ strong     a booking reference in the description or endToEndId — ``FY1703``,
            deposit or balance within R1. Exactly one candidate, or it is not strong.
 suggested  bookings with a visit in the last 7 days or later whose deposit or
            balance equals the amount within R1, or that share two or more
-           significant words with the description; scored, top five.
+           significant words with the description; top five, each carrying a
+           confidence *sentence* ("Equals the deposit", "Part of the balance",
+           ...) rather than a score, ordered by that sentence then by the
+           nearest visit date. Exactly one top candidate is pre-selected;
+           ties pre-select nothing.
 none       everything else stays unmatched for an operator.
+ignored    description rules (``bank_ignore_rules``) park recurring noise —
+           own transfers, card settlements, interest — before matching runs.
 
 Automatic strong matches record the payment through the bookings service
 (which confirms the booking once the deposit is covered) and nothing else:
@@ -58,6 +64,29 @@ MATCH_LOOKBACK_DAYS = 120
 SUGGEST_VISIT_GRACE_DAYS = 7
 AMOUNT_TOLERANCE = Decimal("1.00")
 MAX_SUGGESTIONS = 5
+# Scores below this never become a suggestion (they still rank by sentence).
+SUGGESTION_THRESHOLD = 30
+
+# Confidence sentences in rank order (docs/redesign-spec.md §8). ``tone`` is
+# the colour the UI gives the sentence: green for "this is the money", grey
+# for "plausible, look".
+CONFIDENCE = {
+    "equals_deposit": {"rank": 1, "sentence": "Equals the deposit", "tone": "green"},
+    "equals_balance": {"rank": 2, "sentence": "Equals the balance", "tone": "green"},
+    "part_of_balance": {"rank": 3, "sentence": "Part of the balance", "tone": "grey"},
+    "exceeds_balance": {"rank": 4, "sentence": "Exceeds the balance", "tone": "grey"},
+    "name_matches": {"rank": 5, "sentence": "Name matches", "tone": "grey"},
+}
+
+IGNORE_REASONS = bank_model.IGNORE_REASONS
+IGNORE_REASON_LABELS = bank_model.IGNORE_REASON_LABELS
+# Reasons that may become a description rule; "other" is always one-off.
+RULE_REASONS = ("own_transfer", "card_settlement", "interest")
+MAX_RULE_PATTERN = 120
+MIN_RULE_PATTERN = 4
+# Words after which a description turns into the payer's name or a reference.
+RULE_STOP_AFTER = frozenset({"FROM", "TO", "REF", "FOR"})
+MAX_RULE_WORDS = 5
 
 ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed", "completed")
 
@@ -262,12 +291,18 @@ def match_new(since_days: int = MATCH_LOOKBACK_DAYS) -> dict:
     balance the next amount test compares against.
     """
     today = get_today()
-    counts = {"checked": 0, "matched": 0, "suggested": 0, "unmatched": 0, "failed": 0}
+    counts = {"checked": 0, "matched": 0, "suggested": 0, "unmatched": 0, "ignored": 0, "failed": 0}
     rows = bank_model.credits_to_match(since_days, statuses=("unmatched", "suggested"))
     candidates = bank_model.match_candidates()
+    rules = bank_model.list_ignore_rules()
     for tx in rows:
         counts["checked"] += 1
         try:
+            rule = matching_rule(tx.get("description"), rules)
+            if rule is not None:
+                _ignore_by_rule(tx, rule)
+                counts["ignored"] += 1
+                continue
             result = match_transaction(tx, candidates, today)
             if result.kind == "strong" and result.booking_id is not None:
                 confirm_match(
@@ -321,8 +356,10 @@ def match_transaction(
     prefixed, bare = parse_reference_numbers(description, tx.get("end_to_end_id"))
 
     suggestions: dict[int, dict] = {}
+    scores: dict[int, int] = {}
+    name_only: set[int] = set()
 
-    def suggest(c: dict, score: int, reason: str) -> None:
+    def suggest(c: dict, score: int, reason: str, *, by_name_only: bool = False) -> None:
         fin = candidate_finance(c)
         entry = suggestions.get(c["id"])
         if entry is None:
@@ -337,10 +374,14 @@ def match_transaction(
                 "deposit_due": float(fin["deposit_due"]),
                 "paid_total": float(fin["paid_total"]),
                 "balance_due": float(fin["balance_due"]),
-                "score": 0,
                 "reasons": [],
             }
-        entry["score"] = min(100, entry["score"] + score)
+            scores[c["id"]] = 0
+        scores[c["id"]] = min(100, scores[c["id"]] + score)
+        if by_name_only:
+            name_only.add(c["id"])
+        else:
+            name_only.discard(c["id"])
         if reason not in entry["reasons"]:
             entry["reasons"].append(reason)
 
@@ -402,22 +443,220 @@ def match_transaction(
         if reason:
             score += 40
             reasons.append(reason)
+        if c["id"] in suggestions:
+            reason = reason or "found by reference"  # tier 1 already explains it: not name-only
         name_words = significant_words(f"{c.get('group_name') or ''} {c.get('contact_name') or ''}")
         common = words & name_words
         if len(common) >= 2:
             specific = [w for w in common if w not in GENERIC_NAME_WORDS]
             score += min(45, 15 * len(specific) + 5 * (len(common) - len(specific)))
             reasons.append("Name words: " + ", ".join(sorted(w.title() for w in common)))
-        if score >= 30 and reasons:
+        if score >= SUGGESTION_THRESHOLD and reasons:
             for r in reasons:
-                suggest(c, score if r == reasons[0] else 0, r)
+                suggest(c, score if r == reasons[0] else 0, r, by_name_only=reason is None)
 
-    ranked = sorted(
-        suggestions.values(), key=lambda s: (-s["score"], s["visit_date"] or "", s["booking_id"])
-    )[:MAX_SUGGESTIONS]
+    kept = [
+        decorate_suggestion(entry, amount, name_only=entry["booking_id"] in name_only)
+        for entry in suggestions.values()
+        if scores[entry["booking_id"]] >= SUGGESTION_THRESHOLD
+    ]
+    ranked = rank_suggestions(kept, today)
     if ranked:
         return MatchResult("suggested", suggestions=ranked)
     return MatchResult("none")
+
+
+# --------------------------------------------------------------- confidence ---
+
+def confidence_for(amount: Decimal, fin: dict, *, name_only: bool = False) -> dict:
+    """The sentence that describes how ``amount`` relates to the booking's money.
+
+    ``name_only`` candidates (found by the payer's name, with an amount that
+    neither equals the deposit nor the balance) read "Name matches": the
+    arithmetic alone would say nothing useful about them.
+    """
+    deposit = Decimal(str(fin["deposit_due"]))
+    balance = Decimal(str(fin["balance_due"]))
+    if deposit > 0 and abs(amount - deposit) <= AMOUNT_TOLERANCE:
+        key = "equals_deposit"
+    elif balance > 0 and abs(amount - balance) <= AMOUNT_TOLERANCE:
+        key = "equals_balance"
+    elif name_only:
+        key = "name_matches"
+    elif amount < balance:
+        key = "part_of_balance"
+    else:
+        key = "exceeds_balance"
+    return {"key": key, **CONFIDENCE[key]}
+
+
+def rands(value: Decimal | float | int) -> str:
+    """R3 800 / R3 800.50: thin-space thousands, cents only when there are any."""
+    amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    whole, _, frac = f"{abs(amount):.2f}".partition(".")
+    grouped = f"{int(whole):,}".replace(",", "\u00a0")  # the same NBSP documents.money uses
+    text = f"R{grouped}" + (f".{frac}" if frac != "00" else "")
+    return ("\u2212" if amount < 0 else "") + text
+
+
+def arithmetic_line(amount: Decimal, fin: dict) -> str:
+    """One line of arithmetic for the proposal card: ``R3 800 = deposit · R0 paid · R11 400 total``."""
+    deposit = Decimal(str(fin["deposit_due"]))
+    balance = Decimal(str(fin["balance_due"]))
+    paid = Decimal(str(fin["paid_total"]))
+    total = Decimal(str(fin["total_amount"]))
+    if deposit > 0 and abs(amount - deposit) <= AMOUNT_TOLERANCE:
+        head = f"{rands(amount)} = deposit"
+    elif balance > 0 and abs(amount - balance) <= AMOUNT_TOLERANCE:
+        head = f"{rands(amount)} = balance"
+    elif balance > 0:
+        head = f"{rands(amount)} of {rands(balance)} balance"
+    else:
+        head = rands(amount)
+    return f"{head} · {rands(paid)} paid · {rands(total)} total"
+
+
+def decorate_suggestion(entry: dict, amount: Decimal, *, name_only: bool = False) -> dict:
+    """Attach the confidence sentence, its tone and the arithmetic line."""
+    fin = {
+        "deposit_due": entry["deposit_due"],
+        "balance_due": entry["balance_due"],
+        "paid_total": entry["paid_total"],
+        "total_amount": entry["total_amount"],
+    }
+    conf = confidence_for(amount, fin, name_only=name_only)
+    return {
+        **entry,
+        "confidence": conf["sentence"],
+        "confidence_key": conf["key"],
+        "tone": conf["tone"],
+        "rank": conf["rank"],
+        "arithmetic": arithmetic_line(amount, fin),
+        "preselected": False,
+    }
+
+
+def rank_suggestions(suggestions: list[dict], today: date | None = None) -> list[dict]:
+    """Order by sentence rank, then the visit date nearest today, then id; cut
+    to five; pre-select the first only when it is alone at the top rank."""
+    today = today or get_today()
+
+    def distance(entry: dict) -> int:
+        visit = _parse_date(entry.get("visit_date"))
+        return abs((visit - today).days) if visit else 10_000
+
+    ranked = sorted(suggestions, key=lambda e: (e["rank"], distance(e), e["booking_id"]))[:MAX_SUGGESTIONS]
+    for entry in ranked:
+        entry["preselected"] = False
+    if ranked:
+        top = [e for e in ranked if e["rank"] == ranked[0]["rank"]]
+        if len(top) == 1:
+            top[0]["preselected"] = True
+    return ranked
+
+
+# ------------------------------------------------------------- ignore rules ---
+
+def derive_rule_pattern(description: str | None) -> str | None:
+    """The significant prefix of a bank description, for a description rule.
+
+    ``FNB APP TRANSFER FROM RAY`` → ``FNB APP TRANSFER FROM`` (stops after
+    FROM/TO/REF/FOR, where the payer's name or a reference starts);
+    ``ADDPAY-PSP31240029671426092600`` → ``ADDPAY-PSP`` (a token is cut at its
+    first digit); ``NETCASH161CPP:THE FARMYARD`` → ``NETCASH``; at most five
+    words. None when nothing usable is left.
+    """
+    words = (description or "").split()
+    prefix: list[str] = []
+    for word in words:
+        if any(ch.isdigit() for ch in word):
+            head = ""
+            for ch in word:
+                if ch.isdigit():
+                    break
+                head += ch
+            head = head.rstrip("-/:_.,")
+            if len(head) >= 3:
+                prefix.append(head)
+            break
+        prefix.append(word)
+        if word.upper() in RULE_STOP_AFTER or len(prefix) >= MAX_RULE_WORDS:
+            break
+    pattern = " ".join(prefix).strip()
+    if len(pattern) < MIN_RULE_PATTERN:
+        pattern = " ".join(words).strip()
+    pattern = pattern[:MAX_RULE_PATTERN].strip()
+    return pattern or None
+
+
+def matching_rule(description: str | None, rules: list[dict]) -> dict | None:
+    """The first rule whose pattern the description starts with (case-insensitive)."""
+    text = (description or "").strip().upper()
+    if not text:
+        return None
+    for rule in rules:
+        pattern = str(rule.get("pattern") or "").strip().upper()
+        if pattern and text.startswith(pattern):
+            return rule
+    return None
+
+
+def _ignore_by_rule(tx: dict, rule: dict) -> None:
+    reason = bank_model.format_ignore_reason(
+        str(rule["reason"]), f"rule: {rule['pattern']}"
+    )
+    bank_model.set_match(tx["id"], "ignored", ignore_reason=reason)
+    logger.info(f"Bank transaction {tx['id']} ignored by rule {rule['id']} ({rule['pattern']})")
+
+
+def create_ignore_rule(
+    pattern: str,
+    reason: str,
+    note: str | None = None,
+    actor: int | None = None,
+    *,
+    apply: bool = True,
+) -> dict:
+    """Store a description rule and park every queued credit it already covers.
+
+    Returns ``{"rule", "created", "applied"}`` where ``applied`` is the number
+    of unmatched/suggested credits ignored right away.
+    """
+    pattern = " ".join(str(pattern or "").split())[:MAX_RULE_PATTERN].strip()
+    if len(pattern) < MIN_RULE_PATTERN:
+        raise BankError(
+            f"A rule pattern needs at least {MIN_RULE_PATTERN} characters", 422, "validation_error"
+        )
+    if reason not in RULE_REASONS:
+        raise BankError(
+            "Only own transfers, card settlements and interest become rules", 422, "validation_error"
+        )
+    note = (note or "").strip()[:255] or None
+    rule, created = bank_model.insert_ignore_rule(pattern, reason, note, actor)
+    applied = 0
+    if apply:
+        for tx in bank_model.credits_for_rule(pattern):
+            _ignore_by_rule(tx, rule)
+            applied += 1
+    logger.info(
+        f"Bank ignore rule {'created' if created else 'exists'}: '{pattern}' ({reason}), "
+        f"{applied} queued credits ignored"
+    )
+    return {"rule": rule, "created": created, "applied": applied}
+
+
+def list_ignore_rules() -> list[dict]:
+    return bank_model.list_ignore_rules()
+
+
+def delete_ignore_rule(rule_id: int) -> dict:
+    """Remove a rule. Rows it already ignored stay ignored (unmatch them one by one)."""
+    rule = bank_model.get_ignore_rule(rule_id)
+    if rule is None:
+        raise BankError("Ignore rule not found", 404, "not_found")
+    bank_model.delete_ignore_rule(rule_id)
+    logger.info(f"Bank ignore rule {rule_id} deleted ('{rule['pattern']}')")
+    return rule
 
 
 
@@ -530,9 +769,10 @@ def confirm_match(
 def unmatch(tx_id: int, actor: int | None = None) -> dict:
     """Remove the payment created by the match and return the credit to the queue.
 
-    Also clears an ``ignored`` or ``suggested`` row back to ``unmatched``. The
-    booking's status is left as it is: a booking confirmed by this deposit has
-    no legal transition back (see the handoff).
+    Also clears an ``ignored`` or ``suggested`` row back to ``unmatched``. A
+    booking that this deposit had confirmed goes back to ``proforma_sent``
+    when the remaining payments no longer cover the deposit; the serialized
+    transaction carries ``booking_reverted`` so the UI can say so.
     """
     tx = bank_model.get(tx_id)
     if tx is None:
@@ -543,6 +783,7 @@ def unmatch(tx_id: int, actor: int | None = None) -> dict:
         _delete_payment(payment, actor, tx_id)
         booking_id = booking_id or payment["booking_id"]
     bank_model.set_match(tx_id, "unmatched")
+    reverted: dict | None = None
     if booking_id and tx["match_status"] == "matched":
         _add_event(
             booking_id,
@@ -551,27 +792,103 @@ def unmatch(tx_id: int, actor: int | None = None) -> dict:
             {"bank_transaction_id": tx_id, "payment_id": payment["id"] if payment else None},
             actor,
         )
+        reverted = _revert_if_uncovered(booking_id, actor)
     logger.info(f"Bank transaction {tx_id} unmatched (was {tx['match_status']})")
-    return bank_model.serialize(bank_model.get(tx_id)) or {}
+    out = bank_model.serialize(bank_model.get(tx_id)) or {}
+    out["booking_reverted"] = reverted
+    return out
 
 
-def ignore(tx_id: int, reason: str | None, actor: int | None = None) -> dict:
+def _revert_if_uncovered(booking_id: int, actor: int | None) -> dict | None:
+    """confirmed → proforma_sent when Σ payments no longer covers the deposit."""
+    booking = query_one(
+        """
+        SELECT b.id, b.reference, b.status, b.deposit_due, b.deposit_waived,
+               COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.booking_id = b.id), 0) AS paid_total
+        FROM bookings b WHERE b.id = %s
+        """,
+        (booking_id,),
+    )
+    if booking is None or booking["status"] != "confirmed" or booking["deposit_waived"]:
+        return None
+    deposit = Decimal(str(booking["deposit_due"] or 0))
+    paid = Decimal(str(booking["paid_total"] or 0))
+    if deposit <= 0 or paid >= deposit:
+        return None
+    service = _booking_service()
+    try:
+        if service is not None:
+            service.set_status(booking_id, "proforma_sent", actor, reason="Payment unmatched")
+        else:  # pragma: no cover
+            execute(
+                "UPDATE bookings SET status = 'proforma_sent', confirmed_at = NULL WHERE id = %s",
+                (booking_id,),
+            )
+    except Exception as exc:  # noqa: BLE001 - the unmatch itself has happened; say why the revert did not
+        logger.error(f"Could not revert booking {booking_id} after unmatch: {exc}")
+        return None
+    logger.info(
+        f"Booking {booking['reference']} reverted to proforma_sent: deposit R{deposit:.2f} "
+        f"no longer covered (R{paid:.2f} paid)"
+    )
+    return {
+        "id": booking_id,
+        "reference": booking["reference"],
+        "from": "confirmed",
+        "to": "proforma_sent",
+        "deposit_due": float(deposit),
+        "paid_total": float(paid),
+    }
+
+
+def ignore(
+    tx_id: int,
+    reason: str | None,
+    actor: int | None = None,
+    *,
+    note: str | None = None,
+    create_rule: bool = False,
+    pattern: str | None = None,
+) -> dict:
+    """Park a credit. ``reason`` is one of ``IGNORE_REASONS`` (free text is
+    kept as "other" with the text as the note). With ``create_rule`` the
+    description's significant prefix (or ``pattern``) becomes a rule that
+    ignores every later entry starting with it; the serialized transaction
+    carries ``rule`` (``{"rule", "created", "applied"}``) when one was made.
+    """
     tx = bank_model.get(tx_id)
     if tx is None:
         raise BankError("Bank transaction not found", 404, "not_found")
     if tx["match_status"] == "matched":
         raise BankError("Unmatch this transaction before ignoring it", 409, "conflict")
-    reason = (reason or "").strip()[:255] or None
-    bank_model.set_match(tx_id, "ignored", matched_by=actor, ignore_reason=reason)
-    logger.info(f"Bank transaction {tx_id} ignored: {reason or '-'}")
-    return bank_model.serialize(bank_model.get(tx_id)) or {}
+    code = (reason or "").strip()
+    if code not in IGNORE_REASONS:
+        note = code or note
+        code = "other"
+    stored = bank_model.format_ignore_reason(code, note)
+    bank_model.set_match(tx_id, "ignored", matched_by=actor, ignore_reason=stored)
+    logger.info(f"Bank transaction {tx_id} ignored: {stored}")
+    rule_result: dict | None = None
+    if create_rule and code in RULE_REASONS:
+        rule_pattern = pattern or derive_rule_pattern(tx.get("description"))
+        if rule_pattern:
+            rule_result = create_ignore_rule(rule_pattern, code, note, actor)
+    out = bank_model.serialize(bank_model.get(tx_id)) or {}
+    out["rule"] = rule_result
+    return out
 
 
 def summary() -> dict:
+    """The Bank page's one summary line: ``needs_attention`` = suggested credits
+    + unmatched credits of the last 30 days; ``last_poll`` keeps its shape."""
     last = bank_model.last_poll()
+    unmatched_30d = bank_model.unmatched_credits_summary(30)
+    to_confirm = bank_model.suggested_credit_count()
     return {
         "counts": bank_model.status_counts(),
-        "unmatched_credits_30d": bank_model.unmatched_credits_summary(30),
+        "to_confirm": to_confirm,
+        "unmatched_credits_30d": unmatched_30d,
+        "needs_attention": to_confirm + int(unmatched_30d["count"]),
         "last_poll": (
             {
                 "id": last["id"],

@@ -53,7 +53,7 @@ STATUS_ALIASES = {
     "tentative": list(TENTATIVE_STATUSES),
     "firm": list(FIRM_STATUSES),
 }
-DOCUMENT_LABELS = {"proforma": "Proforma", "invoice": "Invoice", "final_invoice": "Final invoice"}
+DOCUMENT_LABELS = {"proforma": "Proforma", "invoice": "Statement", "final_invoice": "Tax invoice"}
 PDF = "application/pdf"
 # Emails need an absolute https logo URL (the templates fall back to a wordmark).
 LOGO_URL = f"{PUBLIC_BASE_URL}/static/brand/logo-black-600.png"
@@ -163,11 +163,32 @@ def _as_dict(obj: Any) -> dict:
 
 # ---------------------------------------------------------- collection -------
 
+def _parse_bucket(raw: str | None) -> list[str] | None:
+    """``bucket=pending|confirmed|lapsed|past|all`` → statuses (None for all)."""
+    if not raw:
+        return None
+    bucket = raw.strip()
+    if bucket not in booking_model.BUCKETS:
+        raise ApiError(
+            "validation_error",
+            f"Unknown bucket '{bucket}'",
+            422,
+            {"bucket": f"Choose one of: {', '.join(booking_model.BUCKETS)}"},
+        )
+    return None if bucket == "all" else list(booking_model.BUCKETS[bucket])
+
+
 @bp.get("")
 def list_bookings():
     page, size = page_args()
+    statuses = _parse_statuses(request.args.get("status"))
+    bucket_statuses = _parse_bucket(request.args.get("bucket"))
+    if bucket_statuses is not None:
+        statuses = [s for s in statuses if s in bucket_statuses] if statuses else bucket_statuses
+        if not statuses:  # status and bucket exclude each other: nothing matches
+            return paginated([], 0, page, size)
     rows, total = booking_model.list_bookings(
-        statuses=_parse_statuses(request.args.get("status")),
+        statuses=statuses,
         from_date=_arg_date("from"),
         to_date=_arg_date("to"),
         q=request.args.get("q") or None,
@@ -181,7 +202,9 @@ def list_bookings():
 
 @bp.get("/counts")
 def status_counts():
-    return ok({"counts": booking_model.counts_by_status()})
+    """Per-status counts plus the list tabs' buckets (pending, confirmed, lapsed, past, all)."""
+    by_status = booking_model.counts_by_status()
+    return ok({"counts": by_status, **booking_model.counts_by_bucket(by_status)})
 
 
 @bp.post("")

@@ -17,6 +17,9 @@ from src.models.base import dumps, execute, loads, query, query_one, serialize_r
 from src.utils.date import get_today
 
 STATUSES = ("unmatched", "suggested", "matched", "ignored")
+# The list views of the Bank page (docs/redesign-spec.md §8).
+VIEWS = ("needs_attention", "matched", "all")
+IGNORE_REASONS = ("own_transfer", "card_settlement", "interest", "other")
 MYSQL_DUPLICATE_KEY = 1062
 
 _SELECT = """
@@ -127,9 +130,16 @@ def _where(
     date_to: date | None,
     q: str | None,
     credit_debit: str | None = None,
+    view: str | None = None,
 ) -> tuple[str, list]:
     clauses: list[str] = []
     params: list = []
+    if view == "needs_attention":
+        # Credits still waiting for a decision; debits and ignored rows never show.
+        clauses.append("t.credit_debit = 'CREDIT'")
+        clauses.append("t.match_status IN ('suggested', 'unmatched')")
+    elif view == "matched":
+        clauses.append("t.match_status = 'matched'")
     if status:
         clauses.append("t.match_status = %s")
         params.append(status)
@@ -171,9 +181,16 @@ def list_transactions(
     page: int = 1,
     page_size: int = 25,
     credit_debit: str | None = None,
+    view: str | None = None,
 ) -> tuple[list[dict], int]:
-    """Newest first. Returns ``(rows, total)``."""
-    where, params = _where(status, date_from, date_to, q, credit_debit)
+    """Returns ``(rows, total)``.
+
+    ``view="needs_attention"`` lists suggested credits first, then unmatched
+    credits oldest first; every other view is newest first.
+    """
+    if view is not None and view not in VIEWS:
+        raise ValueError(f"Unknown view: {view}")
+    where, params = _where(status, date_from, date_to, q, credit_debit, view)
     total_row = query_one(
         f"SELECT COUNT(*) AS n FROM bank_transactions t "
         f"LEFT JOIN bookings b ON b.id = t.matched_booking_id {where}",
@@ -181,8 +198,12 @@ def list_transactions(
     )
     total = int(total_row["n"]) if total_row else 0
     offset = (max(page, 1) - 1) * page_size
+    if view == "needs_attention":
+        order = "ORDER BY (t.match_status = 'suggested') DESC, t.booking_date ASC, t.id ASC"
+    else:
+        order = "ORDER BY t.booking_date DESC, t.id DESC"
     rows = query(
-        f"{_SELECT} {where} ORDER BY t.booking_date DESC, t.id DESC LIMIT %s OFFSET %s",
+        f"{_SELECT} {where} {order} LIMIT %s OFFSET %s",
         (*params, page_size, offset),
     )
     return rows, total
@@ -248,6 +269,81 @@ def status_counts() -> dict[str, int]:
     for r in rows:
         counts[r["match_status"]] = int(r["n"])
     return counts
+
+
+def suggested_credit_count() -> int:
+    row = query_one(
+        "SELECT COUNT(*) AS n FROM bank_transactions "
+        "WHERE credit_debit = 'CREDIT' AND match_status = 'suggested'"
+    )
+    return int(row["n"]) if row else 0
+
+
+# ----------------------------------------------------------- ignore rules ---
+
+def _like_prefix(pattern: str) -> str:
+    """``pattern%`` with LIKE metacharacters escaped (ESCAPE '\\' is the default)."""
+    escaped = pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return escaped + "%"
+
+
+def list_ignore_rules() -> list[dict]:
+    rows = query(
+        """
+        SELECT r.*, u.full_name AS created_by_name
+        FROM bank_ignore_rules r
+        LEFT JOIN users u ON u.id = r.created_by
+        ORDER BY r.pattern
+        """
+    )
+    return [serialize_row(r) for r in rows]
+
+
+def get_ignore_rule(rule_id: int) -> dict | None:
+    return serialize_row(query_one("SELECT * FROM bank_ignore_rules WHERE id = %s", (rule_id,)))
+
+
+def find_ignore_rule(pattern: str) -> dict | None:
+    return serialize_row(query_one("SELECT * FROM bank_ignore_rules WHERE pattern = %s", (pattern,)))
+
+
+def insert_ignore_rule(pattern: str, reason: str, note: str | None, created_by: int | None) -> tuple[dict, bool]:
+    """Insert the rule unless the pattern exists. Returns ``(rule, created)``."""
+    if reason not in IGNORE_REASONS:
+        raise ValueError(f"Unknown ignore reason: {reason}")
+    try:
+        rule_id = execute(
+            "INSERT INTO bank_ignore_rules (pattern, reason, note, created_by) VALUES (%s, %s, %s, %s)",
+            (pattern, reason, note, created_by),
+        )
+    except pymysql.err.IntegrityError as exc:
+        if exc.args and exc.args[0] != MYSQL_DUPLICATE_KEY:
+            raise
+        existing = find_ignore_rule(pattern)
+        if existing is None:  # pragma: no cover
+            raise
+        return existing, False
+    rule = get_ignore_rule(int(rule_id))
+    return rule or {"id": int(rule_id), "pattern": pattern, "reason": reason, "note": note}, True
+
+
+def delete_ignore_rule(rule_id: int) -> int:
+    return execute("DELETE FROM bank_ignore_rules WHERE id = %s", (rule_id,))
+
+
+def credits_for_rule(pattern: str, statuses: tuple[str, ...] = ("unmatched", "suggested")) -> list[dict]:
+    """Credits still in the queue whose description starts with ``pattern`` (case-insensitive)."""
+    placeholders = ",".join(["%s"] * len(statuses))
+    return query(
+        f"""
+        SELECT * FROM bank_transactions
+        WHERE credit_debit = 'CREDIT'
+          AND match_status IN ({placeholders})
+          AND UPPER(description) LIKE UPPER(%s)
+        ORDER BY booking_date, id
+        """,
+        (*statuses, _like_prefix(pattern)),
+    )
 
 
 # --------------------------------------------------------- booking lookups ---
@@ -334,6 +430,11 @@ def serialize(row: dict | None, include_raw: bool = False) -> dict | None:
     if row.get("balance_after") is not None:
         out["balance_after"] = round(float(row["balance_after"]), 2)
     out["suggestions"] = loads(row.get("suggestions")) or []
+    # Exactly one top candidate may be pre-selected; ties pre-select nothing
+    # (the matcher sets the flag, see bank.rank_suggestions).
+    preselected = [s.get("booking_id") for s in out["suggestions"] if s.get("preselected")]
+    out["preselected_booking_id"] = preselected[0] if len(preselected) == 1 else None
+    out["ignore"] = parse_ignore_reason(row.get("ignore_reason"))
     if row.get("matched_booking_id"):
         out["matched_booking"] = {
             "id": row["matched_booking_id"],
@@ -345,3 +446,34 @@ def serialize(row: dict | None, include_raw: bool = False) -> dict | None:
     if include_raw:
         out["raw"] = loads(row.get("raw"))
     return out
+
+
+IGNORE_REASON_LABELS = {
+    "own_transfer": "Own transfer",
+    "card_settlement": "Card settlement",
+    "interest": "Interest",
+    "other": "Other",
+}
+
+
+def format_ignore_reason(reason: str, note: str | None = None) -> str:
+    """What goes into ``bank_transactions.ignore_reason``: ``code`` or ``code: note``."""
+    if reason not in IGNORE_REASONS:
+        raise ValueError(f"Unknown ignore reason: {reason}")
+    note = (note or "").strip()
+    text = f"{reason}: {note}" if note else reason
+    return text[:255]
+
+
+def parse_ignore_reason(stored: str | None) -> dict | None:
+    """``{"reason", "label", "note"}`` from the stored text; legacy free text → other."""
+    if not stored:
+        return None
+    text = str(stored).strip()
+    code, _, note = text.partition(":")
+    code = code.strip()
+    if code in IGNORE_REASONS:
+        note = note.strip() or None
+    else:
+        code, note = "other", text
+    return {"reason": code, "label": IGNORE_REASON_LABELS[code], "note": note}

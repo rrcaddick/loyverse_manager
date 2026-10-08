@@ -25,6 +25,15 @@ ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed", "completed")
 TENTATIVE_STATUSES = ("enquiry", "proforma_sent")
 FIRM_STATUSES = ("confirmed", "completed")
 
+# The bookings list tabs (docs/redesign-spec.md §6). ``all`` is no filter.
+BUCKETS: dict[str, tuple[str, ...]] = {
+    "pending": ("enquiry", "proforma_sent"),
+    "confirmed": ("confirmed",),
+    "lapsed": ("lapsed", "cancelled"),
+    "past": ("completed", "no_show"),
+    "all": STATUSES,
+}
+
 # Columns the service layer may write. Everything else is set by the DB.
 WRITABLE_COLUMNS = frozenset(
     {
@@ -34,6 +43,8 @@ WRITABLE_COLUMNS = frozenset(
         "group_name",
         "group_type",
         "area",
+        "billing_address",
+        "customer_vat_number",
         "contact_name",
         "contact_email",
         "contact_mobile",
@@ -238,6 +249,15 @@ def counts_by_status() -> dict[str, int]:
     for r in rows:
         counts[r["status"]] = int(r["n"])
     return counts
+
+
+def counts_by_bucket(by_status: dict[str, int] | None = None) -> dict[str, int]:
+    """The list tabs' counts: pending, confirmed, lapsed, past, all."""
+    by_status = by_status if by_status is not None else counts_by_status()
+    return {
+        bucket: sum(int(by_status.get(status, 0)) for status in statuses)
+        for bucket, statuses in BUCKETS.items()
+    }
 
 
 def delete(booking_id: int) -> int:

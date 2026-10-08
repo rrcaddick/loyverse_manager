@@ -1,20 +1,23 @@
+{# One supply line per document. Prices are as quoted (VAT inclusive); the VAT
+   it includes is shown in the totals block, where SARS wants it. #}
 <table class="lines">
   <thead>
     <tr>
-      <th class="qty num">Qty</th>
       <th class="desc">Description</th>
-      <th class="unit num">Unit price ex VAT</th>
-      <th class="vat num">VAT {{ finance.vat_rate_display }}%</th>
+      <th class="qty num">Qty</th>
+      <th class="unit num">Unit price</th>
       <th class="amount num">Amount</th>
     </tr>
   </thead>
   <tbody>
     {% for line in lines %}
     <tr>
+      <td class="desc">
+        {{ line.description }}
+        <span class="desc-sub">{{ line.equation }}</span>
+      </td>
       <td class="qty num">{{ line.qty }}</td>
-      <td class="desc">{{ line.description }}</td>
-      <td class="unit num">{{ line.unit_ex_vat_display }}</td>
-      <td class="vat num">{{ line.vat_display }}</td>
+      <td class="unit num">{{ line.unit_price_display }}</td>
       <td class="amount num">{{ line.total_display }}</td>
     </tr>
     {% endfor %}

@@ -65,7 +65,9 @@ GROUP_TYPE_FALLBACK = "other"
 TRANSITIONS: dict[str, frozenset[str]] = {
     "enquiry": frozenset({"proforma_sent", "confirmed", "cancelled", "lapsed"}),
     "proforma_sent": frozenset({"confirmed", "cancelled", "lapsed"}),
-    "confirmed": frozenset({"completed", "cancelled", "no_show"}),
+    # confirmed → proforma_sent is the revert when a matched deposit is removed
+    # (bank unmatch) and the deposit is no longer covered.
+    "confirmed": frozenset({"completed", "cancelled", "no_show", "proforma_sent"}),
     "completed": frozenset(),
     "cancelled": frozenset({"enquiry"}),
     "lapsed": frozenset({"enquiry"}),
@@ -94,6 +96,8 @@ FIELD_LABELS = {
     "group_name": "group name",
     "group_type": "group type",
     "area": "area",
+    "billing_address": "billing address",
+    "customer_vat_number": "customer VAT number",
     "contact_name": "contact name",
     "contact_email": "email",
     "contact_mobile": "mobile",
@@ -281,6 +285,8 @@ _TEXT_FIELDS = {
     "group_name": 255,
     "group_type": 32,
     "area": 255,
+    "billing_address": 500,
+    "customer_vat_number": 32,
     "contact_name": 255,
     "arrival_time": 20,
     "price_override_reason": 255,
@@ -731,11 +737,14 @@ def set_status(booking_id: int, status: str, actor: int | None, reason: str | No
     check_transition(booking["status"], status, booking["visit_date"], get_today())
     fields: dict[str, Any] = {"status": status}
     stamp_col = STATUS_STAMPS.get(status)
-    if stamp_col:
+    reverting = booking["status"] == "confirmed" and status == "proforma_sent"
+    if stamp_col and not (reverting and booking.get(stamp_col)):
         fields[stamp_col] = now_local()
     if status == "enquiry":  # reopen
         fields["cancelled_at"] = None
         fields["lapsed_at"] = None
+    if reverting:  # the deposit is no longer covered: the confirmation is undone
+        fields["confirmed_at"] = None
     with transaction() as conn:
         booking_model.update_fields(booking_id, fields, conn=conn)
         summary = f"{STATUS_LABELS[booking['status']]} → {STATUS_LABELS[status]}"

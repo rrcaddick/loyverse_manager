@@ -5,10 +5,10 @@
 <p>Hi {{ booking.contact_first_name or "there" }},</p>
 <p>A little while ago we sent proforma {{ document.number if document else booking.reference }} for {{ booking.group_name }}'s visit on {{ booking.visit_date_long }}, and we have not heard back. We would love to have you, so we wanted to check whether you would still like to go ahead.</p>
 {{ summary([
-  ("Reference", booking.reference),
+  ("Deposit due", finance.deposit_outstanding_display if not finance.deposit_waived else "Waived", true),
   ("Visit date", booking.visit_date_long),
   ("Group size", booking.people_booked|plural("visitor")),
-  ("Deposit due", finance.deposit_outstanding_display if not finance.deposit_waived else "Waived", true),
+  ("Reference", booking.reference),
 ]) }}
 {% if finance.deposit_waived %}
 <p>No deposit is needed for this booking, so a quick reply is all it takes to confirm the date.</p>

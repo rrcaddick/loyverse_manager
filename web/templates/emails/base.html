@@ -32,6 +32,9 @@
         <tr>
           <td class="card">
             {% block body %}{% endblock %}
+            {% if attached %}
+            <p class="attached"><span class="muted">Attached:</span> {{ attached }}</p>
+            {% endif %}
             <p class="sign-off">{% block sign_off %}Kind regards,{% endblock %}</p>
             <p class="signature">
               <span class="strong">{{ email_settings.signature_name }}</span><br>

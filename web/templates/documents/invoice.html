@@ -1,3 +1,6 @@
+{# Kind "invoice" is the deposit receipt and statement of account (FY1703-S):
+   it shows the deposit received and the balance, and is deliberately not a
+   tax invoice. The tax invoice (INV1703) is final_invoice.html. #}
 {% extends "documents/base.html" %}
 
 {% block body %}
@@ -32,33 +35,18 @@
 <table class="totals-wrap">
   <tr>
     <td class="totals-aside">
-      {% if doc.is_final and finance.uses_arrivals %}
-      <p class="note">Billed on {{ finance.arrived_count|plural("visitor") }} counted at the gate on {{ booking.visit_date_medium }}{% if finance.arrived_count != finance.people_booked %} ({{ finance.people_booked }} booked){% endif %}.</p>
-      {% elif doc.is_final %}
-      <p class="note">Billed on the booked group size: no gate count was recorded for this visit.</p>
-      {% endif %}
-      {% if doc.is_final %}
-        {% if finance.due > 0 %}
-        <p class="note">The balance is payable at the gate by card or cash.</p>
-        {% elif finance.due < 0 %}
-        <p class="note">Your payments exceed the final amount. We will be in touch about the credit.</p>
-        {% else %}
-        <p class="note">Settled in full. Thank you.</p>
-        {% endif %}
-      {% else %}
-        <p class="note">The balance is payable on the day of your visit, at the gate by card or cash, or by EFT beforehand using the payment reference.</p>
-      {% endif %}
+      <p class="note">This is a receipt for the payments listed and a statement of your account. <strong>This is not a tax invoice</strong>: the tax invoice is issued after your visit, for the visitors counted at the gate.</p>
+      <p class="note">The balance is payable on the day of your visit, at the gate by card or cash, or by EFT beforehand using the payment reference.</p>
     </td>
     <td class="totals-cell">
       <table class="totals">
-        <tr><th>Subtotal</th><td>{{ finance.subtotal_display }}</td></tr>
-        <tr><th>VAT {{ finance.vat_rate_display }}%</th><td>{{ finance.vat_display }}</td></tr>
         <tr class="total"><th>Total</th><td>{{ finance.total_display }}</td></tr>
+        <tr class="minor"><th>Includes VAT {{ finance.vat_rate_display }} %</th><td>{{ finance.vat_display }}</td></tr>
         <tr class="minor"><th>{% if finance.paid > 0 %}Paid to date{% else %}Payments received{% endif %}</th><td>{% if finance.paid > 0 %}&minus;{% endif %}{{ finance.paid_display }}</td></tr>
         {% if finance.due > 0 %}
-        <tr class="due"><th>{% if doc.is_final %}Balance due at the gate{% else %}Balance due on the day{% endif %}</th><td>{{ finance.due_display }}</td></tr>
+        <tr class="due"><th>Balance due on the day</th><td>{{ finance.due_display }}</td></tr>
         {% elif finance.due < 0 %}
-        <tr class="due"><th>Credit due to you</th><td>{{ (0 - finance.due)|money }}</td></tr>
+        <tr class="due"><th>Credit on your account</th><td>{{ (0 - finance.due)|money }}</td></tr>
         {% else %}
         <tr class="settled"><th>Balance</th><td>Paid in full</td></tr>
         {% endif %}
@@ -69,7 +57,5 @@
 {% endblock %}
 
 {% block terms %}
-{% if not doc.is_final %}
-<p>Your date is confirmed. Please bring this invoice reference with you on the day.</p>
-{% endif %}
+<p>Your date is confirmed. Please bring your booking reference with you on the day.</p>
 {% endblock %}

@@ -115,14 +115,18 @@ def test_match_new_is_idempotent_and_handles_partial_deposit(data):
 
 
 def test_suggested_match_stores_suggestions_and_rematches_later(data):
-    b = data.booking(status="proforma_sent", deposit="2800.00", group_name="TEST Riverbend Academy", contact_name="Pieter Botha")
-    tx = data.transaction(amount="2800.00", description="CAPITEC RIVERBEND BOTHA")
+    # An odd deposit so no real booking in a shared database ties at the top rank.
+    b = data.booking(status="proforma_sent", deposit="2817.00", group_name="TEST Riverbend Academy", contact_name="Pieter Botha")
+    tx = data.transaction(amount="2817.00", description="CAPITEC RIVERBEND BOTHA")
     bank.match_new()
     row = bank_model.get(tx["id"])
     assert row["match_status"] == "suggested"
-    suggestions = bank_model.serialize(row)["suggestions"]
+    out = bank_model.serialize(row)
+    suggestions = out["suggestions"]
     assert suggestions[0]["booking_id"] == b["id"]
-    assert suggestions[0]["score"] >= 70
+    assert suggestions[0]["confidence"] == "Equals the deposit" and suggestions[0]["tone"] == "green"
+    assert "Name words: Botha, Riverbend" in suggestions[0]["reasons"]
+    assert out["preselected_booking_id"] == b["id"]
     assert query_one("SELECT COUNT(*) AS n FROM payments WHERE bank_transaction_id = %s", (tx["id"],))["n"] == 0
 
     # Operator confirms the suggestion.
@@ -144,17 +148,124 @@ def test_unmatch_removes_payment_and_resets(data):
     assert query_one("SELECT COUNT(*) AS n FROM payments WHERE booking_id = %s", (b["id"],))["n"] == 0
     kinds = [r["kind"] for r in query("SELECT kind FROM booking_events WHERE booking_id = %s ORDER BY id", (b["id"],))]
     assert "payment_deleted" in kinds and "payment_unmatched" in kinds
-    # Status is deliberately left alone (no legal transition back from confirmed).
+    # The deposit confirmed the booking; removing it reverts to proforma_sent.
+    after = query_one("SELECT status, confirmed_at FROM bookings WHERE id = %s", (b["id"],))
+    assert after["status"] == "proforma_sent" and after["confirmed_at"] is None
+    assert out["booking_reverted"] == {
+        "id": b["id"], "reference": b["reference"], "from": "confirmed", "to": "proforma_sent",
+        "deposit_due": 2800.0, "paid_total": 0.0,
+    }
+    last = query_one("SELECT kind, summary, data FROM booking_events WHERE booking_id = %s ORDER BY id DESC LIMIT 1", (b["id"],))
+    assert last["kind"] == "status_changed" and "Payment unmatched" in last["summary"]
+
+
+def test_unmatch_keeps_confirmed_when_another_payment_covers_the_deposit(data):
+    b = data.booking(status="proforma_sent", deposit="2800.00")
+    tx = data.transaction(amount="2800.00", description=f"INV {b['doc_number']} first")
+    bank.match_new()
+    # A second, manual payment also covers the deposit on its own.
+    bank.confirm_match(data.transaction(amount="3000.00", description="TEST second")["id"], b["id"])
+    out = bank.unmatch(tx["id"])
+    assert out["booking_reverted"] is None
     assert query_one("SELECT status FROM bookings WHERE id = %s", (b["id"],))["status"] == "confirmed"
+
+
+def test_unmatch_does_not_revert_a_waived_deposit_or_a_completed_visit(data):
+    waived = data.booking(status="proforma_sent", deposit="0.00", deposit_waived=True)
+    tx = data.transaction(amount="500.00", description="TEST waived part payment")
+    bank.confirm_match(tx["id"], waived["id"])
+    assert query_one("SELECT status FROM bookings WHERE id = %s", (waived["id"],))["status"] == "confirmed"
+    assert bank.unmatch(tx["id"])["booking_reverted"] is None
+    assert query_one("SELECT status FROM bookings WHERE id = %s", (waived["id"],))["status"] == "confirmed"
+
+    done = data.booking(status="completed", deposit="2800.00")
+    tx2 = data.transaction(amount="2800.00", description="TEST completed")
+    bank.confirm_match(tx2["id"], done["id"])
+    assert bank.unmatch(tx2["id"])["booking_reverted"] is None
+    assert query_one("SELECT status FROM bookings WHERE id = %s", (done["id"],))["status"] == "completed"
 
 
 def test_ignore_and_unignore(data):
     tx = data.transaction(amount="99.00", description="TEST card settlement")
-    out = bank.ignore(tx["id"], "  Card settlement, not a booking  ", actor=None)
-    assert out["match_status"] == "ignored" and out["ignore_reason"] == "Card settlement, not a booking"
-    assert out["matched_at"] is not None
+    out = bank.ignore(tx["id"], "card_settlement", actor=None, note="not a booking")
+    assert out["match_status"] == "ignored" and out["ignore_reason"] == "card_settlement: not a booking"
+    assert out["ignore"] == {"reason": "card_settlement", "label": "Card settlement", "note": "not a booking"}
+    assert out["matched_at"] is not None and out["rule"] is None
     out = bank.unmatch(tx["id"])
-    assert out["match_status"] == "unmatched" and out["ignore_reason"] is None
+    assert out["match_status"] == "unmatched" and out["ignore_reason"] is None and out["ignore"] is None
+    # Legacy free text is kept as "other" with the text as the note.
+    out = bank.ignore(tx["id"], "  Card settlement, not a booking  ")
+    assert out["ignore"] == {"reason": "other", "label": "Other", "note": "Card settlement, not a booking"}
+
+
+@pytest.fixture
+def rules():
+    """Delete every rule created by a test (patterns start with TEST-RULE)."""
+    from src.models.base import execute
+
+    yield
+    execute("DELETE FROM bank_ignore_rules WHERE pattern LIKE 'TEST-RULE%%'")
+
+
+def test_ignore_with_rule_parks_queued_credits_and_later_polls(data, rules):
+    first = data.transaction(amount="10.00", description="TEST-RULE APP TRANSFER FROM RAY")
+    sibling = data.transaction(amount="11.00", description="TEST-RULE APP TRANSFER FROM LINDA")
+    other = data.transaction(amount="12.00", description="TEST-RULE APP PAYMENT FROM SCHOOL")
+    out = bank.ignore(first["id"], "own_transfer", actor=None, create_rule=True)
+    assert out["match_status"] == "ignored"
+    rule = out["rule"]
+    assert rule["created"] is True and rule["applied"] == 1
+    assert rule["rule"]["pattern"] == "TEST-RULE APP TRANSFER FROM" and rule["rule"]["reason"] == "own_transfer"
+    # The sibling already in the queue was ignored by the rule; the other was not.
+    sib = bank_model.get(sibling["id"])
+    assert sib["match_status"] == "ignored" and sib["ignore_reason"].startswith("own_transfer: rule:")
+    assert bank_model.get(other["id"])["match_status"] == "unmatched"
+    # The next poll's matcher applies the rule to a new entry before matching it.
+    later = data.transaction(amount="13.00", description="test-rule app transfer from ray again")
+    counts = bank.match_new()
+    assert counts["ignored"] >= 1
+    assert bank_model.get(later["id"])["match_status"] == "ignored"
+    # Same pattern again: not duplicated.
+    again = bank.create_ignore_rule("TEST-RULE APP TRANSFER FROM", "own_transfer")
+    assert again["created"] is False and again["rule"]["id"] == rule["rule"]["id"]
+    assert any(r["id"] == rule["rule"]["id"] for r in bank.list_ignore_rules())
+    assert bank.delete_ignore_rule(rule["rule"]["id"])["pattern"] == "TEST-RULE APP TRANSFER FROM"
+    with pytest.raises(bank.BankError):
+        bank.delete_ignore_rule(rule["rule"]["id"])
+
+
+def test_rule_guards(data, rules):
+    with pytest.raises(bank.BankError) as exc:
+        bank.create_ignore_rule("TES", "own_transfer")
+    assert exc.value.status == 422
+    with pytest.raises(bank.BankError):
+        bank.create_ignore_rule("TEST-RULE OTHER", "other")
+    # "other" never makes a rule, even when asked.
+    tx = data.transaction(amount="1.00", description="TEST-RULE OTHER THING")
+    assert bank.ignore(tx["id"], "other", create_rule=True)["rule"] is None
+
+
+def test_needs_attention_view_orders_suggested_then_oldest_unmatched(data):
+    from datetime import date as _date
+
+    b = data.booking(status="proforma_sent", deposit="2800.00", group_name="TEST Viewtown Academy", contact_name="Zanele Viewer")
+    old = data.transaction(amount="5.00", description="TEST view old", booking_date=_date.today() - timedelta(days=9))
+    new = data.transaction(amount="6.00", description="TEST view new", booking_date=_date.today() - timedelta(days=1))
+    sug = data.transaction(amount="2800.00", description="CAPITEC VIEWTOWN ZANELE TEST view", booking_date=_date.today() - timedelta(days=3))
+    debit = data.transaction(amount="7.00", description="TEST view debit", credit_debit="DEBIT")
+    ignored = data.transaction(amount="8.00", description="TEST view ignored")
+    bank.ignore(ignored["id"], "interest")
+    bank.match_new()
+    rows, total = bank_model.list_transactions(view="needs_attention", q="TEST view", page_size=50)
+    ids = [r["id"] for r in rows]
+    assert ids == [sug["id"], old["id"], new["id"]]
+    assert debit["id"] not in ids and ignored["id"] not in ids
+    rows, _ = bank_model.list_transactions(view="matched", q="TEST view")
+    assert rows == []
+    rows, _ = bank_model.list_transactions(view="all", q="TEST view", page_size=50)
+    assert {r["id"] for r in rows} == {old["id"], new["id"], sug["id"], debit["id"], ignored["id"]}
+    with pytest.raises(ValueError):
+        bank_model.list_transactions(view="bogus")
 
 
 def test_confirm_match_guards(data):
@@ -184,9 +295,13 @@ def test_confirm_match_guards(data):
 def test_summary_shape(data):
     data.transaction(amount="7.00", description="TEST summary")
     s = bank.summary()
-    assert set(s) == {"counts", "unmatched_credits_30d", "last_poll"}
+    assert set(s) == {"counts", "to_confirm", "unmatched_credits_30d", "needs_attention", "last_poll"}
     assert set(s["counts"]) == set(bank_model.STATUSES)
     assert s["unmatched_credits_30d"]["count"] >= 1
+    assert s["needs_attention"] == s["to_confirm"] + s["unmatched_credits_30d"]["count"]
+    if s["last_poll"] is not None:
+        assert {"id", "started_at", "finished_at", "status", "window_from", "window_to",
+                "entries", "new_entries", "error"} == set(s["last_poll"])
 
 
 # ----------------------------------------------------------------- API ---
@@ -224,14 +339,51 @@ def test_api_list_get_ignore_unmatch(client, data):
 
     headers = {"X-CSRF-Token": "test-csrf"}
     r = client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/ignore", json={"reason": "TEST"}, headers=headers)
-    assert r.status_code == 200 and r.get_json()["transaction"]["match_status"] == "ignored"
+    assert r.status_code == 422  # the reason is one of four codes now
+    r = client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/ignore", json={"reason": "interest", "note": "bank interest"}, headers=headers)
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["transaction"]["match_status"] == "ignored" and body["rule"] is None
+    assert body["transaction"]["ignore"] == {"reason": "interest", "label": "Interest", "note": "bank interest"}
     r = client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/unmatch", json={}, headers=headers)
-    assert r.status_code == 200 and r.get_json()["transaction"]["match_status"] == "unmatched"
+    assert r.status_code == 200
+    assert r.get_json()["transaction"]["match_status"] == "unmatched" and r.get_json()["booking_reverted"] is None
     # CSRF is enforced on writes.
-    assert client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/ignore", json={"reason": "x"}).status_code == 403
+    assert client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/ignore", json={"reason": "other"}).status_code == 403
+    assert client.get("/api/v1/payments/bank-transactions?view=bogus").status_code == 400
+    r = client.get("/api/v1/payments/bank-transactions?view=needs_attention&q=api+row")
+    assert r.status_code == 200 and r.get_json()["total"] == 1
 
     r = client.get("/api/v1/payments/summary")
-    assert r.status_code == 200 and "counts" in r.get_json()
+    assert r.status_code == 200 and {"counts", "needs_attention", "to_confirm", "last_poll"} <= set(r.get_json())
+
+
+def test_api_ignore_rules(client, data, rules):
+    headers = {"X-CSRF-Token": "test-csrf"}
+    tx = data.transaction(amount="3.00", description="TEST-RULE CARD SETTLE 123456")
+    r = client.post(
+        f"/api/v1/payments/bank-transactions/{tx['id']}/ignore",
+        json={"reason": "card_settlement", "create_rule": True},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["rule"]["rule"]["pattern"] == "TEST-RULE CARD SETTLE" and body["rule"]["created"] is True
+    rule_id = body["rule"]["rule"]["id"]
+    r = client.get("/api/v1/payments/ignore-rules")
+    assert r.status_code == 200 and any(x["id"] == rule_id for x in r.get_json()["items"])
+    # "other" may not create a rule.
+    tx2 = data.transaction(amount="4.00", description="TEST-RULE OTHER")
+    r = client.post(f"/api/v1/payments/bank-transactions/{tx2['id']}/ignore", json={"reason": "other", "create_rule": True}, headers=headers)
+    assert r.status_code == 422
+    # Explicit creation and deletion.
+    r = client.post("/api/v1/payments/ignore-rules", json={"pattern": "TEST-RULE EXPLICIT", "reason": "interest"}, headers=headers)
+    assert r.status_code == 201 and r.get_json()["rule"]["reason"] == "interest"
+    explicit_id = r.get_json()["rule"]["id"]
+    assert client.post("/api/v1/payments/ignore-rules", json={"pattern": "TEST-RULE EXPLICIT", "reason": "interest"}, headers=headers).status_code == 200
+    assert client.delete(f"/api/v1/payments/ignore-rules/{explicit_id}", headers=headers).status_code == 200
+    assert client.delete(f"/api/v1/payments/ignore-rules/{explicit_id}", headers=headers).status_code == 404
+    assert client.delete(f"/api/v1/payments/ignore-rules/{rule_id}", headers=headers).status_code == 200
 
 
 def test_api_match_and_unmatch(client, data):
@@ -254,4 +406,6 @@ def test_api_match_and_unmatch(client, data):
     assert r.status_code == 422
     r = client.post(f"/api/v1/payments/bank-transactions/{tx['id']}/unmatch", json={}, headers=headers)
     assert r.status_code == 200 and r.get_json()["transaction"]["match_status"] == "unmatched"
+    assert r.get_json()["booking_reverted"]["to"] == "proforma_sent"
+    assert query_one("SELECT status FROM bookings WHERE id = %s", (b["id"],))["status"] == "proforma_sent"
     assert bank_model.payment_for_transaction(tx["id"]) is None

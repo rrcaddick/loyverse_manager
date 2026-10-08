@@ -33,6 +33,7 @@ def test_every_status_has_a_transition_entry():
         ("proforma_sent", "lapsed"),
         ("confirmed", "completed"),
         ("confirmed", "cancelled"),
+        ("confirmed", "proforma_sent"),  # bank unmatch: the deposit is no longer covered
         ("cancelled", "enquiry"),
         ("lapsed", "enquiry"),
     ],
@@ -49,7 +50,6 @@ def test_allowed(current, new):
         ("proforma_sent", "enquiry"),
         ("proforma_sent", "completed"),
         ("confirmed", "enquiry"),
-        ("confirmed", "proforma_sent"),
         ("confirmed", "lapsed"),
         ("completed", "cancelled"),
         ("completed", "enquiry"),
@@ -82,7 +82,7 @@ def test_no_show_only_after_visit_date():
 
 
 def test_allowed_transitions_lists_only_valid_moves():
-    assert allowed_transitions("confirmed", FUTURE, TODAY) == ["completed", "cancelled"]
-    assert allowed_transitions("confirmed", PAST, TODAY) == ["completed", "cancelled", "no_show"]
+    assert allowed_transitions("confirmed", FUTURE, TODAY) == ["proforma_sent", "completed", "cancelled"]
+    assert allowed_transitions("confirmed", PAST, TODAY) == ["proforma_sent", "completed", "cancelled", "no_show"]
     assert allowed_transitions("completed", PAST, TODAY) == []
     assert allowed_transitions("cancelled", FUTURE, TODAY) == ["enquiry"]

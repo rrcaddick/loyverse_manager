@@ -19,16 +19,22 @@ import css_inline
 import html2text
 
 from src.services.documents import (
+    KIND_DESCRIPTIONS,
+    KIND_LABELS,
     D,
     as_date,
     booking_display,
     compute_finance,
+    date_day_month,
     date_long,
     date_medium,
+    date_weekday_short,
+    document_filename,
     document_number,
     finance_display,
     jinja_env,
     money,
+    money_short,
 )
 from src.utils.date import get_today
 
@@ -83,62 +89,127 @@ def _payment_display(payment: dict | None) -> dict | None:
     return p
 
 
-def _subject(kind: str, booking: dict | None, document: dict | None, settings, ctx: dict) -> str:
+def _subject(
+    kind: str,
+    booking: dict | None,
+    document: dict | None,
+    settings,
+    ctx: dict,
+    finance: dict | None = None,
+    hold_date=None,
+) -> str:
+    """Amount-first subjects (docs/redesign-spec.md §9): the key fact, then the
+    reference. Group and date live in the preheader, not the subject."""
     if ctx.get("subject"):
         return str(ctx["subject"])
     if booking is None:
         if kind == "bounce_back":
             return f"Group bookings at {settings.documents.trading_name}"
         return str(settings.documents.trading_name)
-    tail = f"{booking['group_name']}{DASH}{booking['visit_date_long']}"
     ref = booking["reference"]
+    visit = booking.get("visit_date")
+    day = date_day_month(visit)
+    weekday = date_weekday_short(visit)
+    f = finance or {}
     number = (document or {}).get("number")
     if kind == "proforma":
-        return f"Proforma {number or document_number(booking, 'proforma', settings)}{DASH}{tail}"
+        number = number or document_number(booking, "proforma", settings)
+        if f.get("deposit_waived"):
+            return f"Proforma {number}{DASH}{money_short(f.get('total'))} payable on the day"
+        deposit = money_short(f.get("deposit_outstanding") or f.get("deposit_due"))
+        if hold_date:
+            return f"Proforma {number}{DASH}{deposit} deposit by {date_day_month(hold_date)}"
+        return f"Proforma {number}{DASH}{deposit} deposit secures {day}"
     if kind == "invoice":
-        return f"Invoice {number or document_number(booking, 'invoice', settings)}{DASH}{tail}"
+        number = number or document_number(booking, "invoice", settings)
+        due = D(f.get("due"))
+        if due > 0:
+            return f"Statement {number}{DASH}{money_short(due)} balance on {day}"
+        return f"Statement {number}{DASH}paid in full"
     if kind == "final_invoice":
-        return f"Final invoice {number or document_number(booking, 'final_invoice', settings)}{DASH}{tail}"
-    heads = {
-        "acknowledgement": "Booking request",
-        "ticket": "Vehicle ticket",
-        "payment_confirmation": "Payment received",
-        "still_interested": "Still planning to visit?",
-        "deposit_reminder": "Deposit reminder",
-        "final_details": "Final details",
-        "expiry": "Booking released",
-        "answers": "Your questions",
-    }
-    head = heads.get(kind)
-    if head:
-        return f"{head} {ref}{DASH}{tail}"
-    return f"{ref}{DASH}{tail}"
+        number = number or document_number(booking, "final_invoice", settings)
+        due = D(f.get("due"))
+        if due > 0:
+            return f"Tax invoice {number}{DASH}{money_short(due)} due"
+        if due < 0:
+            return f"Tax invoice {number}{DASH}{money_short(-due)} credit"
+        return f"Tax invoice {number}{DASH}paid in full"
+    if kind == "payment_confirmation":
+        amount = money((ctx.get("payment") or {}).get("amount"))
+        return f"Payment received: {amount}{DASH}{ref}"
+    if kind == "deposit_reminder":
+        deposit = money_short(f.get("deposit_outstanding") or f.get("deposit_due"))
+        if hold_date:
+            return f"Deposit {deposit} due by {date_day_month(hold_date)}{DASH}{ref}"
+        return f"Deposit {deposit} due for {day}{DASH}{ref}"
+    if kind == "still_interested":
+        return f"Still planning to visit on {day}?{DASH}{ref}"
+    if kind == "acknowledgement":
+        return f"Request received {ref}{DASH}{weekday}"
+    if kind == "ticket":
+        return f"Vehicle ticket {ref}{DASH}{weekday}"
+    if kind == "final_details":
+        return f"Your visit on {weekday}{DASH}{ref}"
+    if kind == "expiry":
+        return f"Booking {ref} released{DASH}{day}"
+    if kind == "answers":
+        return f"Your questions{DASH}{ref}"
+    return f"{ref}{DASH}{booking['group_name']}{DASH}{booking['visit_date_long']}"
 
 
 def _preheader(kind: str, c: dict) -> str:
+    """Group and date first, then one sentence."""
     b = c.get("booking") or {}
     f = c.get("finance") or {}
     p = c.get("payment") or {}
     date = b.get("visit_date_long", "")
-    return {
-        "acknowledgement": f"We have received your request for {date}. Your reference is {b.get('reference', '')}.",
+    lead = " · ".join(x for x in (b.get("group_name"), date) if x)
+    sentence = {
+        "acknowledgement": f"We have received your request. Your reference is {b.get('reference', '')}.",
         "proforma": (
-            f"A deposit of {f.get('deposit_outstanding_display', '')} secures {date} for your group."
+            f"A deposit of {f.get('deposit_outstanding_display', '')} secures the date for your group."
             if f and not f.get("deposit_waived")
-            else f"Your proforma for {date} is attached."
+            else "Your proforma is attached."
         ),
-        "invoice": f"Your deposit has been received and {date} is confirmed.",
-        "final_invoice": "Thank you for visiting. Your final invoice is attached.",
-        "ticket": f"Your vehicle entry ticket for {date} is attached. Please share it with each driver.",
+        "invoice": (
+            f"Deposit received, date confirmed. Balance on the day {f.get('due_display', '')}."
+            if f and D(f.get("due")) > 0
+            else "Deposit received, date confirmed. Paid in full."
+        ),
+        "final_invoice": "Thank you for visiting. Your tax invoice is attached.",
+        "ticket": "Your vehicle entry ticket is attached. Please share it with each driver.",
         "payment_confirmation": f"We have received {p.get('amount_display', 'your payment')}. Thank you.",
-        "still_interested": f"We sent a proforma for {date} and would love to know if you would like to go ahead.",
-        "deposit_reminder": f"The deposit of {f.get('deposit_outstanding_display', '')} for {date} is still outstanding.",
-        "final_details": f"Everything you need for {date}: arrival, your ticket and the balance due.",
+        "still_interested": "We sent a proforma and would love to know if you would like to go ahead.",
+        "deposit_reminder": f"The deposit of {f.get('deposit_outstanding_display', '')} is still outstanding.",
+        "final_details": "Everything you need for the day: arrival, your ticket and the balance due.",
         "expiry": "We have not received the deposit, so the date is no longer reserved.",
         "answers": "Answers to the questions you asked with your booking request.",
         "bounce_back": "For a group visit, our booking request form is the quickest way to get a quote.",
         "reply": "",
     }.get(kind, "")
+    if kind in ("bounce_back", "reply") or not lead:
+        return sentence
+    return f"{lead} · {sentence}" if sentence else lead
+
+
+def _attached_name(kind: str, booking: dict | None, document: dict | None, ctx: dict) -> str | None:
+    """The 'Attached: FY1703 Proforma.pdf' line. ``attached`` in ctx wins; otherwise
+    derived from the document number (documents) or the booking (ticket)."""
+    if "attached" in ctx:
+        value = ctx.get("attached")
+        return str(value) if value else None
+    if booking is None:
+        return None
+    number = (document or {}).get("number")
+    if kind in ("proforma", "invoice", "final_invoice") and number:
+        return document_filename({"number": number, "kind": kind})
+    if kind in ("still_interested", "deposit_reminder") and number:
+        return document_filename({"number": number, "kind": "proforma"})
+    if kind == "ticket" or (kind == "final_details" and ctx.get("ticket_attached", True)):
+        return f"Vehicle ticket {booking.get('reference') or booking.get('barcode')}.pdf"
+    if kind == "payment_confirmation" and ctx.get("invoice_attached") and number:
+        return document_filename({"number": number, "kind": "invoice"})
+    return None
 
 
 def _to_text(html: str) -> str:
@@ -177,6 +248,7 @@ def render_email(kind: str, booking: dict | None, settings, **ctx: Any) -> Rende
     invoice_attached bool                            (payment_confirmation; default False)
     rules_url     str                                (ticket, final_details; defaults to the website)
     logo_url      str absolute https URL             (all; falls back to a text wordmark)
+    attached      str filename for the "Attached: …" line (derived from the document/ticket when absent)
     """
     if kind not in KINDS:
         raise EmailTemplateError(f"Unknown email kind: {kind}")
@@ -200,6 +272,10 @@ def render_email(kind: str, booking: dict | None, settings, **ctx: Any) -> Rende
                 "due": finance["due"],
             }
         )
+    if document is None and booking is not None and kind in ("still_interested", "deposit_reminder"):
+        document = _document_display({"number": document_number(booking, "proforma", settings)})
+    if document is None and booking is not None and kind == "payment_confirmation" and ctx.get("invoice_attached"):
+        document = _document_display({"number": document_number(booking, "invoice", settings)})
 
     hold = ctx.get("hold_expires_on", (booking or {}).get("hold_expires_on"))
     hold_date = as_date(hold)
@@ -229,8 +305,12 @@ def render_email(kind: str, booking: dict | None, settings, **ctx: Any) -> Rende
         "company": dict(settings.documents),
         "email_settings": dict(settings.email),
         "today": today,
+        "attached": _attached_name(kind, b, document, ctx),
+        "document_label": KIND_LABELS,
+        "document_description": KIND_DESCRIPTIONS,
     }
-    subject = _subject(kind, b, document, settings, ctx)
+    context["company"].setdefault("deposit_statement_label", KIND_DESCRIPTIONS["invoice"])
+    subject = _subject(kind, b, document, settings, ctx, finance=finance, hold_date=hold_date)
     preheader = ctx.get("preheader", _preheader(kind, context))
 
     template = jinja_env().get_template(f"emails/{kind}.html")

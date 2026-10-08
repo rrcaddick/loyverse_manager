@@ -46,27 +46,30 @@ def test_issue_versions_events_and_bytes(test_booking_id):
 
     execute("INSERT INTO payments (booking_id, kind, amount, paid_on, reference) VALUES (%s, 'eft', 3800, '2026-10-02', 'TST9902')", (bid,))
     inv = d.issue_document(bid, "invoice", actor=None)
-    assert (inv["number"], inv["version"], inv["paid"], inv["due"]) == ("INV9902", 1, 3800.0, 2565.0)
+    # The deposit receipt and statement has its own number: FY9902-S.
+    assert (inv["number"], inv["version"], inv["paid"], inv["due"]) == ("FY9902-S", 1, 3800.0, 2565.0)
+    assert inv["filename"] == "FY9902-S Statement.pdf" and inv["label"] == "Statement"
 
     execute("UPDATE bookings SET arrived_count = 61, arrived_source = 'manual' WHERE id = %s", (bid,))
     fin = d.issue_document(bid, "final_invoice", actor=None)
-    # Shares the invoice number, so it is v2 of INV9902 and the file name stays unique.
-    assert (fin["number"], fin["version"], fin["total"], fin["due"]) == ("INV9902", 2, 5795.0, 1995.0)
+    # The only tax invoice, numbered INV9902 from version 1.
+    assert (fin["number"], fin["version"], fin["total"], fin["due"]) == ("INV9902", 1, 5795.0, 1995.0)
+    assert fin["file_path"] == f"documents/{bid}/INV9902-v1.pdf"
 
     listed = d.list_documents(bid)
-    assert [(x["kind"], x["version"]) for x in listed] == [("final_invoice", 2), ("invoice", 1), ("proforma", 2), ("proforma", 1)]
+    assert [(x["kind"], x["version"]) for x in listed] == [("final_invoice", 1), ("invoice", 1), ("proforma", 2), ("proforma", 1)]
     assert document_model.latest(bid, "proforma")["version"] == 2
     assert document_model.latest(bid, "invoice")["version"] == 1
 
     filename, data = d.document_bytes(fin["id"])
-    assert filename == "INV9902 Final invoice.pdf" and data.startswith(b"%PDF")
+    assert filename == "INV9902 Tax invoice.pdf" and data.startswith(b"%PDF")
 
     events = query("SELECT kind, summary FROM booking_events WHERE booking_id = %s ORDER BY id", (bid,))
     assert [e["summary"] for e in events] == [
         "Proforma FY9902 issued (v1)",
         "Proforma FY9902 issued (v2)",
-        "Invoice INV9902 issued (v1)",
-        "Final invoice INV9902 issued (v2)",
+        "Statement FY9902-S issued (v1)",
+        "Tax invoice INV9902 issued (v1)",
     ]
     assert all(e["kind"] == "document_issued" for e in events)
 

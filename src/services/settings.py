@@ -55,6 +55,11 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "bank_branch_code": "250655",
         "pop_email": GMAIL_ADDRESS or "thefarmyardpark@gmail.com",
         "payment_terms": "The deposit secures your date. The balance is payable on the day of your visit.",
+        # The document issued when the deposit lands: FY1703-S, a receipt and
+        # statement of account, deliberately not a tax invoice (the tax invoice
+        # INV1703 is issued once at the visit for the counted visitors).
+        "statement_suffix": "S",
+        "deposit_statement_label": "Deposit receipt and statement",
     },
     "reminders": {
         "still_interested_days": 7,
@@ -88,7 +93,42 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         ],
         "max_questions": 5,
         "min_group_size": 10,
+        "max_group_size": 900,
         "intro": "Tell us about your group and we will come back to you with a proforma and your booking reference.",
+        # Email an acknowledgement as soon as a request arrives. Off by default:
+        # nothing sends automatically unless the operator turns this on.
+        "acknowledgement_enabled": False,
+        # The arrival-time choices on the public form (half-hour slots plus "Not sure yet").
+        "arrival_slots": [
+            "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+            "12:00", "12:30", "13:00", "13:30", "14:00", "Not sure yet",
+        ],
+    },
+    "templates": {
+        # Canned snippets for the mail composer. ``key`` is stable; title and
+        # body are the operator's to edit on Settings › Templates.
+        "items": [
+            {
+                "key": "price_list",
+                "title": "Price list",
+                "body": "Our group prices for the season are on the proforma we send you; the full price list is at www.farmyardpark.co.za.",
+            },
+            {
+                "key": "availability",
+                "title": "Availability",
+                "body": "We still have space on the date you asked for. The date is held once the deposit on the proforma has been paid.",
+            },
+            {
+                "key": "deposit_terms",
+                "title": "Deposit terms",
+                "body": "The deposit secures your date. The balance is paid on the day for the people who actually arrive, by card or cash at the gate or by EFT beforehand.",
+            },
+            {
+                "key": "form_link",
+                "title": "Booking form link",
+                "body": "The quickest way to get a proforma is our booking request form: https://www.farmyardpark.co.za/request",
+            },
+        ],
     },
 }
 

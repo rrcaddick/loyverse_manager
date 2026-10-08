@@ -5,10 +5,10 @@
 <p>Hi {{ booking.contact_first_name or "there" }},</p>
 <p>{{ booking.group_name }}'s visit on {{ booking.visit_date_long }} is {% if days_left is not none %}{{ days_left|plural("day") }} away{% else %}coming up{% endif %}, and we have not yet received the deposit of <span class="strong">{{ finance.deposit_outstanding_display }}</span>. The date is only reserved once it arrives.</p>
 {{ summary([
-  ("Reference", booking.reference),
-  ("Visit date", booking.visit_date_long),
   ("Deposit due", finance.deposit_outstanding_display, true),
   ("Please pay by", hold_expires_on_long),
+  ("Visit date", booking.visit_date_long),
+  ("Reference", booking.reference),
 ]) }}
 <p>Please pay by EFT using <span class="strong">{{ booking.reference }}</span> as your reference and send proof of payment to <a href="mailto:{{ company.pop_email }}">{{ company.pop_email }}</a>. The proforma is attached for your records.{% if hold_expires_on %} If the deposit has not reached us by {{ hold_expires_on_long }}, the date will be released.{% endif %}</p>
 {{ bank_details(company, booking.reference) }}

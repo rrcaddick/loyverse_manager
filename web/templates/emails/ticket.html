@@ -5,12 +5,12 @@
 <p>Hi {{ booking.contact_first_name or "there" }},</p>
 <p>The vehicle entry ticket for {{ booking.group_name }} is attached. Please send a copy to the driver of every vehicle in your group before the day.</p>
 {{ summary([
+  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else none,
   ("Reference", booking.reference),
   ("Visit date", booking.visit_date_long),
   ("Arrival", booking.arrival_time),
   ("Group size", booking.people_booked|plural("visitor")),
   ("Vehicles", booking.vehicles if booking.vehicles else none),
-  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else none,
 ], "Your visit") }}
 <h2>At the gate</h2>
 <ul>

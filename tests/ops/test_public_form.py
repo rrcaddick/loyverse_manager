@@ -2,7 +2,15 @@ from datetime import date
 
 import pytest
 
-from src.services.public_form import date_problem, normalise_mobile, validate_request
+from src.services import public_form
+from src.services.public_form import (
+    date_problem,
+    next_open_day_after,
+    normalise_mobile,
+    request_receipt_token,
+    validate_request,
+    verify_request_receipt_token,
+)
 from tests.ops.conftest import TODAY
 
 CLOSED = {date(2026, 12, 24): "Christmas Eve", date(2026, 12, 31): "New Year's Eve"}
@@ -79,9 +87,9 @@ def test_foreign_mobile_accepted_when_fully_qualified():
         ("2026-10-08", "Choose a date after today"),
         ("2026-10-07", "Choose a date after today"),
         ("2026-10-22", "The season opens on 31 October 2026"),
-        ("2026-11-02", "We are closed on Mondays and Tuesdays"),
-        ("2026-11-03", "We are closed on Mondays and Tuesdays"),
-        ("2026-12-24", "The park is closed on 24 December 2026 (Christmas Eve)"),
+        ("2026-11-02", "We are closed on Mondays and Tuesdays. The next open day is Wednesday 4 November."),
+        ("2026-11-03", "We are closed on Mondays and Tuesdays. The next open day is Wednesday 4 November."),
+        ("2026-12-24", "The park is closed on 24 December 2026 (Christmas Eve). The next open day is Friday 25 December."),
         ("2027-05-06", "The season ends on 30 April 2027"),
         ("05/11/2026", "Enter a date as YYYY-MM-DD"),
     ],
@@ -111,15 +119,60 @@ def test_alternative_date_rules(settings):
     assert errors == {} and clean["alternative_date"] is None
 
 
+TOO_SMALL = "Group bookings are for 10 or more people. For smaller groups, buy day tickets on Quicket."
+
+
 def test_group_size_minimum(settings):
     _, errors = validate(settings, visitors=9)
-    assert errors["visitors"] == "Group bookings are for 10 or more visitors"
+    assert errors["visitors"] == TOO_SMALL
     _, errors = validate(settings, adults=4, children=5)
-    assert errors["visitors"] == "Group bookings are for 10 or more visitors"
+    assert errors["visitors"] == TOO_SMALL
     clean, errors = validate(settings, visitors=10)
     assert errors == {} and clean["people_booked"] == 10
     clean, errors = validate(settings, adults=None, children=10)
     assert errors == {} and clean["adults"] == 0 and clean["people_booked"] == 10
+
+
+def test_group_size_maximum_names_the_phone(settings):
+    _, errors = validate(settings, visitors=901)
+    assert errors["visitors"] == "For more than 900 people please phone us on 081 461 4246."
+    clean, errors = validate(settings, visitors=900)
+    assert errors == {} and clean["people_booked"] == 900
+    settings["form"]["max_group_size"] = 500
+    _, errors = validate(settings, visitors=600)
+    assert errors["visitors"].startswith("For more than 500 people")
+
+
+def test_visitors_wins_over_adults_and_children(settings):
+    clean, errors = validate(settings, visitors=45, adults=12, children=88)
+    assert errors == {} and clean["people_booked"] == 45 and "visitors" not in clean
+
+
+def test_arrival_time_must_be_a_slot(settings):
+    clean, errors = validate(settings, arrival_time="09:30")
+    assert errors == {} and clean["arrival_time"] == "09:30"
+    clean, errors = validate(settings, arrival_time="Not sure yet")
+    assert errors == {} and clean["arrival_time"] == "Not sure yet"
+    _, errors = validate(settings, arrival_time="about ten")
+    assert errors["arrival_time"] == "Choose an arrival time from the list"
+    clean, errors = validate(settings, arrival_time="")
+    assert errors == {} and clean["arrival_time"] is None
+    settings["form"]["arrival_slots"] = ["08:00"]
+    _, errors = validate(settings, arrival_time="09:30")
+    assert "arrival_time" in errors
+
+
+def test_gazebos_capped_at_the_park_fleet(settings):
+    clean, errors = validate(settings, gazebos=7)
+    assert errors == {} and clean["gazebos"] == 7
+    _, errors = validate(settings, gazebos=8)
+    assert errors["gazebos"] == "We have 7 gazebos to hire"
+
+
+def test_next_open_day_after(settings):
+    assert next_open_day_after(date(2026, 11, 2), settings, CLOSED, TODAY) == date(2026, 11, 4)
+    assert next_open_day_after(date(2026, 12, 23), settings, CLOSED, TODAY) == date(2026, 12, 25)
+    assert next_open_day_after(date(2027, 4, 30), settings, CLOSED, TODAY) is None  # season over
 
 
 def test_counts_must_be_whole_non_negative(settings):
@@ -150,7 +203,7 @@ def test_text_lengths(settings):
 
 def test_policy_and_honeypot(settings):
     _, errors = validate(settings, policy_accepted=False)
-    assert errors["policy_accepted"] == "Please accept the booking policy to continue"
+    assert errors["policy_accepted"] == "Agree to the booking terms to send your request"
     _, errors = validate(settings, policy_accepted="true")
     assert "policy_accepted" not in errors
     _, errors = validate(settings, website="http://spam.example")
@@ -160,3 +213,54 @@ def test_policy_and_honeypot(settings):
 def test_non_dict_payload(settings):
     _, errors = validate_request(None, settings, closed_days=CLOSED, today=TODAY)
     assert errors["group_name"] == "This field is required"
+
+
+# ------------------------------------------------------------- receipt ---
+
+def test_request_receipt_token_round_trip():
+    token = request_receipt_token(123)
+    assert token and isinstance(token, str)
+    assert verify_request_receipt_token(token, 123) == (True, "")
+    assert verify_request_receipt_token(token, 124) == (False, "mismatch")
+    assert verify_request_receipt_token("garbage", 123) == (False, "invalid")
+    assert verify_request_receipt_token(None, 123) == (False, "missing")
+
+
+def test_request_receipt_token_expires_and_checks_purpose(monkeypatch):
+    import jwt as pyjwt
+
+    expired = request_receipt_token(5, ttl_days=-1)
+    assert verify_request_receipt_token(expired, 5) == (False, "expired")
+    secret = public_form._receipt_secret()
+    other = pyjwt.encode({"booking_id": 5, "purpose": "ticket_image"}, secret, algorithm="HS256")
+    assert verify_request_receipt_token(other, 5) == (False, "purpose")
+
+
+def test_acknowledgement_is_off_by_default_and_never_raises(settings, monkeypatch):
+    booking = {"id": 1, "reference": "FY1", "contact_email": "x@example.test"}
+    assert public_form.send_acknowledgement_if_enabled(booking, settings) is None
+    settings["form"]["acknowledgement_enabled"] = True
+    calls = []
+
+    def fake_send(**kw):
+        calls.append(kw)
+        return {"id": 9, "send_status": "sent"}
+
+    from src.services import mail_send
+
+    monkeypatch.setattr(mail_send, "send_email", fake_send)
+    monkeypatch.setattr(
+        "src.services.email_templates.render_email",
+        lambda kind, b, s, **ctx: type("R", (), {"subject": "s", "html": "h", "text": "t"})(),
+    )
+    out = public_form.send_acknowledgement_if_enabled(booking, settings)
+    assert out == {"id": 9, "send_status": "sent"}
+    assert calls and calls[0]["to"] == ["x@example.test"] and calls[0]["kind"] == "acknowledgement"
+    assert calls[0]["booking_id"] == 1 and calls[0]["actor"] is None
+
+    def boom(**kw):
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr(mail_send, "send_email", boom)
+    assert public_form.send_acknowledgement_if_enabled(booking, settings) is None  # logged, not raised
+    assert public_form.send_acknowledgement_if_enabled({**booking, "contact_email": None}, settings) is None

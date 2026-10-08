@@ -19,7 +19,7 @@ the service has not landed yet.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Mapping
 
@@ -27,7 +27,10 @@ import phonenumbers
 import requests
 from email_validator import EmailNotValidError, validate_email
 
-from config.settings import TURNSTILE_SECRET_KEY
+import jwt
+
+from config.constants import GAZEBOS
+from config.settings import IMAGE_TOKEN_SECRET, SECRET_KEY, TURNSTILE_SECRET_KEY
 from src.models.base import dumps, execute, query, query_one, serialize_row, transaction
 from src.services.barcode import generate_barcode
 from src.services.settings import Settings, get_settings, next_document_number
@@ -44,6 +47,19 @@ MAX_TEXT = 255
 MAX_ARRIVAL_TIME = 20
 MAX_NOTES = 2000
 MAX_QUESTION = 500
+# The park has a fixed set of gazebos to hire (config/constants.py).
+MAX_GAZEBOS = len(GAZEBOS) or 7
+DEFAULT_MAX_GROUP_SIZE = 900
+DEFAULT_ARRIVAL_SLOTS = (
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+    "12:00", "12:30", "13:00", "13:30", "14:00", "Not sure yet",
+)
+# How far ahead to look for the next open day in a closed-day error.
+NEXT_OPEN_DAY_HORIZON = 60
+
+# The signed receipt that lets the confirmation page survive a refresh.
+RECEIPT_PURPOSE = "request_receipt"
+RECEIPT_TTL_DAYS = 7
 
 # Keys that never belong in a stored payload.
 _PAYLOAD_DROP = ("turnstile_token", "cf-turnstile-response", "website")
@@ -66,6 +82,11 @@ TRUE_STRINGS = {"true", "1", "yes", "on"}
 
 def _fmt(d: date) -> str:
     return f"{d.day} {d.strftime('%B %Y')}"
+
+
+def _fmt_weekday(d: date) -> str:
+    """Wednesday 4 November (the year is implied by the season)."""
+    return f"{d.strftime('%A')} {d.day} {d.strftime('%B')}"
 
 
 def _join(names: list[str]) -> str:
@@ -112,11 +133,40 @@ def date_problem(
     closed_weekdays = [int(w) for w in (season.closed_weekdays or [])]
     if d.weekday() in closed_weekdays:
         names = [WEEKDAY_NAMES[w] + "s" for w in sorted(closed_weekdays) if 0 <= w <= 6]
-        return f"We are closed on {_join(names)}"
+        return f"We are closed on {_join(names)}." + _next_open_sentence(d, settings, closed_days, today)
     if closed_days and d in closed_days:
         label = closed_days.get(d) if isinstance(closed_days, Mapping) else None
         suffix = f" ({label})" if label else ""
-        return f"The park is closed on {_fmt(d)}{suffix}"
+        return f"The park is closed on {_fmt(d)}{suffix}." + _next_open_sentence(d, settings, closed_days, today)
+    return None
+
+
+def _next_open_sentence(
+    d: date,
+    settings: Settings,
+    closed_days: Mapping[date, str | None] | set[date] | None,
+    today: date,
+) -> str:
+    nxt = next_open_day_after(d, settings, closed_days, today)
+    return f" The next open day is {_fmt_weekday(nxt)}." if nxt else ""
+
+
+def next_open_day_after(
+    d: date,
+    settings: Settings,
+    closed_days: Mapping[date, str | None] | set[date] | None = None,
+    today: date | None = None,
+    horizon: int = NEXT_OPEN_DAY_HORIZON,
+) -> date | None:
+    """The first bookable day after ``d`` (closed weekdays and closures skipped),
+    or None when the season ends first."""
+    today = today or get_today()
+    if closed_days is None:
+        closed_days = season_days_by_kind("closed")
+    for i in range(1, horizon + 1):
+        candidate = d + timedelta(days=i)
+        if date_problem(candidate, settings, closed_days, today) is None:
+            return candidate
     return None
 
 
@@ -204,8 +254,13 @@ def validate_request(
     text("group_name", required=True, max_len=MAX_TEXT)
     text("area", required=False, max_len=MAX_TEXT)
     text("contact_name", required=True, max_len=MAX_TEXT)
-    text("arrival_time", required=False, max_len=MAX_ARRIVAL_TIME)
     text("customer_notes", required=False, max_len=MAX_NOTES)
+
+    # arrival time: one of the configured slots (no free text to normalise)
+    slots = [str(x) for x in (form.get("arrival_slots") or DEFAULT_ARRIVAL_SLOTS)]
+    arrival = text("arrival_time", required=False, max_len=MAX_ARRIVAL_TIME)
+    if arrival is not None and slots and arrival not in slots:
+        errors["arrival_time"] = "Choose an arrival time from the list"
 
     # group type: must be a configured code
     codes = {str(g.get("code")) for g in (form.group_types or []) if isinstance(g, Mapping)}
@@ -282,18 +337,29 @@ def validate_request(
     adults = count("adults", default=0)
     children = count("children", default=0)
     count("vehicles", default=0)
-    count("gazebos", default=0)
+    gazebos = count("gazebos", default=0)
+    if gazebos is not None and gazebos > MAX_GAZEBOS:
+        errors["gazebos"] = f"We have {MAX_GAZEBOS} gazebos to hire"
     min_size = int(form.get("min_group_size") or 0)
+    max_size = int(form.get("max_group_size") or DEFAULT_MAX_GROUP_SIZE)
+    phone = str(settings["email"].get("phone") or "").strip()
+    too_small = (
+        f"Group bookings are for {min_size} or more people. "
+        "For smaller groups, buy day tickets on Quicket."
+    )
+    too_big = f"For more than {max_size} people please phone us" + (f" on {phone}" if phone else "") + "."
+    people: int | None = None
     if visitors is not None:
-        clean["people_booked"] = visitors
+        people = visitors
         clean.pop("visitors", None)
-        if visitors < min_size:
-            errors["visitors"] = f"Group bookings are for {min_size} or more visitors"
-    elif adults is not None and children is not None:
+    elif adults is not None and children is not None and data.get("visitors") in (None, ""):
         people = adults + children
+    if people is not None:
         clean["people_booked"] = people
         if people < min_size:
-            errors["visitors"] = f"Group bookings are for {min_size} or more visitors"
+            errors["visitors"] = too_small
+        elif max_size and people > max_size:
+            errors["visitors"] = too_big
 
     # questions
     max_q = int(form.get("max_questions") or 0)
@@ -320,7 +386,7 @@ def validate_request(
 
     # policy + honeypot
     if not _truthy(data.get("policy_accepted")):
-        errors["policy_accepted"] = "Please accept the booking policy to continue"
+        errors["policy_accepted"] = "Agree to the booking terms to send your request"
     clean["policy_accepted"] = True
     if str(data.get("website") or "").strip():
         errors["website"] = "Leave this field empty"
@@ -398,6 +464,120 @@ def record_submission(
     )
 
 
+# ---------------------------------------------------------- receipt token ---
+
+
+def _receipt_secret() -> str | None:
+    return IMAGE_TOKEN_SECRET or SECRET_KEY or None
+
+
+def request_receipt_token(booking_id: int, ttl_days: int = RECEIPT_TTL_DAYS) -> str | None:
+    """A signed token for ``GET /public/requests/<id>`` (the confirmation page).
+
+    Same pattern as ``TokenService.generate_ticket_image_token``: HS256, a
+    purpose claim and an expiry. None when no secret is configured.
+    """
+    secret = _receipt_secret()
+    if not secret:
+        return None
+    now = datetime.now(timezone.utc)
+    payload = {
+        "booking_id": int(booking_id),
+        "purpose": RECEIPT_PURPOSE,
+        "iat": now,
+        "exp": now + timedelta(days=ttl_days),
+    }
+    token = jwt.encode(payload, secret, algorithm="HS256")
+    return token.decode() if isinstance(token, bytes) else token
+
+
+def verify_request_receipt_token(token: str | None, booking_id: int) -> tuple[bool, str]:
+    """``(ok, error)`` where error ∈ config | missing | expired | invalid | purpose | mismatch."""
+    secret = _receipt_secret()
+    if not secret:
+        return False, "config"
+    if not token:
+        return False, "missing"
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return False, "expired"
+    except jwt.InvalidTokenError:
+        return False, "invalid"
+    if payload.get("purpose") != RECEIPT_PURPOSE:
+        return False, "purpose"
+    if int(payload.get("booking_id") or 0) != int(booking_id):
+        return False, "mismatch"
+    return True, ""
+
+
+def acknowledgement_sent(booking_id: int) -> bool:
+    row = query_one(
+        """
+        SELECT 1 AS x FROM email_messages
+        WHERE booking_id = %s AND direction = 'outbound' AND kind = 'acknowledgement'
+          AND COALESCE(send_status, 'sent') = 'sent'
+        LIMIT 1
+        """,
+        (booking_id,),
+    )
+    return row is not None
+
+
+def public_summary(booking: Mapping[str, Any]) -> dict[str, Any]:
+    """What the confirmation page may show: no phone, no prices, no notes."""
+    visit = booking.get("visit_date")
+    created = booking.get("created_at")
+    return {
+        "id": int(booking["id"]),
+        "reference": booking.get("reference"),
+        "group_name": booking.get("group_name"),
+        "visit_date": visit.isoformat() if hasattr(visit, "isoformat") else (str(visit)[:10] if visit else None),
+        "contact_email": booking.get("contact_email"),
+        "visitors": int(booking.get("people_booked") or 0),
+        "acknowledged": acknowledgement_sent(int(booking["id"])),
+        "submitted_at": created.isoformat(timespec="seconds") if hasattr(created, "isoformat") else None,
+    }
+
+
+def send_acknowledgement_if_enabled(booking: Mapping[str, Any], settings: Settings | None = None) -> dict | None:
+    """Email the acknowledgement when ``settings.form.acknowledgement_enabled``.
+
+    The one deliberate exception to "nothing sends automatically", and off by
+    default. Sent through ``mail_send.send_email`` (lazy import), so the dev
+    recipient rewrite applies and the send is recorded as an outbound
+    ``email_messages`` row plus a booking event. A failure is logged, never
+    raised: the request has already been saved.
+    """
+    settings = settings or get_settings()
+    if not bool(settings["form"].get("acknowledgement_enabled")):
+        return None
+    to = booking.get("contact_email")
+    if not to:
+        return None
+    try:
+        from config.settings import BOOKING_FORM_URL
+        from src.services import mail_send
+        from src.services.email_templates import render_email
+
+        rendered = render_email(
+            "acknowledgement", dict(booking), settings, form_url=BOOKING_FORM_URL, logo_url=mail_send.logo_url()
+        )
+        result = mail_send.send_email(
+            to=[str(to)],
+            rendered=rendered,
+            booking_id=int(booking["id"]),
+            kind="acknowledgement",
+            actor=None,
+        )
+    except Exception as exc:  # noqa: BLE001 - the enquiry is saved; the send is best effort
+        logger.error(f"Acknowledgement for booking {booking.get('reference')} not sent: {type(exc).__name__}: {exc}")
+        return None
+    status = (result or {}).get("send_status") if isinstance(result, Mapping) else None
+    logger.info(f"Acknowledgement for booking {booking.get('reference')}: {status or 'sent'}")
+    return dict(result) if isinstance(result, Mapping) else {"send_status": "sent"}
+
+
 # -------------------------------------------------- bookings service bridge ---
 
 
@@ -462,6 +642,10 @@ def _row(booking_id: int) -> dict:
     if row is None:
         raise LookupError(f"Booking {booking_id} vanished")
     return row
+
+
+def booking_row(booking_id: int) -> dict | None:
+    return query_one("SELECT * FROM bookings WHERE id = %s", (booking_id,))
 
 
 def _money(value: Any) -> Decimal:
@@ -666,6 +850,12 @@ def _fallback_record_payment(
 __all__ = [
     "validate_request",
     "date_problem",
+    "next_open_day_after",
+    "request_receipt_token",
+    "verify_request_receipt_token",
+    "public_summary",
+    "acknowledgement_sent",
+    "send_acknowledgement_if_enabled",
     "normalise_email",
     "normalise_mobile",
     "parse_iso_date",

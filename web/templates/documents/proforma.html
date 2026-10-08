@@ -6,13 +6,12 @@
 <table class="totals-wrap">
   <tr>
     <td class="totals-aside">
-      <p class="note">This proforma is not a tax invoice. A tax invoice follows once your deposit has been received.</p>
+      <p class="note">This proforma is not a tax invoice. VAT may not be claimed on this document. A deposit receipt and statement follows once your deposit has been received, and a tax invoice after your visit.</p>
     </td>
     <td class="totals-cell">
       <table class="totals">
-        <tr><th>Subtotal</th><td>{{ finance.subtotal_display }}</td></tr>
-        <tr><th>VAT {{ finance.vat_rate_display }}%</th><td>{{ finance.vat_display }}</td></tr>
         <tr class="total"><th>Total</th><td>{{ finance.total_display }}</td></tr>
+        <tr class="minor"><th>Includes VAT {{ finance.vat_rate_display }} %</th><td>{{ finance.vat_display }}</td></tr>
         {% if finance.paid > 0 %}
         <tr class="minor"><th>Paid to date</th><td>&minus;{{ finance.paid_display }}</td></tr>
         {% endif %}

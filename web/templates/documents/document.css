@@ -81,6 +81,11 @@ h2 {
   line-height: 1.1;
   margin: 1mm 0 3.5mm;
 }
+.doc-subtitle {
+  font-size: 8.6pt;
+  color: #6e6e6a;
+  margin: -2.5mm 0 3mm;
+}
 
 .meta { margin-left: auto; }
 .meta th {
@@ -143,17 +148,24 @@ h2 {
 }
 .lines th.num, .lines td.num,
 .payments-table th.num, .payments-table td.num { text-align: right; padding-right: 0; }
-.lines .qty { width: 12mm; }
-.lines th.qty.num, .lines td.qty.num { padding-right: 5mm; }
-.lines .unit, .lines .vat { width: 30mm; }
+.lines .qty { width: 14mm; }
+.lines .unit { width: 28mm; }
 .lines .amount { width: 32mm; }
 .lines tr { page-break-inside: avoid; }
+.lines .desc-sub {
+  display: block;
+  color: #6e6e6a;
+  font-size: 8.5pt;
+  margin-top: 0.8mm;
+  font-variant-numeric: tabular-nums;
+}
 
 .note {
   color: #6e6e6a;
   font-size: 8.5pt;
   margin: 0 0 1.5mm;
 }
+.note strong { color: #161615; font-weight: 600; }
 .totals-aside .note:last-child { margin-bottom: 0; }
 
 /* Totals ------------------------------------------------------------- */
@@ -223,6 +235,7 @@ h2 {
   color: #4b4b48;
   font-size: 8.6pt;
 }
+.terms.full { padding-left: 0; }
 .terms p { margin: 0 0 1.8mm; }
 
 .kv th {

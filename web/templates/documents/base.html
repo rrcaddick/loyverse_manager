@@ -16,10 +16,13 @@
     </td>
     <td class="masthead-doc">
       <h1 class="doc-title">{{ doc.title }}</h1>
+      {% if doc.is_invoice %}<p class="doc-subtitle">{{ doc.description }}</p>{% endif %}
       <table class="meta">
         <tr><th>Number</th><td>{{ doc.number }}</td></tr>
         <tr><th>Date</th><td>{{ doc.issued_on_long }}</td></tr>
+        {% if doc.show_booking_ref %}
         <tr><th>Booking ref</th><td>{{ booking.reference }}</td></tr>
+        {% endif %}
         {% if doc.version > 1 %}
         <tr><th>Version</th><td>{{ doc.version }}</td></tr>
         {% endif %}
@@ -41,13 +44,18 @@
     <td class="party">
       <h2>Bill to</h2>
       <p class="name">{{ booking.group_name }}</p>
-      {% if booking.area %}<p>{{ booking.area }}</p>{% endif %}
+      {% if booking.billing_address_lines %}
+        {% for line in booking.billing_address_lines %}
+        {% if loop.first and line == booking.group_name %}{% else %}<p>{{ line }}</p>{% endif %}
+        {% endfor %}
+      {% elif booking.area %}
+      <p>{{ booking.area }}</p>
+      {% endif %}
+      {% if booking.customer_vat_number %}<p class="muted">VAT {{ booking.customer_vat_number }}</p>{% endif %}
     </td>
     <td class="party">
       <h2>Booked by</h2>
       <p class="name">{{ booking.contact_name }}</p>
-      {% if booking.contact_mobile_display %}<p>{{ booking.contact_mobile_display }}</p>{% endif %}
-      {% if booking.contact_email %}<p>{{ booking.contact_email }}</p>{% endif %}
     </td>
   </tr>
 </table>
@@ -81,6 +89,7 @@
 
 <table class="foot">
   <tr>
+    {% if doc.show_bank_box %}
     <td class="pay">
       <h2>Payment details</h2>
       <table class="kv">
@@ -94,7 +103,8 @@
       </table>
       <p class="pop">Proof of payment to <strong>{{ company.pop_email }}</strong></p>
     </td>
-    <td class="terms">
+    {% endif %}
+    <td class="terms{% if not doc.show_bank_box %} full{% endif %}">
       <h2>Booking terms</h2>
       <p>{{ company.payment_terms }}</p>
       {% block terms %}{% endblock %}

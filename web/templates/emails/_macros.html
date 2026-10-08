@@ -10,8 +10,8 @@
         {% for row in rows %}
         {% if row and row[1] is not none and row[1] != "" %}
         <tr>
-          <td class="row-k">{{ row[0] }}</td>
-          <td class="row-v{% if row|length > 2 and row[2] %} row-v-strong{% endif %}">{{ row[1] }}</td>
+          <td class="row-k" width="40%">{{ row[0] }}</td>
+          <td class="row-v{% if row|length > 2 and row[2] %} row-v-strong{% endif %}" width="60%">{{ row[1] }}</td>
         </tr>
         {% endif %}
         {% endfor %}

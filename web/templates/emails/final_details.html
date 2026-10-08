@@ -5,12 +5,12 @@
 <p>Hi {{ booking.contact_first_name or "there" }},</p>
 <p>{{ booking.group_name }}'s visit to {{ company.trading_name }} is {% if days_left is not none %}{{ days_left|plural("day") }} away{% else %}almost here{% endif %}. Here is everything you need for the day.</p>
 {{ summary([
+  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
   ("Visit date", booking.visit_date_long),
   ("Arrival", booking.arrival_time),
   ("Group size", booking.people_booked|plural("visitor")),
   ("Vehicles", booking.vehicles if booking.vehicles else none),
   ("Gazebos reserved", booking.gazebos if booking.gazebos else none),
-  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
 ], "Your visit") }}
 <h2>Before you arrive</h2>
 <ul>
@@ -25,7 +25,7 @@
   {% else %}
   <li>Your account is settled, so there is nothing to pay on the day.</li>
   {% endif %}
-  <li>If your numbers have changed, let us know. The final invoice is based on the visitors counted at the gate.</li>
+  <li>If your numbers have changed, let us know. The tax invoice is based on the visitors counted at the gate.</li>
   <li>Park rules: <a href="{{ rules_url }}">{{ rules_url }}</a></li>
 </ul>
 <p>We look forward to welcoming you.</p>

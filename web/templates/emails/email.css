@@ -47,10 +47,15 @@
 }
 .row-k { padding: 0 12px 8px 0; font-size: 15px; line-height: 1.4; color: #6e6e6a; vertical-align: top; }
 .row-v {
+  /* Inline fallback for clients that ignore media queries: the value may
+     wrap (no nowrap) and the key column keeps a 40 % width attribute. */
   padding: 0 0 8px; font-size: 15px; line-height: 1.4; color: #161615; text-align: right;
-  font-weight: 500; font-variant-numeric: tabular-nums; vertical-align: top; white-space: nowrap;
+  font-weight: 500; font-variant-numeric: tabular-nums; vertical-align: top; white-space: normal;
 }
 .row-v-strong { font-weight: 700; font-size: 18px; color: #2f5d3b; }
+.attached { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #161615; }
+.steps { margin: 0 0 16px; padding: 0 0 0 22px; }
+.steps li { margin: 0 0 8px; }
 
 .bank { background: #ffffff; border: 1px solid #e4e3de; border-radius: 10px; margin: 0 0 24px; width: 100%; }
 .bank-cell { padding: 16px 22px 10px; }
@@ -84,4 +89,14 @@
   .wrapper-cell { padding: 16px 8px !important; }
   .card { padding: 28px 22px 24px !important; }
   .card h1 { font-size: 22px !important; }
+}
+
+/* Card rows stack below 480 px: label above value, both left-aligned. */
+@media only screen and (max-width: 480px) {
+  .row-k, .row-v {
+    display: block !important; width: 100% !important; text-align: left !important;
+  }
+  .row-k { padding: 0 !important; font-size: 13px !important; }
+  .row-v { padding: 0 0 10px !important; }
+  .bank .row-v { padding: 0 0 8px !important; }
 }

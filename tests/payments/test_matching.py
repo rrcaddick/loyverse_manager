@@ -5,14 +5,21 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.services import bank
 from src.services.bank import (
     HISTORY_FLOOR,
     MatchResult,
+    arithmetic_line,
     candidate_finance,
+    confidence_for,
+    derive_rule_pattern,
     match_transaction,
+    matching_rule,
     parse_reference_numbers,
     poll_window,
+    rank_suggestions,
     significant_words,
 )
 
@@ -198,7 +205,8 @@ def test_amount_only_suggests_recent_and_upcoming_bookings():
     assert r.kind == "suggested"
     assert [s["booking_id"] for s in r.suggestions] == [1]
     assert r.suggestions[0]["reasons"] == ["Amount equals the deposit"]
-    assert r.suggestions[0]["score"] == 40
+    assert r.suggestions[0]["confidence"] == "Equals the deposit"
+    assert r.suggestions[0]["tone"] == "green" and r.suggestions[0]["preselected"] is True
 
 
 def test_amount_equal_to_balance_suggests():
@@ -226,8 +234,12 @@ def test_amount_and_name_add_up_and_rank_first():
     b = booking(2, group_name="Other Group")
     r = match_transaction(credit("2800", "SUNNYSIDE DLAMINI"), [a, b], TODAY)
     assert r.kind == "suggested"
-    assert r.suggestions[0]["booking_id"] == 1 and r.suggestions[0]["score"] == 70
-    assert r.suggestions[1]["booking_id"] == 2 and r.suggestions[1]["score"] == 40
+    # Both equal the deposit; the name only adds a reason, never a rank. Same
+    # sentence and the same visit date: a tie, so nothing is pre-selected.
+    assert {s["booking_id"] for s in r.suggestions} == {1, 2}
+    assert all(s["confidence"] == "Equals the deposit" for s in r.suggestions)
+    assert not any(s["preselected"] for s in r.suggestions)
+    assert r.suggestions[0]["reasons"] == ["Amount equals the deposit", "Name words: Dlamini, Sunnyside"]
 
 
 def test_suggestions_capped_at_five():
@@ -255,10 +267,107 @@ def test_suggestion_payload_shape():
     s = r.suggestions[0]
     assert set(s) == {
         "booking_id", "reference", "group_name", "contact_name", "visit_date", "status",
-        "total_amount", "deposit_due", "paid_total", "balance_due", "score", "reasons",
+        "total_amount", "deposit_due", "paid_total", "balance_due", "reasons",
+        "confidence", "confidence_key", "tone", "rank", "arithmetic", "preselected",
     }
+    assert "score" not in s
     assert s["visit_date"] == (TODAY + timedelta(days=20)).isoformat()
     assert s["total_amount"] == 3500.0
+    assert s["confidence"] == "Part of the balance" and s["tone"] == "grey"
+    assert s["arithmetic"] == "R1\u00a0000 of R3\u00a0500 balance · R0 paid · R3\u00a0500 total"
+
+
+# --------------------------------------------------------- confidence ---
+
+FIN = {"deposit_due": 2800.0, "balance_due": 3500.0, "paid_total": 0.0, "total_amount": 3500.0}
+
+
+@pytest.mark.parametrize(
+    "amount, name_only, sentence, tone, rank",
+    [
+        ("2800", False, "Equals the deposit", "green", 1),
+        ("2800.60", False, "Equals the deposit", "green", 1),  # within R1
+        ("3500", False, "Equals the balance", "green", 2),
+        ("1000", False, "Part of the balance", "grey", 3),
+        ("9000", False, "Exceeds the balance", "grey", 4),
+        ("1000", True, "Name matches", "grey", 5),
+        ("2800", True, "Equals the deposit", "green", 1),  # the amount wins over "name only"
+    ],
+)
+def test_confidence_sentences(amount, name_only, sentence, tone, rank):
+    c = confidence_for(Decimal(amount), FIN, name_only=name_only)
+    assert (c["sentence"], c["tone"], c["rank"]) == (sentence, tone, rank)
+
+
+def test_arithmetic_line_forms():
+    assert arithmetic_line(Decimal("2800"), FIN) == "R2\u00a0800 = deposit · R0 paid · R3\u00a0500 total"
+    assert arithmetic_line(Decimal("3500"), FIN) == "R3\u00a0500 = balance · R0 paid · R3\u00a0500 total"
+    paid = {**FIN, "paid_total": 2800.0, "balance_due": 700.0}
+    assert arithmetic_line(Decimal("700"), paid) == "R700 = balance · R2\u00a0800 paid · R3\u00a0500 total"
+    assert arithmetic_line(Decimal("250.50"), paid) == "R250.50 of R700 balance · R2\u00a0800 paid · R3\u00a0500 total"
+
+
+def test_candidates_order_by_sentence_then_nearest_visit_and_preselect_only_when_alone():
+    # 1001 is named by number but the amount is only part of its balance;
+    # 2 and 3 both equal the deposit, 3 visits sooner.
+    near = booking(1001, visit_date=TODAY + timedelta(days=5), deposit_due=Decimal("1000"))
+    equal_far = booking(2, visit_date=TODAY + timedelta(days=60))
+    equal_near = booking(3, visit_date=TODAY + timedelta(days=10))
+    r = match_transaction(credit("2800", "DEPOSIT 1001"), [near, equal_far, equal_near], TODAY)
+    assert [s["booking_id"] for s in r.suggestions] == [3, 2, 1001]
+    assert [s["confidence"] for s in r.suggestions] == [
+        "Equals the deposit", "Equals the deposit", "Part of the balance",
+    ]
+    assert not any(s["preselected"] for s in r.suggestions)  # two tie at the top
+
+    r = match_transaction(credit("2800", "DEPOSIT 1001"), [near, equal_far], TODAY)
+    assert [s["booking_id"] for s in r.suggestions] == [2, 1001]
+    assert r.suggestions[0]["preselected"] is True and r.suggestions[1]["preselected"] is False
+
+
+def test_rank_suggestions_cuts_to_five_and_is_stable():
+    entries = [
+        {"booking_id": i, "rank": 3, "visit_date": (TODAY + timedelta(days=i)).isoformat()} for i in range(1, 9)
+    ]
+    ranked = rank_suggestions(entries, TODAY)
+    assert [e["booking_id"] for e in ranked] == [1, 2, 3, 4, 5]
+    assert ranked[0]["preselected"] is False  # five share the top sentence: a tie
+
+
+def test_name_only_candidate_reads_name_matches():
+    cands = [booking(1, group_name="Sunnyside Primary School", contact_name="Nomsa Dlamini")]
+    r = match_transaction(credit("500", "ABSA BANK SUNNYSIDE DLAMINI"), cands, TODAY)
+    assert r.suggestions[0]["confidence"] == "Name matches" and r.suggestions[0]["rank"] == 5
+    assert r.suggestions[0]["preselected"] is True  # alone at the top, however weak
+
+
+# -------------------------------------------------------- ignore rules ---
+
+@pytest.mark.parametrize(
+    "description, pattern",
+    [
+        ("FNB APP TRANSFER FROM RAY", "FNB APP TRANSFER FROM"),
+        ("INTERNET TRF FROM CALL ACC", "INTERNET TRF FROM"),
+        ("ADDPAY-PSP31240029671426092600", "ADDPAY-PSP"),
+        ("NETCASH161CPP:THE FARMYARD PARK", "NETCASH"),
+        ("BIS/INT 22,00000 2026-09-30", "BIS/INT"),
+        ("Microsoft ISO", "Microsoft ISO"),
+        ("ONE TWO THREE FOUR FIVE SIX SEVEN", "ONE TWO THREE FOUR FIVE"),
+        ("1234 PAYMENT", "1234 PAYMENT"),  # nothing usable before the digits: the whole text
+        ("", None),
+        (None, None),
+    ],
+)
+def test_derive_rule_pattern(description, pattern):
+    assert derive_rule_pattern(description) == pattern
+
+
+def test_matching_rule_is_a_case_insensitive_prefix():
+    rules = [{"id": 1, "pattern": "FNB APP TRANSFER FROM", "reason": "own_transfer"}]
+    assert matching_rule("fnb app transfer from ray", rules)["id"] == 1
+    assert matching_rule("FNB APP PAYMENT FROM RAY", rules) is None
+    assert matching_rule("", rules) is None and matching_rule(None, rules) is None
+    assert matching_rule("X", [{"id": 2, "pattern": "", "reason": "other"}]) is None
 
 
 def test_entry_to_row_normalises_debits_and_zero_balance(entries):
