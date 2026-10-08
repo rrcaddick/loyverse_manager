@@ -1,0 +1,20 @@
+{# Kind "invoice": the deposit receipt and statement (FY1703-S), sent when the
+   deposit lands. Not a tax invoice; that follows after the visit. #}
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Your date is confirmed</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you, we have received your deposit and {{ booking.group_name }} is booked for <span class="strong">{{ booking.visit_date_long }}</span>. Your {{ company.deposit_statement_label|lower }} <span class="strong">{{ document.number }}</span> is attached.</p>
+{{ summary([
+  ("Balance due on the day", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
+  ("Paid to date", finance.paid_display),
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
+  ("Total", finance.total_display),
+], "Statement " ~ document.number) }}
+{% if finance.due > 0 %}
+<p>The balance is payable at the gate on the day by card or cash, or by EFT beforehand using reference <span class="strong">{{ booking.reference }}</span>.</p>
+{% endif %}
+<p>Your vehicle entry ticket will follow closer to the date. If your numbers change, please tell us as soon as you can: the tax invoice is issued after your visit, for the visitors counted at the gate.</p>
+{% endblock %}

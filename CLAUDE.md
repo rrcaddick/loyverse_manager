@@ -11,14 +11,19 @@ Western Cape, South Africa. The repo is named `loyverse_manager` after its origi
 1. **Daily inventory automation** — pulls the day's ticket sales from Quicket (the online
    ticketing platform), materialises them as items/inventory in Loyverse (the POS the gate
    staff use), and clears them again at end of day.
-2. **Group bookings** — a Flask admin portal for capturing group visits, generating a
-   barcoded vehicle-entry ticket PDF, and delivering it over WhatsApp.
+2. **Group bookings** — the whole pipeline from a customer's request to the visit day:
+   public request form → proforma → deposit matched from the FNB bank feed → invoice →
+   barcoded vehicle ticket (email + WhatsApp) → arrivals from Loyverse → final invoice.
+   A React admin app (Today, Work, Calendar, Bookings, Mail, Bank, Gate, Settings)
+   replaced the old Gmail + Google Sheet + Excel workflow. `docs/booking-system.md` is
+   the data/API contract; `docs/redesign-spec.md` and `docs/research/` are the UI
+   design authority — read them before changing a screen.
 3. **Payment auditing** — reconciles card takings from the AddPay/PayCloud terminals
    against both POS systems (Loyverse and Aronium), and tracks cash-bag blind counts.
 4. **Open-ticket observation** — webhook endpoints that record the lifecycle of Loyverse
    open tickets for an external observer app.
 
-There is **no test suite** and no CI. Changes are verified by running the scripts/app.
+There is a pytest suite under `tests/` (no CI); UI changes are verified in the browser.
 
 ## Domain glossary
 
@@ -46,32 +51,48 @@ config/      settings.py  → env vars + secrets (single place env is read)
 src/
   clients/       thin HTTP/transport adapters, no business logic
                  base.py (requests wrapper) → loyverse, quicket, chatwoot,
-                 meta_whatsapp, paycloud (RSA sign/verify)
+                 meta_whatsapp, paycloud (RSA sign/verify), gmail (IMAP read-only +
+                 SMTP), fnb (transaction-history API)
   services/      business logic, composed from clients
-                 loyverse, quicket, inventory, audit, paycloud, chatwoot,
-                 meta_whatsapp, notification (SMTP), pdf, barcode, token (JWT)
-  models/        active-record style persistence over MySQL
-                 group_booking, audit (3 models), open_ticket
-  repositories/  mysql.py  → get_db_connection() context manager (PyMySQL, DictCursor)
-                 aronium.py → read-only SQLite queries against the Aronium POS DB
+                 booking (status machine, pricing, actions), pricing, documents
+                 (WeasyPrint PDFs), email_templates, mail_ingest, mail_send,
+                 extraction (Claude), bank (FNB matching), reminders (queue),
+                 public_form, settings, users, arrivals (Loyverse count), tickets,
+                 loyverse, quicket, inventory, chatwoot, notification, pdf, barcode, token
+  models/        plain-SQL persistence over MySQL (base.py has query/execute/transaction)
+                 booking, booking_event, booking_question, payment, document,
+                 bank_transaction, email_message, user, group_booking (read adapter),
+                 audit (3 models), open_ticket
+  repositories/  mysql.py → get_db_connection() (PyMySQL, DictCursor); aronium.py
   bots/          quicket.py → Selenium bot (Quicket has no API for hiding an event)
-  utils/         logging (CSV logger), date (SAST today), gazebos (lookup helpers)
+  utils/         logging (CSV logger), date (SAST today), holidays (SA public
+                 holidays), gazebos
 
-scripts/     CLI entry points; also imported and called by the web Scripts page
-web/         Flask app (factory pattern), AdminLTE + jQuery templates, blueprints
+web/
+  app.py         factory: serves the React app, registers the JSON API, auth guard
+  api/           /api/v1 blueprints: auth, users, settings, bookings, calendar,
+                 documents, inbox, payments, queue, ops, public (helpers in __init__)
+  routes/        legacy: ticket endpoints (groups), bridge webhooks (open_tickets,
+                 stock), /api/groups receipts feed
+  templates/     documents/ (PDF) and emails/ (HTML) Jinja templates
+  static/app/    the built React app (gitignored; built by the Docker frontend stage)
+frontend/    Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui admin app
+scripts/     CLI entry points (sync_mail, poll_bank, import_sheet, import_mail,
+             recompute_reminders, create_user, backup_db.sh, add/clear_inventory, ...)
 migrations/  numbered .sql files, applied by scripts/run_migrations.py
-bin/         host-side wrappers that shell out to `docker compose run`
-docker/      entrypoint.sh - dispatches the image's web/scheduler/migrate roles
+docs/        booking-system.md (the build contract) and handoff/ notes per area
+docker/      entrypoint.sh - web / worker / scheduler / migrate / one-off roles
 deploy/      nginx site example for the reverse proxy
+tests/       pytest (pure logic and DB-backed tests; DB tests skip without MySQL)
 ```
 
 Deployment is `compose.yaml` + `Dockerfile` at the root; see `DEPLOYMENT.md`.
 
-**Dependency direction:** `routes`/`scripts` → `services` → `clients` / `models` →
-`repositories`. Services are constructed with their dependencies injected (see
-`scripts/add_inventory.py` and `web/routes/audit.py:get_audit_service` for the wiring
-pattern). Keep new code in this shape: HTTP details in a client, decisions in a service,
-SQL in a model.
+**Dependency direction:** `web/api` and `scripts` → `services` → `clients` / `models` →
+`repositories`. Keep new code in this shape: HTTP details in a client, decisions in a
+service, SQL in a model, validation and orchestration in the API module. The booking
+contract (`docs/booking-system.md`) is the reference for tables, statuses, API shapes
+and service signatures; update it when you change them.
 
 ## Key flows
 
@@ -102,22 +123,38 @@ Online-ticket items encode data into the Loyverse variant field `option1_value`:
 this encoding, update `is_online_item`, `update_item_order_counts`, and
 `InventoryService.build_orders_inventory_map` together.
 
-### Authentication
+### Authentication and roles
 
-A single shared account gates the portal (`web/routes/auth.py`). The gate is a
-deny-by-default `before_request` registered in `create_app` **after** the
-blueprints, with a small `PUBLIC_ENDPOINTS` exemption set.
+Accounts live in `users` (`src/services/users.py`): `admin` sees everything,
+`manager` sees only the calendar and day view. Sessions are Flask cookies;
+`web/app.py:_register_guard` is deny-by-default: anonymous API calls get 401,
+every non-GET `/api` call needs the session's CSRF token (`X-CSRF-Token`),
+managers are refused on any view not marked `@allow_manager`, and a user with
+`must_change_password` can only reach the auth endpoints. Views opt out with
+`@public_endpoint` (the public form) or by blueprint (the bridge webhooks).
 
-The one exemption that matters: **`groups.get_ticket_image` must stay public**.
+The one legacy exemption that matters: **`groups.get_ticket_image` must stay public**.
 Meta's servers fetch that URL to render the WhatsApp template header and have no
-session. It is protected by its own 5-minute JWT instead. Gating it silently
-breaks ticket delivery - the booking saves, the send reports success, and the
-customer receives a broken image.
+session. It is protected by its own 5-minute JWT instead. Gating it silently breaks
+ticket delivery.
 
-Credentials are `AUTH_USERNAME` plus a werkzeug hash in `AUTH_PASSWORD_HASH`.
-An empty hash fails closed. Moving to per-user accounts means replacing
-`_credentials_valid` and the session payload; nothing else depends on the shape
-of the credential check.
+### Booking pipeline (the main flow now)
+
+`enquiry → proforma_sent → confirmed → completed` with `cancelled`, `lapsed`, `no_show`
+as exits (`src/services/booking.py:set_status`). Nothing is sent automatically: every
+email is a button in the app (`POST /api/v1/bookings/:id/actions/<action>`), and every
+send is an outbound `email_messages` row plus a `booking_events` row. The worker
+container keeps the data fresh: `scripts/sync_mail.py` (read-only IMAP, every minute),
+`scripts/poll_bank.py` (FNB, every 5 minutes; a credit whose description carries the
+booking reference records the deposit and confirms the booking, still without
+sending anything), `scripts/recompute_reminders.py` (daily; fills the action queue).
+Prices and deposits come from `src/services/pricing.py` and the Settings page; per-booking
+overrides are explicit flags with a reason and survive recalculation. Document numbers
+are one counter per booking (`FY1703` proforma, `INV1703` invoice) taken atomically
+from `settings.documents.next_number`.
+
+Outside `ENV=prod`, `src/services/mail_send.py` rewrites every recipient to
+`DEV_MAIL_RECIPIENT` and prefixes the subject. Never bypass this.
 
 ### Group booking ticket delivery
 
@@ -172,24 +209,19 @@ timer. `docker compose run` activates the profile for that single invocation,
 which is why the manual commands above still work. Enable the schedule by
 setting `COMPOSE_PROFILES=scheduled` in `.env`.
 
-Running against a local checkout instead:
+Local development (the `.venv` virtualenv and `compose.dev.yaml` exist for this):
 
 ```bash
-pip install -r requirements/dev.txt
-
-python -m scripts.run_migrations    # apply migrations/*.sql (idempotent, tracked)
-python -m scripts.add_inventory     # and clear_inventory / hide_quicket_event
-
-python -m web                       # dev server on :5000
-flask --app web.app run --debug     # same, with reloader
-
-mypy src config scripts web         # dev extra; no CI runs this automatically
+docker compose -f compose.yaml -f compose.dev.yaml up -d db   # MySQL on 127.0.0.1:3307
+.venv/bin/python -m scripts.run_migrations
+.venv/bin/python -c "from web.app import create_app; create_app().run(port=5100)"  # API + built app
+cd frontend && pnpm install && pnpm dev          # live-reload UI on :5173, proxies /api
+cd frontend && pnpm typecheck && pnpm lint && pnpm build   # build → web/static/app
+PYTHONPATH=. .venv/bin/python -m pytest tests -q               # backend tests
 ```
 
-Two notes: the README's `python -m web.app` does **not** start a server
-(`web/app.py` has no `__main__` guard) — use `python -m web`. And the README's
-`poppler-utils` requirement is stale; PDF→JPEG moved to PyMuPDF in `f94d6bd`
-and there is no system dependency left.
+`ENV=dev` and `SESSION_COOKIE_SECURE=false` must be set in the local `.env`. The
+README's `poppler-utils` requirement is stale; PDF→JPEG uses PyMuPDF.
 
 ## Conventions
 
@@ -215,11 +247,17 @@ and there is no system dependency left.
 - **Style:** Python ≥3.10, 4-space indent, double quotes, 88-col, trailing commas —
   consistent with Ruff/Black defaults. Type hints are used in newer modules but are not
   applied uniformly; match the file you're editing.
-- **Templates** are Jinja2 on AdminLTE 3.2 with jQuery, DataTables, Flatpickr and Toastr,
-  all loaded from CDNs in `web/templates/base.html`.
-- **Long scripts run inline in the request** on the Scripts page (`web/routes/scripts.py`)
-  — `add_inventory` can take minutes because of Selenium. Bear that in mind before adding
-  more work to it.
+- **Frontend** conventions live in `docs/handoff/frontend-foundation-v2.md`: semantic
+  colour tokens and six themes in `frontend/src/styles/tokens.css` (colour is meaning,
+  the accent is interaction), type roles (`text-display`, `text-title`, ...), shadcn
+  components, TanStack Query keys, zod forms. One primary list per screen, counts in
+  rails, one filled verb per row, 15 px body, nothing below 12 px. No external CDNs
+  except the Turnstile script on the public form.
+- **API** conventions: `web/api/__init__.py` (`make_blueprint`, `ok`, `ApiError`,
+  `parse_json`, `require_role`, `allow_manager`, `public_endpoint`). Errors are
+  `{"error": {"code", "message", "fields"}}`; lists are `{"items", "total", "page", "page_size"}`.
+- **Long jobs run inline in the request** on the Ops page (`web/api/ops.py`) —
+  `add_inventory` can take minutes because of Selenium.
 
 ## Known rough edges
 
@@ -229,15 +267,13 @@ Pre-existing; don't "fix" them as a side effect of unrelated work, but be aware:
   `self.client.send_request(self, "reconcile.trans.details", payload)` — it passes the
   service as the `endpoint` argument, so the gateway URL is malformed. The exception is
   swallowed and an empty list returned, so PayCloud amounts silently come back as zero.
-- `audit_bp` (`web/routes/audit.py`) is **not registered** in `web/app.py`, and its nav
-  link was removed in `7689af1`. The audit UI is currently unreachable.
+- `audit_bp` (`web/routes/audit.py`) is **not registered** in `web/app.py` and still
+  renders a Jinja template that no longer has a base layout. The audit UI is unreachable.
 - `CardPaymentAudit.create_batch` plain-`INSERT`s against a table with
   `UNIQUE KEY unique_audit_date`, so re-running the audit for an already-audited date
   fails rather than updating.
-- The web app has no CSRF protection; the `/open_tickets/*` webhooks and
-  `/api/stock/availability` are bridge-token protected (session guard exempts them) and
-  must stay reachable from the terminals through nginx. Everything else sits behind the
-  session login.
+- The `/open_tickets/*` webhooks and `/api/stock/*` are bridge-token protected (the
+  session guard exempts them) and must stay reachable from the terminals through nginx.
 - `LoyverseClient.get` auto-paginates using the endpoint string as the response key, so
   pagination only works when the endpoint is a bare resource name (`items`, `receipts`) —
   not when a query string is appended (`inventory?variant_ids=…`).

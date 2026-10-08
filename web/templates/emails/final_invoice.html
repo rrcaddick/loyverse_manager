@@ -1,0 +1,23 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary, bank_details %}
+{% block body %}
+<h1>Thank you for visiting</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>We hope {{ booking.group_name }} enjoyed the day at {{ company.trading_name }} on {{ booking.visit_date_long }}. Your tax invoice <span class="strong">{{ document.number }}</span> is attached{% if finance.uses_arrivals %}, based on the {{ finance.arrived_count|plural("visitor") }} counted at the gate{% endif %}.</p>
+{{ summary([
+  ("Balance outstanding", finance.due_display, true) if finance.due > 0 else (("Credit due to you", (0 - finance.due)|money, true) if finance.due < 0 else ("Balance", "Paid in full", true)),
+  ("Visit date", booking.visit_date_long),
+  ("Visitors", (finance.arrived_count|plural("visitor") ~ (" (" ~ finance.people_booked ~ " booked)" if finance.arrived_count != finance.people_booked else "")) if finance.uses_arrivals else booking.people_booked|plural("visitor")),
+  ("Total", finance.total_display),
+  ("Paid", finance.paid_display),
+], "Tax invoice " ~ document.number) }}
+{% if finance.due > 0 %}
+<p>There is an outstanding balance of <span class="strong">{{ finance.due_display }}</span>. Please settle it by EFT using reference <span class="strong">{{ booking.reference }}</span> and send proof of payment to <a href="mailto:{{ company.pop_email }}">{{ company.pop_email }}</a>.</p>
+{{ bank_details(company, booking.reference) }}
+{% elif finance.due < 0 %}
+<p>Your payments exceed the final amount by {{ (0 - finance.due)|money }}. Reply with the banking details you would like the refund paid to and we will arrange it.</p>
+{% else %}
+<p>Your account is settled in full, so there is nothing more to pay.</p>
+{% endif %}
+<p>We would love to welcome your group back. If you have a moment, we would also appreciate hearing how your day went.</p>
+{% endblock %}

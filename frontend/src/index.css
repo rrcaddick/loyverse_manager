@@ -1,0 +1,300 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "./styles/tokens.css";
+
+@custom-variant dark (&:is(.dark *));
+@custom-variant hc (&:is([data-theme="contrast"] *));
+
+@theme inline {
+  /* ---- type (docs/research/07 §d). Everything in rem; the root is the one
+   * knob (16 / 17 / 18 px via data-text-size). Inter at 400/500/600 only. */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 2.5rem;
+  --text-4xl: 3rem;
+  --text-4xl--line-height: 3.25rem;
+
+  /* Named roles: text-display, text-title, text-section, text-body,
+   * text-label, text-button. Secondary text (14/20, muted) is plain text-sm:
+   * a "text-secondary" role would collide with the --color-secondary surface. */
+  --text-display: 2.25rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.01em;
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.125rem;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.01em;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.625rem;
+  --text-section--font-weight: 600;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-label--font-weight: 500;
+  --text-label--letter-spacing: 0.04em;
+  --text-button: 0.9375rem;
+  --text-button--line-height: 1.25rem;
+  --text-button--font-weight: 500;
+
+  /* ---- colour: only semantic tokens exist. Tailwind's default palette is
+   * switched off so nobody can reach for bg-green-500; every colour in the
+   * app is a meaning (green/amber/red/blue/grey), a surface, or the accent. */
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-nested: var(--surface-nested);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-faint-foreground: var(--faint-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selection-ring: var(--selection-ring);
+  --color-selection-row: var(--selection-row);
+  --color-pill-ring: var(--pill-ring);
+
+  /* Semantic hues: text / soft fill / solid. White (on-solid) on every solid. */
+  --color-green-text: var(--green-text);
+  --color-green-soft: var(--green-soft);
+  --color-green-solid: var(--green-solid);
+  --color-amber-text: var(--amber-text);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-solid: var(--amber-solid);
+  --color-red-text: var(--red-text);
+  --color-red-soft: var(--red-soft);
+  --color-red-solid: var(--red-solid);
+  --color-blue-text: var(--blue-text);
+  --color-blue-soft: var(--blue-soft);
+  --color-blue-solid: var(--blue-solid);
+  --color-grey-text: var(--grey-text);
+  --color-grey-soft: var(--grey-soft);
+  --color-grey-solid: var(--grey-solid);
+  --color-on-solid: var(--on-solid);
+  --color-direction-in: var(--direction-in);
+  --color-direction-out: var(--direction-out);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-fg: var(--status-neutral-fg);
+  --color-status-amber-bg: var(--status-amber-bg);
+  --color-status-amber-fg: var(--status-amber-fg);
+  --color-status-green-bg: var(--status-green-bg);
+  --color-status-green-fg: var(--status-green-fg);
+  --color-status-green-muted-bg: var(--status-green-muted-bg);
+  --color-status-green-muted-fg: var(--status-green-muted-fg);
+  --color-status-red-bg: var(--status-red-bg);
+  --color-status-red-fg: var(--status-red-fg);
+  --color-status-red-muted-bg: var(--status-red-muted-bg);
+  --color-status-red-muted-fg: var(--status-red-muted-fg);
+  --color-status-blue-bg: var(--status-blue-bg);
+  --color-status-blue-fg: var(--status-blue-fg);
+
+  --color-heat-0: var(--heat-0);
+  --color-heat-1: var(--heat-1);
+  --color-heat-2: var(--heat-2);
+  --color-heat-3: var(--heat-3);
+  --color-heat-4: var(--heat-4);
+  --color-heat-5: var(--heat-5);
+  --color-heat-text: var(--heat-text);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Raw ramp for the log viewer only. */
+  --color-ink-950: var(--ink-950);
+  --color-ink-900: var(--ink-900);
+  --color-ink-800: var(--ink-800);
+  --color-ink-700: var(--ink-700);
+  --color-ink-600: var(--ink-600);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-300: var(--ink-300);
+  --color-ink-200: var(--ink-200);
+  --color-ink-100: var(--ink-100);
+  --color-paper-50: var(--paper-50);
+  --color-paper-0: var(--paper-0);
+
+  /* Compatibility for the first calendar build's OVER rule; remove with calendar v2. */
+  --color-red-500: var(--red-solid);
+
+  /* ---- spacing (4-8-12-16-24-32-48-64 is Tailwind's grid; these are the
+   * named sizes from the spec so pages agree on rows and gutters). */
+  --spacing-gutter: 2rem; /* page gutter 32 */
+  --spacing-card: 1.25rem; /* card padding 20 */
+  --spacing-card-gap: 1.5rem; /* between cards 24 */
+  --spacing-field: 1rem; /* between fields 16 */
+  --spacing-row-sm: 2.25rem; /* compact table row 36 */
+  --spacing-row: 2.75rem; /* table row / target 44 */
+  --spacing-row-lg: 3rem; /* two-line table row 48 */
+  --spacing-row-queue: 3.5rem; /* work / list row 56 */
+  --spacing-thead: 2.5rem; /* sticky table header 40 */
+  --spacing-header: 3.5rem; /* app header 56 */
+  --spacing-target: 2.75rem; /* minimum click target 44 */
+
+  --container-page: 1600px; /* page content cap on 1920 displays */
+  --container-prose: 42rem; /* 68 ch for prose and emails */
+
+  /* ---- shape: 8px base radius */
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-3xl: calc(var(--radius) * 2.5);
+  --radius-4xl: calc(var(--radius) * 3);
+
+  /* ---- elevation: one overlay shadow; everything else is a 1 px border. */
+  --shadow-xs: var(--shadow-raised);
+  --shadow-sm: var(--shadow-raised);
+  --shadow-md: var(--shadow-overlay);
+  --shadow-lg: var(--shadow-overlay);
+  --shadow-xl: var(--shadow-overlay);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans antialiased;
+    font-feature-settings: "cv11", "ss01", "calt";
+    text-rendering: optimizeLegibility;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-background text-foreground text-base;
+    min-height: 100svh;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Monospace for codes and references; tabular digits for every number. */
+  code, kbd, samp, pre {
+    @apply font-mono;
+  }
+  table, [data-numeric], .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+
+  /* High contrast: every border is strong and every focus ring is 3 px. */
+  [data-theme="contrast"] :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A thin, theme-aware scrollbar for scroll areas and the log viewer. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+}
+
+/* Urgent rows and sections: a 3 px amber bar on the left edge, never a tinted fill. */
+@utility edge-amber {
+  box-shadow: inset 3px 0 0 0 var(--amber-solid);
+}
+@utility edge-red {
+  box-shadow: inset 3px 0 0 0 var(--red-solid);
+}
+@utility edge-green {
+  box-shadow: inset 3px 0 0 0 var(--green-solid);
+}
+@utility edge-blue {
+  box-shadow: inset 3px 0 0 0 var(--blue-solid);
+}
+@utility edge-accent {
+  box-shadow: inset 3px 0 0 0 var(--primary);
+}
+
+/* Closed days: a fine diagonal hatch over whatever fill the element has. */
+@utility hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 5px,
+    color-mix(in oklch, var(--foreground) 9%, transparent) 5px 6px
+  );
+}

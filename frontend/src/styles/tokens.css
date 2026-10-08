@@ -1,0 +1,477 @@
+/*
+ * Farmyard Bookings design tokens, v2 (docs/research/07, docs/redesign-spec.md §2).
+ *
+ * Three ideas:
+ *
+ * 1. Colour is meaning. Five semantic hues are identical in every theme:
+ *      green  done / paid / confirmed / matched
+ *      amber  waiting on someone (proforma sent, deposit due, hold expiring)
+ *      red    wrong or overdue (always with a word or icon)
+ *      blue   information (incoming mail, notes, today) — never a button
+ *      grey   not started (enquiry, lapsed, ignored, closed days)
+ *    Each has a text colour, a soft fill and a solid (`--green-text`,
+ *    `--green-soft`, `--green-solid`). White text sits on every solid.
+ *
+ * 2. A theme is three decisions: accent hue/chroma, surface tint, contrast.
+ *    Themes override only the theme variables (`--accent-*`, `--surface-*`,
+ *    `--heat-chroma`); every other token is derived in the two shared blocks
+ *    below, so the neutral lightness tiers — canvas 0.985, card 0.995,
+ *    nested 0.965, sidebar 0.94, border 0.86; dark 0.20 / 0.245 / 0.27 — are
+ *    the same in all six and one semantic set passes contrast everywhere.
+ *
+ * 3. Derived tokens are declared on `:root, [data-theme]` (light) and
+ *    `.dark, [data-theme].dark` (dark), not just on :root, so any element that
+ *    carries data-theme recomputes the whole set from its own theme
+ *    variables. That is what lets the Appearance page render six live theme
+ *    previews side by side.
+ *
+ * Verified by frontend/scripts/check-contrast.mjs; the ratios are in
+ * docs/handoff/frontend-foundation-v2.md.
+ */
+
+/* ------------------------------------------------------------------ themes
+ * Only these variables differ between themes. Graphite is the default and is
+ * declared on :root so a page with no data-theme attribute still renders. */
+
+:root,
+[data-theme="graphite"] {
+  --theme-name: "graphite";
+  --accent-h: 60;
+  --accent-c: 0.012;
+  --accent-c-dark: 0.008;
+  --accent-light: oklch(0.25 0.012 60);
+  --accent-light-hover: oklch(0.32 0.012 60);
+  --accent-dark: oklch(0.92 0.008 80);
+  --accent-dark-hover: oklch(0.86 0.008 80);
+  --surface-h: 85;
+  --surface-c: 0.004;
+  --surface-c-dark: 0.006;
+  --ink-c: 0.012;
+  --heat-chroma: 0.35;
+  --contrast-level: normal;
+}
+
+[data-theme="fynbos"] {
+  --theme-name: "fynbos";
+  --accent-h: 305;
+  --accent-c: 0.17;
+  --accent-c-dark: 0.13;
+  --accent-light: oklch(0.48 0.17 305);
+  --accent-light-hover: oklch(0.43 0.17 305);
+  --accent-dark: oklch(0.76 0.13 305);
+  --accent-dark-hover: oklch(0.81 0.12 305);
+  --surface-h: 300;
+  --surface-c: 0.005;
+  --surface-c-dark: 0.008;
+  --ink-c: 0.012;
+  --heat-chroma: 1;
+}
+
+[data-theme="indigo"] {
+  --theme-name: "indigo";
+  --accent-h: 265;
+  --accent-c: 0.17;
+  --accent-c-dark: 0.13;
+  --accent-light: oklch(0.47 0.17 265);
+  --accent-light-hover: oklch(0.42 0.17 265);
+  --accent-dark: oklch(0.74 0.13 265);
+  --accent-dark-hover: oklch(0.79 0.12 265);
+  --surface-h: 250;
+  --surface-c: 0.006;
+  --surface-c-dark: 0.01;
+  --ink-c: 0.014;
+  --heat-chroma: 0.8;
+}
+
+[data-theme="lagoon"] {
+  --theme-name: "lagoon";
+  --accent-h: 195;
+  --accent-c: 0.09;
+  --accent-c-dark: 0.10;
+  --accent-light: oklch(0.47 0.09 195);
+  --accent-light-hover: oklch(0.42 0.09 195);
+  --accent-dark: oklch(0.76 0.10 195);
+  --accent-dark-hover: oklch(0.81 0.09 195);
+  --surface-h: 220;
+  --surface-c: 0;
+  --surface-c-dark: 0;
+  --ink-c: 0;
+  --heat-chroma: 0.75;
+}
+
+[data-theme="cocoa"] {
+  --theme-name: "cocoa";
+  --accent-h: 55;
+  --accent-c: 0.07;
+  --accent-c-dark: 0.07;
+  --accent-light: oklch(0.40 0.07 55);
+  --accent-light-hover: oklch(0.35 0.07 55);
+  --accent-dark: oklch(0.78 0.07 60);
+  --accent-dark-hover: oklch(0.83 0.07 60);
+  --surface-h: 85;
+  --surface-c: 0.007;
+  --surface-c-dark: 0.008;
+  --ink-c: 0.014;
+  --heat-chroma: 0.85;
+}
+
+[data-theme="contrast"] {
+  --theme-name: "contrast";
+  --accent-h: 0;
+  --accent-c: 0;
+  --accent-c-dark: 0;
+  --accent-light: #030303;
+  --accent-light-hover: #2a2a2a;
+  --accent-dark: #ffffff;
+  --accent-dark-hover: #d9d9d9;
+  --surface-h: 0;
+  --surface-c: 0;
+  --surface-c-dark: 0;
+  --ink-c: 0;
+  --heat-chroma: 0;
+  --contrast-level: high;
+}
+
+/* ------------------------------------------------------- derived: light */
+
+:root,
+[data-theme] {
+  /* ---- semantic hues (identical in every theme) --------------------- */
+  --green-text: oklch(0.40 0.11 150);
+  --green-soft: oklch(0.93 0.06 150);
+  --green-solid: oklch(0.45 0.12 150);
+  --amber-text: oklch(0.42 0.10 70);
+  --amber-soft: oklch(0.93 0.075 85);
+  --amber-solid: oklch(0.54 0.115 72);
+  --red-text: oklch(0.42 0.17 27);
+  --red-soft: oklch(0.93 0.045 25);
+  --red-solid: oklch(0.55 0.20 27);
+  --blue-text: oklch(0.40 0.11 245);
+  --blue-soft: oklch(0.93 0.045 240);
+  --blue-solid: oklch(0.50 0.13 245);
+  --grey-text: oklch(0.36 0.012 60);
+  --grey-soft: oklch(0.93 0.006 75);
+  --grey-solid: oklch(0.46 0.012 60);
+  --on-solid: #ffffff;
+
+  /* ---- neutral tiers ------------------------------------------------- */
+  --background: oklch(0.985 var(--surface-c) var(--surface-h));
+  --surface-canvas: var(--background);
+  --card: oklch(0.995 calc(var(--surface-c) * 0.5) var(--surface-h));
+  --surface-nested: oklch(0.965 var(--surface-c) var(--surface-h));
+  --sidebar: oklch(0.94 calc(var(--surface-c) * 1.4) var(--surface-h));
+  --border: oklch(0.86 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --border-strong: oklch(0.78 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --input: oklch(0.80 calc(var(--surface-c) * 1.5) var(--surface-h));
+
+  --foreground: oklch(0.21 var(--ink-c) var(--surface-h));
+  --muted-foreground: oklch(0.47 var(--ink-c) var(--surface-h));
+  --faint-foreground: oklch(0.62 var(--ink-c) var(--surface-h));
+
+  /* ---- accent (the only hue a theme changes) ------------------------- */
+  --primary: var(--accent-light);
+  --primary-foreground: #ffffff;
+  --primary-hover: var(--accent-light-hover);
+  --primary-soft: oklch(0.93 calc(var(--accent-c) * 0.2) var(--accent-h));
+  --ring: var(--accent-light);
+
+  /* Selection: 2 px accent ring, accent-tinted row at L 0.93 */
+  --selection-ring: var(--accent-light);
+  --selection-row: oklch(0.93 calc(var(--accent-c) * 0.2) var(--accent-h));
+
+  /* Direction of mail: incoming = blue dot, outgoing = grey arrow */
+  --direction-in: var(--blue-solid);
+  --direction-out: var(--grey-solid);
+
+  /* ---- shadcn surface roles ------------------------------------------ */
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.925 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-nested);
+  --accent: var(--surface-nested);
+  --accent-foreground: var(--foreground);
+
+  --destructive: var(--red-solid);
+  --destructive-foreground: var(--on-solid);
+  --success: var(--green-solid);
+  --success-foreground: var(--on-solid);
+  --warning: var(--amber-solid);
+  --warning-foreground: var(--on-solid);
+  --info: var(--blue-solid);
+  --info-foreground: var(--on-solid);
+
+  --sidebar-foreground: oklch(0.30 var(--ink-c) var(--surface-h));
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.885 calc(var(--accent-c) * 0.3) var(--accent-h));
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(0.86 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --sidebar-ring: var(--ring);
+
+  /* ---- status map (StatusPill) ---------------------------------------
+   * enquiry grey · proforma_sent amber · confirmed green · completed
+   * green-subtle (tick, no fill) · cancelled red (bold) · lapsed / no_show
+   * grey with red text. */
+  --pill-ring: color-mix(in oklch, var(--foreground) 10%, transparent);
+  --status-neutral-bg: var(--grey-soft);
+  --status-neutral-fg: var(--grey-text);
+  --status-amber-bg: var(--amber-soft);
+  --status-amber-fg: var(--amber-text);
+  --status-green-bg: var(--green-soft);
+  --status-green-fg: var(--green-text);
+  --status-green-muted-bg: transparent;
+  --status-green-muted-fg: var(--green-text);
+  --status-red-bg: var(--red-solid);
+  --status-red-fg: var(--on-solid);
+  --status-red-muted-bg: var(--grey-soft);
+  --status-red-muted-fg: var(--red-text);
+  --status-blue-bg: var(--blue-soft);
+  --status-blue-fg: var(--blue-text);
+
+  /* ---- capacity ramp: five steps on the accent hue, ink text on all ---- */
+  --heat-0: transparent;
+  --heat-1: oklch(0.95 calc(0.035 * var(--heat-chroma)) var(--accent-h));
+  --heat-2: oklch(0.89 calc(0.07 * var(--heat-chroma)) var(--accent-h));
+  --heat-3: oklch(0.81 calc(0.10 * var(--heat-chroma)) var(--accent-h));
+  --heat-4: oklch(0.72 calc(0.12 * var(--heat-chroma)) var(--accent-h));
+  --heat-5: oklch(0.62 calc(0.13 * var(--heat-chroma)) var(--accent-h));
+  --heat-text: var(--foreground);
+
+  --chart-1: var(--primary);
+  --chart-2: var(--amber-solid);
+  --chart-3: var(--blue-solid);
+  --chart-4: var(--grey-solid);
+  --chart-5: var(--red-solid);
+
+  /* ---- legacy ramp (log viewer and the odd raw use) ------------------- */
+  --ink-950: oklch(0.17 var(--ink-c) var(--surface-h));
+  --ink-900: oklch(0.21 var(--ink-c) var(--surface-h));
+  --ink-800: oklch(0.27 var(--ink-c) var(--surface-h));
+  --ink-700: oklch(0.36 var(--ink-c) var(--surface-h));
+  --ink-600: oklch(0.47 var(--ink-c) var(--surface-h));
+  --ink-500: oklch(0.58 var(--ink-c) var(--surface-h));
+  --ink-400: oklch(0.70 calc(var(--ink-c) * 0.8) var(--surface-h));
+  --ink-300: oklch(0.82 calc(var(--ink-c) * 0.6) var(--surface-h));
+  --ink-200: oklch(0.89 calc(var(--ink-c) * 0.5) var(--surface-h));
+  --ink-100: oklch(0.955 calc(var(--ink-c) * 0.4) var(--surface-h));
+  --paper-50: var(--background);
+  --paper-0: var(--card);
+
+  /* ---- shape and elevation ------------------------------------------- */
+  --radius: 0.5rem;
+  --shadow-overlay: 0 8px 24px -8px oklch(0.2 0.01 60 / 0.18), 0 1px 2px oklch(0.2 0.01 60 / 0.08);
+  --shadow-raised: 0 1px 2px oklch(0.2 0.01 60 / 0.06);
+
+  color-scheme: light;
+}
+
+/* -------------------------------------------------------- derived: dark */
+
+.dark,
+[data-theme].dark {
+  --green-text: oklch(0.85 0.10 150);
+  --green-soft: oklch(0.30 0.05 150);
+  --green-solid: oklch(0.50 0.12 150);
+  --amber-text: oklch(0.87 0.105 85);
+  --amber-soft: oklch(0.31 0.06 70);
+  --amber-solid: oklch(0.52 0.12 72);
+  --red-text: oklch(0.84 0.09 25);
+  --red-soft: oklch(0.31 0.08 25);
+  --red-solid: oklch(0.52 0.18 27);
+  --blue-text: oklch(0.85 0.07 240);
+  --blue-soft: oklch(0.31 0.05 240);
+  --blue-solid: oklch(0.50 0.12 245);
+  --grey-text: oklch(0.85 0.008 70);
+  --grey-soft: oklch(0.30 0.008 60);
+  --grey-solid: oklch(0.48 0.01 60);
+  --on-solid: #ffffff;
+
+  --background: oklch(0.20 var(--surface-c-dark) var(--surface-h));
+  --surface-canvas: var(--background);
+  --card: oklch(0.245 var(--surface-c-dark) var(--surface-h));
+  --surface-nested: oklch(0.27 var(--surface-c-dark) var(--surface-h));
+  --sidebar: oklch(0.17 var(--surface-c-dark) var(--surface-h));
+  --border: oklch(1 0 0 / 14%);
+  --border-strong: oklch(1 0 0 / 22%);
+  --input: oklch(1 0 0 / 20%);
+
+  --foreground: oklch(0.95 calc(var(--ink-c) * 0.5) var(--surface-h));
+  --muted-foreground: oklch(0.72 calc(var(--ink-c) * 0.8) var(--surface-h));
+  --faint-foreground: oklch(0.58 calc(var(--ink-c) * 0.8) var(--surface-h));
+
+  --primary: var(--accent-dark);
+  --primary-foreground: oklch(0.16 calc(var(--accent-c-dark) * 0.3) var(--accent-h));
+  --primary-hover: var(--accent-dark-hover);
+  --primary-soft: oklch(0.30 calc(var(--accent-c-dark) * 0.3) var(--accent-h));
+  --ring: var(--accent-dark);
+
+  --selection-ring: var(--accent-dark);
+  --selection-row: oklch(0.30 calc(var(--accent-c-dark) * 0.3) var(--accent-h));
+
+  --direction-in: oklch(0.70 0.11 245);
+  --direction-out: oklch(0.62 0.01 60);
+
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.26 var(--surface-c-dark) var(--surface-h));
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.31 var(--surface-c-dark) var(--surface-h));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-nested);
+  --accent: var(--surface-nested);
+  --accent-foreground: var(--foreground);
+
+  --destructive: var(--red-solid);
+  --destructive-foreground: var(--on-solid);
+  --success: var(--green-solid);
+  --success-foreground: var(--on-solid);
+  --warning: var(--amber-solid);
+  --warning-foreground: var(--on-solid);
+  --info: var(--blue-solid);
+  --info-foreground: var(--on-solid);
+
+  --sidebar-foreground: oklch(0.86 calc(var(--ink-c) * 0.6) var(--surface-h));
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.27 calc(var(--accent-c-dark) * 0.25) var(--accent-h));
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--ring);
+
+  --pill-ring: color-mix(in oklch, var(--foreground) 14%, transparent);
+  --status-neutral-bg: var(--grey-soft);
+  --status-neutral-fg: var(--grey-text);
+  --status-amber-bg: var(--amber-soft);
+  --status-amber-fg: var(--amber-text);
+  --status-green-bg: var(--green-soft);
+  --status-green-fg: var(--green-text);
+  --status-green-muted-bg: transparent;
+  --status-green-muted-fg: var(--green-text);
+  --status-red-bg: var(--red-solid);
+  --status-red-fg: var(--on-solid);
+  --status-red-muted-bg: var(--grey-soft);
+  --status-red-muted-fg: var(--red-text);
+  --status-blue-bg: var(--blue-soft);
+  --status-blue-fg: var(--blue-text);
+
+  --heat-1: oklch(0.28 calc(0.05 * var(--heat-chroma)) var(--accent-h));
+  --heat-2: oklch(0.34 calc(0.07 * var(--heat-chroma)) var(--accent-h));
+  --heat-3: oklch(0.40 calc(0.09 * var(--heat-chroma)) var(--accent-h));
+  --heat-4: oklch(0.46 calc(0.11 * var(--heat-chroma)) var(--accent-h));
+  --heat-5: oklch(0.52 calc(0.12 * var(--heat-chroma)) var(--accent-h));
+  --heat-text: var(--foreground);
+
+  --chart-1: var(--primary);
+  --chart-2: var(--amber-text);
+  --chart-3: var(--blue-text);
+  --chart-4: var(--grey-text);
+  --chart-5: var(--red-text);
+
+  --ink-950: oklch(0.98 0 0);
+  --ink-900: oklch(0.95 0 0);
+  --ink-800: oklch(0.88 0 0);
+  --ink-700: oklch(0.80 0 0);
+  --ink-600: oklch(0.72 0 0);
+  --ink-500: oklch(0.60 0 0);
+  --ink-400: oklch(0.48 0 0);
+  --ink-300: oklch(0.38 0 0);
+  --ink-200: oklch(0.32 0 0);
+  --ink-100: oklch(0.28 0 0);
+  --paper-50: var(--background);
+  --paper-0: var(--card);
+
+  --shadow-overlay: 0 12px 32px -8px oklch(0 0 0 / 0.5), 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-raised: 0 1px 2px oklch(0 0 0 / 0.3);
+
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------- high contrast overrides
+ * GitHub's model: pure white/black, ink accent, borders you cannot miss,
+ * text at 7:1 or better, pills outlined rather than filled. These sit after
+ * the derived blocks so they win on specificity and order. */
+
+[data-theme="contrast"] {
+  --background: #ffffff;
+  --card: #ffffff;
+  --surface-nested: oklch(0.96 0 0);
+  --sidebar: oklch(0.96 0 0);
+  --border: oklch(0.75 0 0);
+  --border-strong: oklch(0.55 0 0);
+  --input: oklch(0.45 0 0);
+  --foreground: #030303;
+  --muted-foreground: oklch(0.38 0 0);
+  --faint-foreground: oklch(0.48 0 0);
+  --sidebar-foreground: #030303;
+  --sidebar-accent: oklch(0.88 0 0);
+  --sidebar-border: oklch(0.75 0 0);
+  --secondary: oklch(0.92 0 0);
+  --primary-soft: oklch(0.92 0 0);
+  --selection-row: oklch(0.92 0 0);
+  --green-text: oklch(0.36 0.11 150);
+  --amber-text: oklch(0.38 0.08 70);
+  --red-text: oklch(0.40 0.17 27);
+  --blue-text: oklch(0.37 0.09 245);
+  --grey-text: oklch(0.30 0 0);
+  --green-solid: oklch(0.40 0.12 150);
+  --amber-solid: oklch(0.45 0.095 72);
+  --red-solid: oklch(0.48 0.19 27);
+  --blue-solid: oklch(0.42 0.105 245);
+  --grey-solid: oklch(0.38 0 0);
+  --pill-ring: currentColor;
+  --status-neutral-bg: transparent;
+  --status-amber-bg: transparent;
+  --status-green-bg: transparent;
+  --status-red-muted-bg: transparent;
+  --status-blue-bg: transparent;
+}
+
+[data-theme="contrast"].dark {
+  --background: #000000;
+  --card: oklch(0.12 0 0);
+  --surface-nested: oklch(0.18 0 0);
+  --sidebar: oklch(0.08 0 0);
+  --border: oklch(1 0 0 / 45%);
+  --border-strong: oklch(1 0 0 / 65%);
+  --input: oklch(1 0 0 / 60%);
+  --foreground: #ffffff;
+  --muted-foreground: oklch(0.80 0 0);
+  --faint-foreground: oklch(0.70 0 0);
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: oklch(0.28 0 0);
+  --sidebar-border: oklch(1 0 0 / 40%);
+  --popover: oklch(0.14 0 0);
+  --secondary: oklch(0.26 0 0);
+  --primary-soft: oklch(0.28 0 0);
+  --selection-row: oklch(0.28 0 0);
+  --primary-foreground: #000000;
+  --green-text: oklch(0.88 0.10 150);
+  --amber-text: oklch(0.90 0.105 85);
+  --red-text: oklch(0.87 0.068 25);
+  --blue-text: oklch(0.88 0.07 240);
+  --grey-text: oklch(0.90 0 0);
+  --pill-ring: currentColor;
+  --status-neutral-bg: transparent;
+  --status-amber-bg: transparent;
+  --status-green-bg: transparent;
+  --status-red-muted-bg: transparent;
+  --status-blue-bg: transparent;
+}
+
+/* ------------------------------------------------------------- text size
+ * One knob: the root font size. Everything is in rem. The default
+ * preference is "large" (17 px); "default" is 16 and "xlarge" 18. */
+
+html {
+  font-size: 17px;
+}
+html[data-text-size="default"] {
+  font-size: 16px;
+}
+html[data-text-size="large"] {
+  font-size: 17px;
+}
+html[data-text-size="xlarge"] {
+  font-size: 18px;
+}

@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import button %}
+{% block body %}
+<h1>Thanks for getting in touch</h1>
+<p>Hello,</p>
+<p>Thank you for your email. If you are enquiring about a group visit to {{ company.trading_name }}, the quickest way to get a price and a booking reference is our online request form. It takes a couple of minutes and gives us everything we need to send you a proforma.</p>
+{% if form_url %}
+{{ button("Request a group booking", form_url) }}
+<p class="small muted">Or copy this link into your browser: <a href="{{ form_url }}">{{ form_url }}</a></p>
+{% endif %}
+<p>If your email is about something else, we will reply as soon as we can.</p>
+<p class="small muted">This is an automatic reply.</p>
+{% endblock %}

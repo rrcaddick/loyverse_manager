@@ -1,0 +1,25 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Your vehicle ticket for {{ booking.visit_date_long }}</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>The vehicle entry ticket for {{ booking.group_name }} is attached. Please send a copy to the driver of every vehicle in your group before the day.</p>
+{{ summary([
+  ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else none,
+  ("Reference", booking.reference),
+  ("Visit date", booking.visit_date_long),
+  ("Arrival", booking.arrival_time),
+  ("Group size", booking.people_booked|plural("visitor")),
+  ("Vehicles", booking.vehicles if booking.vehicles else none),
+], "Your visit") }}
+<h2>At the gate</h2>
+<ul>
+  <li>The driver of each vehicle presents the ticket at the gate, printed or on a phone.</li>
+  <li>We scan the barcode and count your visitors in, so your group does not need to queue at the ticket office.</li>
+  {% if finance.due > 0 %}
+  <li>The balance of {{ finance.due_display }} is payable at the gate by card or cash, or by EFT beforehand using reference {{ booking.reference }}.</li>
+  {% endif %}
+  <li>Please read the park rules before your visit: <a href="{{ rules_url }}">{{ rules_url }}</a></li>
+</ul>
+<p class="small muted">If your numbers or vehicles change, let us know and we will update the booking.</p>
+{% endblock %}
