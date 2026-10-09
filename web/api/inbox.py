@@ -12,7 +12,8 @@ from flask import request, send_file
 
 from config.settings import DATA_DIR, PUBLIC_BASE_URL
 from src.models import email_message as em
-from src.services import conversations, extraction, mail_ingest, mail_send, quote_split
+from src.models import ignored_sender
+from src.services import conversations, extraction, mail_ingest, mail_send, quote_split, waiting
 from web.api import ApiError, current_user_id, make_blueprint, ok, page_args, parse_json, require_role
 
 bp = make_blueprint("inbox", "")
@@ -63,12 +64,19 @@ def _thrid(value: str) -> int:
 def _conversation_errors(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
-    except conversations.ConversationNotFound as exc:
+    except (conversations.ConversationNotFound, waiting.PartyNotFound) as exc:
         raise ApiError("not_found", str(exc), 404)
-    except conversations.ConversationError as exc:
+    except (conversations.ConversationError, waiting.PartyError) as exc:
         raise ApiError("validation_error", str(exc), 422)
     except mail_send.MailSendError as exc:
         raise ApiError("validation_error", str(exc), 422)
+
+
+def _party_key(value: str) -> str:
+    try:
+        return waiting.normalise_party_key(value)
+    except waiting.PartyError as exc:
+        raise ApiError("validation_error", str(exc), 422, {"party_key": "b:<booking id> or e:<address>"})
 
 
 # --------------------------------------------------------------- lists ---
@@ -321,8 +329,9 @@ def list_conversations():
     if chip is not None and chip not in conversations.CHIPS:
         raise ApiError("validation_error", f"chip must be one of {', '.join(conversations.CHIPS)}", 400)
     page, page_size = page_args(default_size=25, max_size=200)
+    snap = waiting.build_snapshot()
     items, total = conversations.list_conversations(
-        view=view, q=request.args.get("q") or None, chip=chip, page=page, page_size=page_size
+        view=view, q=request.args.get("q") or None, chip=chip, page=page, page_size=page_size, snap=snap
     )
     return ok(
         {
@@ -332,7 +341,7 @@ def list_conversations():
             "page_size": page_size,
             "view": view,
             "chip": chip,
-            "counts": conversations.counts(),
+            "counts": conversations.counts(snap),
         }
     )
 
@@ -366,10 +375,139 @@ def conversation_reopen(thrid: str):
 @bp.post("/inbox/conversations/<thrid>/not-booking")
 @require_role("admin")
 def conversation_not_booking(thrid: str):
+    """``{value?: bool, learn?: bool, scope?: "address"|"domain", reason?}``.
+
+    ``value`` false undoes the flag on this thread only. Otherwise every
+    thread from the sender is closed (done + not_booking) and, with ``learn``,
+    the sender joins the ignored list; the response carries the ``rule``.
+    """
     data = request.get_json(silent=True) or {}
-    value = bool(data.get("value", True)) if isinstance(data, dict) else True
-    thread = _conversation_errors(conversations.set_not_booking, _thrid(thrid), current_user_id(), value)
-    return ok({"thread": thread, "counts": conversations.counts()})
+    if not isinstance(data, dict):
+        data = {}
+    if data.get("value", True) in (False, 0, "false"):
+        thread = _conversation_errors(conversations.set_not_booking, _thrid(thrid), current_user_id(), False)
+        return ok({"thread": thread, "rule": None, "threads_closed": 0, "counts": conversations.counts()})
+    scope = data.get("scope")
+    if scope is not None and scope not in conversations.NOT_BOOKING_SCOPES:
+        raise ApiError("validation_error", "scope must be address or domain", 422, {"scope": "address | domain"})
+    result = _conversation_errors(
+        conversations.not_booking,
+        _thrid(thrid),
+        current_user_id(),
+        learn=bool(data.get("learn", False)),
+        scope=scope,
+        reason=(str(data["reason"])[:255] if data.get("reason") else None),
+    )
+    result["counts"] = conversations.counts()
+    return ok(result)
+
+
+# ------------------------------------------------------------- parties ---
+
+
+@bp.get("/inbox/parties/<party_key>")
+@require_role("admin")
+def get_party(party_key: str):
+    return ok(_conversation_errors(waiting.party_stream, _party_key(party_key)))
+
+
+@bp.post("/inbox/parties/<party_key>/done")
+@require_role("admin")
+def party_done(party_key: str):
+    key = _party_key(party_key)
+    party = _conversation_errors(waiting.mark_done, key, current_user_id())
+    snap = waiting.build_snapshot()
+    threads = waiting.annotate_threads([conversations.thread_to_api(t) or {} for t in waiting.party_threads(key, snap)], snap)
+    return ok({"party": party, "threads": threads, "counts": conversations.counts(snap)})
+
+
+@bp.post("/inbox/parties/<party_key>/reopen")
+@require_role("admin")
+def party_reopen(party_key: str):
+    key = _party_key(party_key)
+    party = _conversation_errors(waiting.reopen, key, current_user_id())
+    snap = waiting.build_snapshot()
+    threads = waiting.annotate_threads([conversations.thread_to_api(t) or {} for t in waiting.party_threads(key, snap)], snap)
+    return ok({"party": party, "threads": threads, "counts": conversations.counts(snap)})
+
+
+@bp.post("/inbox/parties/<party_key>/reply")
+@require_role("admin")
+def party_reply(party_key: str):
+    """Same body as the thread reply, plus an optional ``thrid`` to pick the
+    thread; defaults to the party's newest thread."""
+    key = _party_key(party_key)
+    data = parse_json(("body_html",))
+    snap = waiting.build_snapshot()
+    _conversation_errors(waiting.party_summary, key, snap)  # 404 for an unknown party
+    thrids = {int(t["gmail_thrid"]) for t in waiting.party_threads(key, snap)}
+    if data.get("thrid"):
+        thrid = _thrid(str(data["thrid"]))
+        if thrid not in thrids:
+            raise ApiError("validation_error", "thrid does not belong to this party", 422, {"thrid": "Not this party's thread"})
+    else:
+        thrid = waiting.primary_thrid(key, snap)
+    if thrid is None:
+        raise ApiError("validation_error", "The party has no conversation to reply in", 422)
+    cc = data.get("cc") or []
+    if not isinstance(cc, list):
+        cc = [cc]
+    doc_ids: list[int] = []
+    for raw in data.get("attach_document_ids") or []:
+        try:
+            doc_ids.append(int(raw))
+        except (TypeError, ValueError):
+            raise ApiError("validation_error", "attach_document_ids must be integers", 422,
+                           {"attach_document_ids": "Integers only"})
+    result = _conversation_errors(
+        conversations.reply,
+        thrid,
+        body_html=str(data["body_html"]),
+        body_text=(str(data["body_text"]) if data.get("body_text") else None),
+        subject=(str(data["subject"]) if data.get("subject") else None),
+        cc=[str(c) for c in cc],
+        attach_document_ids=doc_ids,
+        mark_done_after=bool(data.get("mark_done", False)),
+        actor=current_user_id(),
+    )
+    sent = (result.get("item") or {}).get("send_status") == "sent"
+    after = waiting.build_snapshot()
+    result["party"] = waiting.party_summary(key, after)
+    result["counts"] = conversations.counts(after)
+    return ok(result, 201 if sent else 502)
+
+
+# ----------------------------------------------------- ignored senders ---
+
+
+@bp.get("/inbox/ignored-senders")
+@require_role("admin")
+def list_ignored_senders():
+    return ok({"items": [ignored_sender.to_api(r) for r in ignored_sender.list_all()]})
+
+
+@bp.post("/inbox/ignored-senders")
+@require_role("admin")
+def add_ignored_sender():
+    data = parse_json(("pattern",))
+    try:
+        rule = ignored_sender.add(
+            str(data["pattern"]),
+            (str(data["reason"])[:255] if data.get("reason") else None),
+            current_user_id(),
+        )
+    except ValueError as exc:
+        raise ApiError("validation_error", str(exc), 422, {"pattern": str(exc)})
+    return ok({"item": ignored_sender.to_api(rule)}, 201)
+
+
+@bp.delete("/inbox/ignored-senders/<int:rule_id>")
+@require_role("admin")
+def delete_ignored_sender(rule_id: int):
+    if ignored_sender.get(rule_id) is None:
+        raise ApiError("not_found", "Ignored sender not found", 404)
+    ignored_sender.delete(rule_id)
+    return ok({"deleted": rule_id})
 
 
 @bp.post("/inbox/conversations/<thrid>/attach")

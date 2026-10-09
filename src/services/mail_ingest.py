@@ -5,8 +5,15 @@
     match_message(row)                  # (booking_id, method) or (None, None)
     suggest_bookings(row)               # up to 5 scored candidates
     link_current_threads(review_days)   # the import's "link current threads" pass
+    automated_layer(headers, from, subject)   # pure: (layer 1|2|3, reason) or None
+    classify_automated(parsed, row)     # ("drop" | "automated" | None, reason) at ingest
 
 The IMAP side is read-only (see src/clients/gmail.py). Nothing here sends mail.
+
+Automated mail is filtered in three layers (docs/handoff/waiting-v3.md): a
+certain match (headers, sender shape, learned ignored sender) is dropped at
+ingest unless it names a booking; a subject hint is stored and marked
+automated. Dropped messages are counted (``dropped``) and logged, never stored.
 
 Every stored message carries its quote/signature split (src/services/quote_split.py,
 ``split_version``) and keeps its ``email_threads`` row fresh
@@ -350,11 +357,25 @@ def parse_message(raw: bytes, internaldate: datetime | None = None) -> ParsedMes
     headers = {}
     for name in (
         "Auto-Submitted", "Precedence", "List-Id", "List-Unsubscribe", "X-Autoreply",
-        "X-Auto-Response-Suppress", "Return-Path", "X-Failed-Recipients",
+        "X-Auto-Response-Suppress", "Return-Path", "X-Failed-Recipients", "X-Mailer",
     ):
         value = _header(msg, name)
         if value is not None:
             headers[name.lower()] = value
+    # Bulk-provider fingerprints (layer 1 of the automated filter): the
+    # provider's own headers and the Received chain.
+    try:
+        for name in msg.keys():
+            lower = name.lower()
+            if lower.startswith(PROVIDER_HEADER_PREFIXES) and lower not in headers:
+                value = _header(msg, name)
+                if value is not None:
+                    headers[lower] = value
+        received = [str(v) for v in msg.get_all("Received", []) or []]
+    except Exception:  # noqa: BLE001 - junk headers must not break parsing
+        received = []
+    if received:
+        headers["received"] = re.sub(r"\s+", " ", " || ".join(received))[:4000]
 
     return ParsedMessage(
         message_id=_header(msg, "Message-ID"),
@@ -378,27 +399,182 @@ def parse_message(raw: bytes, internaldate: datetime | None = None) -> ParsedMes
 # ====================================================== classification ===
 
 
+# The automated filter has three layers (docs/handoff/waiting-v3-contract.md):
+#   1 headers       Auto-Submitted, Precedence bulk/list/junk, List-Id, List-Unsubscribe,
+#                   bounces, X-Mailer / Return-Path / Received / provider headers from
+#                   bulk providers                                        -> certain
+#   2 sender shape  no-reply, receipts, notifications, ibreply, billing, …  -> certain
+#   3 subject shape "Receipt from", "Invoice INV-", "Notice of payment", "Statement",
+#                   "Newsletter", "Unsubscribe" on a subject that is not a reply/forward
+#                   (a person forwarding a receipt is a person writing)     -> hint
+# A certain match is DROPPED at ingest unless the message belongs to a booking
+# (reference, email or mobile), in which case it is stored and marked automated.
+# A hint is stored and marked automated. The learned ignored-sender list
+# (src/models/ignored_sender.py) counts as certain.
+
+BULK_PROVIDER_RE = re.compile(
+    r"(mailchimp|mcsv\.net|mcdlv\.net|mandrill|sendgrid|sendinblue|brevo|mailgun|amazonses"
+    r"|ses\.amazonaws|articulationmail|everlytic|constantcontact|campaignmonitor|createsend"
+    r"|klaviyo|hubspot|sparkpost|postmarkapp|mailjet|mailerlite|activecampaign|exacttarget"
+    r"|marketo|pardot|touchbasepro|graphicmail|yoco)",
+    re.IGNORECASE,
+)
+PROVIDER_HEADER_PREFIXES = (
+    "x-mailgun", "x-ses-", "x-mc-", "x-sg-", "x-sendgrid", "x-mandrill", "x-mailchimp", "x-campaign",
+    "x-brevo", "x-sib-", "x-everlytic", "x-mailer",
+)
+AUTO_LOCAL_TOKENS = frozenset(
+    {
+        "no-reply", "noreply", "no_reply", "donotreply", "do-not-reply", "receipts", "notifications",
+        "notification", "ibreply", "mailer-daemon", "postmaster", "billing", "invoices", "statements",
+        "alerts", "newsletter",
+    }
+)
+AUTO_SUBJECT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^\s*receipt from\b", re.IGNORECASE), "subject starts 'Receipt from'"),
+    (re.compile(r"\binvoice\s+INV-?\d", re.IGNORECASE), "subject carries 'Invoice INV-'"),
+    (re.compile(r"^\s*notice of payment\b", re.IGNORECASE), "subject starts 'Notice of payment'"),
+    (re.compile(r"^\s*(?:your |monthly |account |tax |e-?)?statement\b", re.IGNORECASE), "subject starts 'Statement'"),
+    (re.compile(r"\bnewsletter\b", re.IGNORECASE), "subject mentions 'Newsletter'"),
+    (re.compile(r"\bunsubscribe\b", re.IGNORECASE), "subject mentions 'Unsubscribe'"),
+)
+LAYER_NAMES = {1: "headers", 2: "sender", 3: "subject"}
+
+
+def _local_tokens(local: str) -> set[str]:
+    tokens = {local}
+    tokens.update(t for t in re.split(r"[._+]", local) if t)
+    tokens.update(t for t in re.split(r"[._+\-]", local) if t)
+    return tokens
+
+
+def automated_layer(
+    headers: dict[str, str] | None, from_email: str | None, subject: str | None = None
+) -> tuple[int, str] | None:
+    """Pure: ``(layer, reason)`` for the first of the three layers that
+    matches, else None. Layers 1–2 are certain, 3 is a hint."""
+    h = {k.lower(): (v or "").strip() for k, v in (headers or {}).items()}
+    auto = h.get("auto-submitted", "").lower()
+    if auto and auto != "no":
+        return 1, f"Auto-Submitted: {auto}"
+    precedence = h.get("precedence", "").lower()
+    if precedence in ("bulk", "list", "junk"):
+        return 1, f"Precedence: {precedence}"
+    if "list-id" in h:
+        return 1, "List-Id header"
+    if "list-unsubscribe" in h:
+        return 1, "List-Unsubscribe header"
+    if "x-failed-recipients" in h:
+        return 1, "bounce (X-Failed-Recipients)"
+    for name in ("x-mailer", "return-path", "received"):
+        hit = BULK_PROVIDER_RE.search(h.get(name, ""))
+        if hit:
+            return 1, f"{name} via {hit.group(1).lower()}"
+    for name in h:
+        if name.startswith(PROVIDER_HEADER_PREFIXES) and name != "x-mailer":
+            return 1, f"{name} header"
+
+    sender = (from_email or "").lower()
+    local, _, domain = sender.partition("@")
+    if domain:
+        hit = BULK_PROVIDER_RE.search(domain)
+        if hit:
+            # Stored rows keep no headers; the sender domain is the same fingerprint.
+            return 1, f"sender domain via {hit.group(1).lower()}"
+    if local:
+        tokens = _local_tokens(local) & AUTO_LOCAL_TOKENS
+        if tokens:
+            return 2, f"sender {sender} ({sorted(tokens)[0]})"
+        hit = AUTO_SENDER_RE.search(local)
+        if hit:
+            return 2, f"sender {sender} ({hit.group(1).lower()})"
+
+    subj = (subject or "").strip()
+    if subj and quote_split.strip_reply_prefixes(subj) == subj:
+        for regex, label in AUTO_SUBJECT_RULES:
+            if regex.search(subj):
+                return 3, label
+    return None
+
+
 def detect_auto_generated(
     headers: dict[str, str], from_email: str | None, folder: str, own_address: str | None = None
 ) -> bool:
-    """Bulk, list, bounce and notification traffic, or our own address in INBOX."""
-    h = {k.lower(): (v or "").strip() for k, v in headers.items()}
-    auto = h.get("auto-submitted", "").lower()
-    if auto and auto != "no":
-        return True
-    if h.get("precedence", "").lower() in ("bulk", "list", "junk"):
-        return True
-    if "list-id" in h or "list-unsubscribe" in h:
-        return True
-    if "x-failed-recipients" in h:
+    """Bulk, list, bounce and notification traffic (layers 1–2), or our own
+    address in INBOX. Kept for ``build_row``; the drop decision is
+    ``classify_automated``."""
+    layer = automated_layer(headers, from_email)
+    if layer is not None and layer[0] <= 2:
         return True
     sender = (from_email or "").lower()
-    if sender and AUTO_SENDER_RE.search(sender.split("@")[0]):
-        return True
     own = (own_address or GMAIL_ADDRESS or "").lower()
     if folder == INBOX and own and sender == own:
         return True
     return False
+
+
+def match_booking_direct(row: dict) -> tuple[int | None, str | None]:
+    """Reference > contact email > mobile — the thread step is deliberately
+    skipped: an automated message is kept only when it names a booking."""
+    subject = row.get("subject") or ""
+    body = row.get("body_text") or ""
+    for number in find_references(subject, body):
+        booking = em.booking_by_doc_number(number)
+        if booking:
+            return booking["id"], "reference"
+    if row.get("direction") == "outbound":
+        candidates = sorted(_booking_email_set(row))
+    else:
+        candidates = [row["from_email"].lower()] if row.get("from_email") else []
+    for address in candidates:
+        booking = em.booking_by_contact_email(address)
+        if booking:
+            return booking["id"], "email"
+    for digits in sorted(extract_za_mobiles(body)):
+        booking = em.booking_by_contact_mobile(digits)
+        if booking:
+            return booking["id"], "phone"
+    return None, None
+
+
+def classify_automated(
+    parsed: ParsedMessage | None,
+    row: dict,
+    ignored_rules: list[dict] | None = None,
+) -> tuple[str | None, str | None]:
+    """``("drop" | "automated" | None, reason)`` for a message about to be stored.
+
+    Outbound rows are never classified. Layers 1–2 and the ignored-sender
+    list are certain: drop, unless ``match_booking_direct`` finds a booking
+    (then store + automated). Layer 3 is a hint: store + automated.
+    ``ignored_rules`` is ``ignored_sender.list_all()`` (pass it to avoid a
+    query per message; ``[]`` disables the list).
+    """
+    from src.models import ignored_sender
+
+    if row.get("direction") == "outbound":
+        return None, None
+    headers = parsed.headers if parsed is not None else {}
+    from_email = row.get("from_email") or (parsed.from_email if parsed else None)
+    subject = row.get("subject") or (parsed.subject if parsed else None)
+
+    certain_reason: str | None = None
+    layer = automated_layer(headers, from_email, subject)
+    if layer is not None and layer[0] <= 2:
+        certain_reason = f"{LAYER_NAMES[layer[0]]}: {layer[1]}"
+    else:
+        rule = ignored_sender.matches(from_email, ignored_rules)
+        if rule is not None:
+            pattern = rule["pattern"] if rule.get("kind") == "address" else f"@{rule['pattern']}"
+            certain_reason = f"ignored sender {pattern}"
+    if certain_reason:
+        booking_id, method = match_booking_direct(row)
+        if booking_id:
+            return "automated", f"{certain_reason}; kept for booking {booking_id} ({method})"
+        return "drop", certain_reason
+    if layer is not None:
+        return "automated", f"{LAYER_NAMES[layer[0]]}: {layer[1]}"
+    return None, None
 
 
 def find_references(*texts: str | None) -> list[int]:
@@ -753,8 +929,12 @@ def _sync_folder(
 ) -> dict:
     stats: dict[str, Any] = {
         "folder": folder, "mode": "incremental", "fetched": 0, "inserted": 0, "updated": 0,
-        "claimed": 0, "matched": 0, "pending": 0, "errors": 0, "attachments": 0,
+        "claimed": 0, "matched": 0, "pending": 0, "dropped": 0, "automated": 0, "errors": 0,
+        "attachments": 0,
     }
+    from src.models import ignored_sender
+
+    ignored_rules = ignored_sender.list_all() if FOLDERS.get(folder, "inbound") == "inbound" else []
     uidvalidity = imap.select(folder, readonly=True)
     state = em.get_sync_state(folder)
     last_uid = int(state["last_uid"]) if state else 0
@@ -782,6 +962,22 @@ def _sync_folder(
         try:
             parsed = parse_message(item["raw"], item.get("internaldate"))
             row = build_row(item, parsed, folder)
+            verdict, reason = classify_automated(parsed, row, ignored_rules)
+            if verdict == "drop" and not (
+                item.get("gmail_msgid") and em.get_by_gmail_msgid(item["gmail_msgid"])
+            ):
+                # Certain automated mail that names no booking is never stored.
+                stats["dropped"] += 1
+                logger.info(
+                    f"{folder} uid {uid}: dropped automated mail from {row.get('from_email')} "
+                    f"({(row.get('subject') or '')[:60]!r}): {reason}"
+                )
+                max_uid = max(max_uid, uid)
+                continue
+            if verdict is not None:
+                row["is_auto_generated"] = True
+                stats["automated"] += 1
+                logger.info(f"{folder} uid {uid}: stored as automated: {reason}")
             message_id, outcome, previous_thrid = em.upsert_by_gmail_msgid(row)
             stats[outcome] += 1
             # A claimed row keeps the split mail_send stored; only its thread ids changed.
@@ -849,7 +1045,7 @@ def sync_mailbox(full: bool = False, since: date | None = None, before: date | N
         "mode": "full" if full else "incremental",
         "folders": {},
         "fetched": 0, "inserted": 0, "updated": 0, "claimed": 0, "matched": 0,
-        "pending": 0, "errors": [],
+        "pending": 0, "dropped": 0, "automated": 0, "errors": [],
     }
     window_days = _review_window_days()
     try:
@@ -869,7 +1065,7 @@ def sync_mailbox(full: bool = False, since: date | None = None, before: date | N
                     )
                     continue
                 summary["folders"][folder] = stats
-                for key in ("fetched", "inserted", "updated", "claimed", "matched", "pending"):
+                for key in ("fetched", "inserted", "updated", "claimed", "matched", "pending", "dropped", "automated"):
                     summary[key] += stats[key]
                 if stats["errors"]:
                     summary["errors"].append(f"{folder}: {stats['errors']} message(s) failed to parse")
@@ -884,7 +1080,8 @@ def sync_mailbox(full: bool = False, since: date | None = None, before: date | N
     summary["ok"] = not summary["errors"]
     logger.info(
         f"Mail sync ({summary['mode']}): fetched={summary['fetched']} inserted={summary['inserted']} "
-        f"matched={summary['matched']} pending={summary['pending']} errors={len(summary['errors'])}"
+        f"matched={summary['matched']} pending={summary['pending']} dropped={summary['dropped']} "
+        f"automated={summary['automated']} errors={len(summary['errors'])}"
     )
     return summary
 

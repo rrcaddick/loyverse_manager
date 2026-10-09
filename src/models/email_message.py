@@ -507,6 +507,56 @@ def messages_for_booking_threads(booking_id: int) -> list[dict]:
     return [_decode(r) or {} for r in rows]
 
 
+def messages_for_threads(gmail_thrids: list[int] | tuple[int, ...] | set[int]) -> list[dict]:
+    """Full rows of every message in the given threads, oldest first."""
+    ids = sorted({int(t) for t in gmail_thrids})
+    if not ids:
+        return []
+    placeholders = ",".join(["%s"] * len(ids))
+    rows = query(_FULL_SELECT + f" WHERE m.gmail_thrid IN ({placeholders}) ORDER BY m.sent_at, m.id", tuple(ids))
+    return [_decode(r) or {} for r in rows]
+
+
+WAITING_COLUMNS = (
+    "id, gmail_thrid, direction, from_email, to_emails, cc_emails, sent_at, booking_id, "
+    "send_status, is_auto_generated, review_status, has_attachments"
+)
+
+
+def messages_for_waiting() -> list[dict]:
+    """Light rows for the party computation (src/services/waiting.py): every
+    message that sits in a thread, plus outbound rows the Sent sync has not
+    threaded yet (they still count as having written to someone)."""
+    rows = query(
+        f"SELECT {WAITING_COLUMNS} FROM email_messages "
+        "WHERE gmail_thrid IS NOT NULL OR direction = 'outbound' ORDER BY sent_at, id"
+    )
+    return [_decode(r) or {} for r in rows]
+
+
+def inbound_for_reclassify() -> list[dict]:
+    """Inbound rows not yet marked automated, for scripts/reapply_waiting.py."""
+    return query(
+        """
+        SELECT id, gmail_thrid, from_email, subject, body_text, booking_id, sent_at
+        FROM email_messages
+        WHERE direction = 'inbound' AND is_auto_generated = 0
+        ORDER BY id
+        """
+    )
+
+
+def set_auto_generated(message_ids: list[int] | tuple[int, ...], value: bool = True) -> int:
+    ids = sorted({int(i) for i in message_ids})
+    if not ids:
+        return 0
+    placeholders = ",".join(["%s"] * len(ids))
+    return execute(
+        f"UPDATE email_messages SET is_auto_generated = %s WHERE id IN ({placeholders})",
+        (int(bool(value)), *ids),
+    )
+
+
 def set_review_status(message_id: int, status: str, user_id: int | None) -> None:
     if status not in REVIEW_STATUSES:
         raise ValueError(f"Unknown review status: {status}")

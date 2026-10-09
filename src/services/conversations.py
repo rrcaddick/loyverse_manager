@@ -235,7 +235,9 @@ def refresh_thread(gmail_thrid: int | None) -> dict | None:
     existing = et.get(thrid)
     et.upsert(thrid, derived)
     if should_reopen(existing, derived):
-        et.set_status(thrid, "open", None)
+        # Open again, but keep done_at: the party computation (waiting.py)
+        # still needs to know everything up to the mark was handled.
+        et.set_status(thrid, "open", None, keep_mark=True)
         logger.info(f"Thread {thrid} reopened by a new inbound message")
     return et.get(thrid)
 
@@ -462,13 +464,29 @@ def list_conversations(
     chip: str | None = None,
     page: int = 1,
     page_size: int = 25,
+    snap=None,
 ) -> tuple[list[dict], int]:
+    """``needs_reply`` returns PARTIES (waiting.party_summary items, oldest
+    unanswered first); every other view returns thread items, each with
+    ``party_key`` and its own ``unanswered_count``."""
+    from src.services import waiting
+
+    snap = snap if snap is not None else waiting.build_snapshot()
+    if view == "needs_reply":
+        parties = waiting.waiting_parties(q=q, snap=snap)
+        start = (max(1, int(page)) - 1) * int(page_size)
+        return parties[start : start + int(page_size)], len(parties)
     rows, total = et.list_conversations(view=view, q=q, chip=chip, page=page, page_size=page_size)
-    return [thread_to_api(r) or {} for r in rows], total
+    return waiting.annotate_threads([thread_to_api(r) or {} for r in rows], snap), total
 
 
-def counts() -> dict[str, int]:
-    return et.counts()
+def counts(snap=None) -> dict[str, int]:
+    """Thread counts per view, except ``needs_reply`` which counts parties."""
+    from src.services import waiting
+
+    out = et.counts()
+    out["needs_reply"] = waiting.waiting_count(snap)
+    return out
 
 
 def _thread_or_404(gmail_thrid: int) -> dict:
@@ -487,20 +505,34 @@ def _booking_events(booking_id: int | None) -> list[dict]:
     return em.booking_events_for(int(booking_id))
 
 
-def get_conversation(gmail_thrid: int) -> dict:
+def get_conversation(gmail_thrid: int, snap=None) -> dict:
+    """Thread + merged stream; message items carry ``unanswered`` (decided
+    per party, docs/handoff/waiting-v3.md) and the thread its ``party_key``."""
+    from src.services import waiting
+
     row = _thread_or_404(gmail_thrid)
     thrid = int(row["gmail_thrid"])
     messages = em.thread(thrid)
     notes = et.list_notes([thrid])
     events = _booking_events(row.get("booking_id"))
+    snap = snap if snap is not None else waiting.build_snapshot()
+    thread = waiting.annotate_threads([thread_to_api(row) or {}], snap)[0]
+    items = waiting.mark_unanswered(build_stream(messages, notes, events), thread.get("party_key"), snap)
     return {
-        "thread": thread_to_api(row),
+        "thread": thread,
         "booking": booking_summary(row),
-        "items": build_stream(messages, notes, events),
+        "party_key": thread.get("party_key"),
+        "unanswered_count": thread.get("unanswered_count", 0),
+        "items": items,
     }
 
 
-def booking_conversation(booking_id: int) -> dict:
+def booking_conversation(booking_id: int, snap=None) -> dict:
+    """The party stream for ``b:<id>``: every thread on the booking merged
+    with its events; items carry ``unanswered`` and the response the party's
+    ``unanswered_count``."""
+    from src.services import waiting
+
     booking = em.booking_by_id(int(booking_id))
     if booking is None:
         raise ConversationNotFound(f"Booking {booking_id} not found")
@@ -513,8 +545,15 @@ def booking_conversation(booking_id: int) -> dict:
             if refreshed:
                 thread_rows.append(refreshed)
                 thrids.add(int(m["gmail_thrid"]))
+                snap = None  # the snapshot predates this thread row
     notes = et.list_notes(sorted(thrids))
     events = _booking_events(int(booking_id))
+    snap = snap if snap is not None else waiting.build_snapshot()
+    party_key = f"b:{int(booking_id)}"
+    threads = waiting.annotate_threads(
+        [thread_to_api(t) or {} for t in sorted(thread_rows, key=lambda t: (t.get("last_message_at") or datetime.min))],
+        snap,
+    )
     return {
         "booking": {
             "id": int(booking["id"]),
@@ -526,8 +565,10 @@ def booking_conversation(booking_id: int) -> dict:
             "contact_email": booking.get("contact_email"),
             "email_thread_id": str(booking["email_thread_id"]) if booking.get("email_thread_id") else None,
         },
-        "threads": [thread_to_api(t) for t in sorted(thread_rows, key=lambda t: (t.get("last_message_at") or datetime.min))],
-        "items": build_stream(messages, notes, events),
+        "party_key": party_key,
+        "unanswered_count": len(waiting.unanswered_messages(party_key, snap)),
+        "threads": threads,
+        "items": waiting.mark_unanswered(build_stream(messages, notes, events), party_key, snap),
     }
 
 
@@ -568,6 +609,86 @@ def set_not_booking(gmail_thrid: int, actor: int | None, value: bool = True) -> 
     else:
         em.set_review_status_for_thread(thrid, "pending", actor)
     return thread_to_api(et.get(thrid)) or {}
+
+
+# Hosts where an address says nothing about its neighbours: "Not a booking"
+# learns the address, not the domain. Wildcards (yahoo.*, hotmail.*, …)
+# are matched on the first label.
+PUBLIC_MAILBOX_DOMAINS = frozenset(
+    {
+        "gmail.com", "googlemail.com", "icloud.com", "me.com", "mac.com", "webmail.co.za",
+        "mweb.co.za", "telkomsa.net", "vodamail.co.za", "iafrica.com", "ymail.com", "msn.com",
+        "aol.com", "protonmail.com", "proton.me", "lantic.net", "absamail.co.za", "polka.co.za",
+    }
+)
+PUBLIC_MAILBOX_LABELS = frozenset({"gmail", "googlemail", "yahoo", "hotmail", "outlook", "live", "icloud", "ymail"})
+NOT_BOOKING_SCOPES = ("address", "domain")
+
+
+def is_public_mailbox(domain_or_address: str | None) -> bool:
+    text = (domain_or_address or "").strip().lower()
+    domain = text.rsplit("@", 1)[-1]
+    if not domain:
+        return False
+    # yahoo.*, hotmail.*, outlook.*, live.* … including mail.yahoo.co.uk-style hosts.
+    return domain in PUBLIC_MAILBOX_DOMAINS or bool(set(domain.split(".")) & PUBLIC_MAILBOX_LABELS)
+
+
+def learn_scope_for(address: str | None, scope: str | None = None) -> str:
+    """Explicit ``scope`` wins; else address for public mailboxes, domain otherwise."""
+    if scope:
+        if scope not in NOT_BOOKING_SCOPES:
+            raise ConversationError("scope must be address or domain")
+        return scope
+    return "address" if is_public_mailbox(address) else "domain"
+
+
+def not_booking(
+    gmail_thrid: int,
+    actor: int | None,
+    *,
+    learn: bool = False,
+    scope: str | None = None,
+    reason: str | None = None,
+) -> dict:
+    """Not a booking, per person: close every thread from the sender (done +
+    not_booking) and, with ``learn``, remember the sender in
+    ``mail_ignored_senders`` so the ingest drops its mail from now on.
+
+    The scope (address vs the whole domain) follows ``learn_scope_for``; with
+    domain scope every unlinked thread from that domain is closed too.
+    Returns ``{"thread", "sender", "scope", "rule", "threads_closed"}``.
+    """
+    from src.models import ignored_sender
+
+    row = _thread_or_404(gmail_thrid)
+    thrid = int(row["gmail_thrid"])
+    sender = (row.get("counterpart_email") or "").strip().lower() or None
+    resolved_scope = learn_scope_for(sender, scope) if sender else "address"
+
+    siblings: list[dict] = []
+    if sender:
+        siblings = et.list_for_counterpart(sender, domain=(resolved_scope == "domain"), unlinked_only=True)
+    thrids = {thrid, *(int(t["gmail_thrid"]) for t in siblings)}
+    et.set_not_booking_many(thrids, True)
+    et.set_status_many(thrids, "done", actor)
+    for t in sorted(thrids):
+        em.set_review_status_for_thread(t, "not_booking", actor)
+
+    rule = None
+    if learn and sender:
+        pattern = sender if resolved_scope == "address" else "@" + sender.rsplit("@", 1)[1]
+        rule = ignored_sender.to_api(
+            ignored_sender.add(pattern, reason or f"Not a booking (thread {thrid})", actor)
+        )
+        logger.info(f"Learned ignored sender {pattern} from thread {thrid}")
+    return {
+        "thread": thread_to_api(et.get(thrid)) or {},
+        "sender": sender,
+        "scope": resolved_scope,
+        "rule": rule,
+        "threads_closed": len(thrids),
+    }
 
 
 def _add_booking_event(booking_id: int, kind: str, summary: str, data: dict | None, actor: int | None) -> None:
@@ -829,6 +950,11 @@ __all__ = [
     "mark_done",
     "reopen",
     "set_not_booking",
+    "not_booking",
+    "is_public_mailbox",
+    "learn_scope_for",
+    "PUBLIC_MAILBOX_DOMAINS",
+    "NOT_BOOKING_SCOPES",
     "attach",
     "detach",
     "add_note",

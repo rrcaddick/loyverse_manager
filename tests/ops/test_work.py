@@ -56,6 +56,7 @@ def at(day, hour=9):
 
 def cleanup():
     execute("DELETE FROM email_threads WHERE gmail_thrid BETWEEN %s AND %s", (TEST_THRID, TEST_THRID + 9))
+    execute("DELETE FROM email_messages WHERE gmail_thrid BETWEEN %s AND %s", (TEST_THRID, TEST_THRID + 9))
     execute("DELETE FROM bank_transactions WHERE fingerprint LIKE 'TEST-work-%%'")
     delete_test_bookings()
 
@@ -105,6 +106,16 @@ def rows():
                 'inbound', 0)
         """,
         (TEST_THRID, r["reminder"]["id"], now - timedelta(days=2), now - timedelta(days=2)),
+    )
+    # The reply view is decided per person from the messages: one unanswered inbound.
+    execute(
+        """
+        INSERT INTO email_messages (gmail_msgid, gmail_thrid, direction, from_name, from_email, to_emails,
+            subject, sent_at, booking_id, snippet, review_status)
+        VALUES (%s, %s, 'inbound', 'Thandi Test', 'thandi@example.test', '["bookings@example.test"]',
+                'Re: TEST visit', %s, %s, 'When can we pay?', 'none')
+        """,
+        (9_500_000_000_000_000_001, TEST_THRID, now - timedelta(days=2), r["reminder"]["id"]),
     )
     suggestions = [{
         "booking_id": r["reminder"]["id"], "reference": r["reminder"]["reference"],
@@ -297,13 +308,17 @@ def test_stale_view(rows):
 
 def test_reply_and_money_views(rows):
     views = work.snapshot()["views"]
-    reply = by_id(views["reply"], f"reply:{TEST_THRID}")
+    bid = rows["reminder"]["id"]
+    reply = by_id(views["reply"], f"reply:b:{bid}")
     assert reply["booking"]["reference"] == rows["reminder"]["reference"]
-    assert reply["context"] == "Thandi Test · waiting 2 d" and reply["age_days"] == 2
+    oldest = rows["today"] - timedelta(days=2)
+    assert reply["context"] == f"Test Contact · 1 message waiting · oldest {oldest.day} {oldest:%b}"
+    assert reply["age_days"] == 2
     assert reply["primary"] == {
-        "verb": "Reply", "action": "open_conversation", "thrid": str(TEST_THRID),
-        "booking_id": rows["reminder"]["id"],
+        "verb": "Reply", "action": "open_conversation", "party_key": f"b:{bid}", "thrid": str(TEST_THRID),
+        "booking_id": bid,
     }
+    assert verbs(reply) == ["Open"]
 
     money = views["confirm_money"]
     sugg = query_one("SELECT id FROM bank_transactions WHERE fingerprint = 'TEST-work-sugg'")["id"]
@@ -322,19 +337,45 @@ def test_reply_and_money_views(rows):
     assert all(r["sort_key"] < u["sort_key"] for r in money if r["primary"]["verb"] == "Confirm")
 
 
-def test_reply_fallback_uses_messages_when_threads_table_is_empty(rows):
-    now = datetime.now()
+def test_reply_rows_are_parties_and_clear_once_written_to(rows):
+    now = datetime.now().replace(microsecond=0)
+    bid = rows["reminder"]["id"]
+    # An unattached sender is a party of its own (booking null, no Open button).
     execute(
         """
-        INSERT INTO email_messages (direction, from_name, from_email, subject, sent_at, booking_id, snippet, gmail_thrid)
-        VALUES ('outbound', 'Park', 'park@example.test', 'Your proforma', %s, %s, 'Attached', %s),
-               ('inbound', 'Customer', 'request@example.test', 'Re: Your proforma', %s, %s, 'Thanks', %s)
+        INSERT INTO email_threads (gmail_thrid, status, subject, counterpart_name, counterpart_email,
+            message_count, last_message_at, last_inbound_at, last_direction, has_automated_only)
+        VALUES (%s, 'open', 'TEST enquiry', 'Walk In', 'walkin@example.test', 1, %s, %s, 'inbound', 0)
         """,
-        (now - timedelta(hours=2), rows["request"]["id"], TEST_THRID + 1, now - timedelta(hours=1), rows["request"]["id"], TEST_THRID + 1),
+        (TEST_THRID + 1, now - timedelta(hours=1), now - timedelta(hours=1)),
     )
-    fallback = work._reply_rows(rows["today"], use_threads=False)
-    row = by_id(fallback, f"reply:{TEST_THRID + 1}")
-    assert row["booking"]["id"] == rows["request"]["id"] and row["context"] == "Customer · waiting 0 d"
+    execute(
+        """
+        INSERT INTO email_messages (gmail_msgid, gmail_thrid, direction, from_name, from_email, to_emails,
+            subject, sent_at, snippet, review_status)
+        VALUES (%s, %s, 'inbound', 'Walk In', 'walkin@example.test', '["bookings@example.test"]',
+                'TEST enquiry', %s, 'Do you take walk-ins?', 'pending')
+        """,
+        (9_500_000_000_000_000_002, TEST_THRID + 1, now - timedelta(hours=1)),
+    )
+    reply = work.snapshot()["views"]["reply"]
+    walkin = by_id(reply, "reply:e:walkin@example.test")
+    assert walkin["booking"] is None and walkin["title"] == "Walk In" and walkin["secondary"] == []
+    assert walkin["context"] == f"1 message waiting · oldest {now.day} {now:%b}" and walkin["age_days"] == 0
+    assert walkin["primary"] == {"verb": "Reply", "action": "open_conversation", "party_key": "e:walkin@example.test",
+                                 "thrid": str(TEST_THRID + 1)}
+    # Writing to the booking's contact (even only in cc) answers the booking party.
+    execute(
+        """
+        INSERT INTO email_messages (gmail_msgid, gmail_thrid, direction, from_email, to_emails, cc_emails,
+            subject, sent_at, booking_id, snippet, send_status)
+        VALUES (%s, %s, 'outbound', 'bookings@example.test', '["other@example.test"]', '["thandi@example.test"]',
+                'Re: TEST visit', %s, %s, 'You: Pay by Friday', 'sent')
+        """,
+        (9_500_000_000_000_000_003, TEST_THRID, now, bid),
+    )
+    reply = work.snapshot()["views"]["reply"]
+    assert f"reply:b:{bid}" not in ids(reply) and "reply:e:walkin@example.test" in ids(reply)
 
 
 # ---------------------------------------------------------------- up next ---

@@ -8,9 +8,9 @@ view and the Today page.
 
 Views, in pipeline order, and what each selects:
 
-    reply          email_threads waiting on us (open, last message inbound,
-                   not automated, linked to a booking); falls back to the
-                   per-message rule when the threads table is still empty
+    reply          PARTIES waiting on us (src/services/waiting.py): a booking
+                   with all its contacts and threads, or an unattached sender
+                   address, with at least one unanswered inbound message
     new_requests   status enquiry with no proforma sent
     confirm_money  bank credits: every ``suggested`` one, plus ``unmatched``
                    ones from the last MONEY_WINDOW_DAYS; suggested first
@@ -48,7 +48,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Mapping
 
-from src.models.base import loads, query, query_one, serialize_row
+from src.models.base import loads, query, serialize_row
 from src.services.reminders import KIND_TITLES, LIVE_DUE_SQL
 from src.services.settings import get_settings
 from src.utils.date import get_today
@@ -219,74 +219,58 @@ def _open(booking_id: int) -> dict:
 # ------------------------------------------------------------------ reply ---
 
 
-def _threads_exist() -> bool:
-    return query_one("SELECT 1 AS one FROM email_threads LIMIT 1") is not None
+def _short_day(value: Any) -> str:
+    """``4 Jun`` (the contract's "oldest 4 Jun")."""
+    d = _as_date(value)
+    return f"{d.day} {d:%b}" if d else ""
 
 
-def _reply_threads() -> list[dict]:
-    return query(
-        f"""
-        SELECT {BOOKING_COLS}, t.gmail_thrid, t.counterpart_name, t.counterpart_email,
-               t.subject, t.last_inbound_at, t.last_snippet
-        FROM email_threads t
-        JOIN bookings b ON b.id = t.booking_id
-        WHERE t.status = 'open' AND t.last_direction = 'inbound'
-          AND t.has_automated_only = 0 AND t.not_booking = 0
-        ORDER BY t.last_inbound_at, t.gmail_thrid
-        """
-    )
+def _reply_rows(today: date, parties: list[dict] | None = None) -> list[dict]:
+    """One row per PARTY waiting on us (src/services/waiting.py): a booking
+    with all its contacts and threads, or an unattached sender address.
+    Oldest unanswered message first."""
+    from src.services import waiting
 
-
-def _reply_messages(today: date) -> list[dict]:
-    """Per-message fallback: the newest non-automatic message on the booking is
-    inbound. Old bookings drop out two weeks after the visit."""
-    return query(
-        f"""
-        WITH ranked AS (
-            SELECT m.id, m.booking_id, m.direction, m.gmail_thrid, m.subject, m.from_name,
-                   m.from_email, m.sent_at, m.snippet,
-                   ROW_NUMBER() OVER (PARTITION BY m.booking_id ORDER BY m.sent_at DESC, m.id DESC) AS rn
-            FROM email_messages m
-            WHERE m.booking_id IS NOT NULL AND m.is_auto_generated = 0
-        )
-        SELECT {BOOKING_COLS}, r.gmail_thrid, r.from_name AS counterpart_name,
-               r.from_email AS counterpart_email, r.subject, r.sent_at AS last_inbound_at,
-               r.snippet AS last_snippet, r.id AS message_id
-        FROM ranked r
-        JOIN bookings b ON b.id = r.booking_id
-        WHERE r.rn = 1 AND r.direction = 'inbound'
-          AND (b.status IN ('enquiry', 'proforma_sent', 'confirmed') OR b.visit_date >= %s)
-        ORDER BY r.sent_at, r.id
-        """,
-        (today - timedelta(days=14),),
-    )
-
-
-def _reply_rows(today: date, use_threads: bool | None = None) -> list[dict]:
-    if use_threads is None:
-        use_threads = _threads_exist()
-    rows = _reply_threads() if use_threads else _reply_messages(today)
+    if parties is None:
+        parties = waiting.waiting_parties()
+    # Work is about bookings; a waiting sender with no booking is handled in
+    # Mail (Needs reply / Unmatched), not here.
+    parties = [p for p in parties if p.get("booking")]
+    chips: dict[int, dict] = {}
+    ids = sorted({int(p["booking"]["id"]) for p in parties if p.get("booking")})
+    if ids:
+        marks = ",".join(["%s"] * len(ids))
+        for b in query(f"SELECT {BOOKING_COLS} FROM bookings b WHERE b.id IN ({marks})", ids):
+            chips[int(b["booking_id"])] = _chip(b)
     out = []
-    for r in rows:
-        thrid = str(r["gmail_thrid"]) if r.get("gmail_thrid") is not None else None
-        ident = f"reply:{thrid}" if thrid else f"reply:m{r['message_id']}"
-        waiting = _days_since(r["last_inbound_at"], today)
-        who = r.get("counterpart_name") or r.get("counterpart_email") or "Customer"
-        primary = _act("Reply", "open_conversation", thrid=thrid, booking_id=int(r["booking_id"]))
-        if thrid is None:
-            primary["message_id"] = int(r["message_id"])
+    for p in parties:
+        key = p["party_key"]
+        booking_id = int(p["booking"]["id"]) if p.get("booking") else None
+        chip = chips.get(booking_id) if booking_id else None
+        oldest = p.get("oldest_unanswered_at")
+        waiting_days = _days_since(oldest, today)
+        n = int(p.get("unanswered_count") or 0)
+        context = f"{n} message{'s' if n != 1 else ''} waiting · oldest {_short_day(oldest)}"
+        who = p.get("counterpart_name") or p.get("counterpart_email") or "Customer"
+        title = chip["group_name"] if chip else who
+        if chip and p.get("counterpart_name"):
+            context = f"{who} · {context}"
+        primary = _act("Reply", "open_conversation", party_key=key, thrid=p.get("primary_thrid"))
+        if booking_id:
+            primary["booking_id"] = booking_id
+        secondary = [_open(booking_id)] if booking_id else []
         out.append(
             _row(
                 "reply",
-                ident,
-                booking=_chip(r),
-                title=r["group_name"],
-                context=f"{who} · waiting {waiting} d",
+                f"reply:{key}",
+                booking=chip,
+                title=title,
+                context=context,
                 amount=None,
-                age_days=waiting,
+                age_days=waiting_days,
                 primary=primary,
-                secondary=[_open(r["booking_id"])],
-                sort_key=_key(TIER_REPLY, r["last_inbound_at"] or datetime.min, ident),
+                secondary=secondary,
+                sort_key=_key(TIER_REPLY, oldest or datetime.min.isoformat(), key),
             )
         )
     return out

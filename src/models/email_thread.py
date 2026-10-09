@@ -103,6 +103,37 @@ def all_thrids() -> list[int]:
     return [int(r["gmail_thrid"]) for r in rows]
 
 
+def all_rows() -> list[dict]:
+    """Every thread row (with the booking columns), for the party snapshot."""
+    return query(_SELECT + " ORDER BY t.last_message_at, t.gmail_thrid")
+
+
+def get_many(gmail_thrids: list[int] | tuple[int, ...] | set[int]) -> list[dict]:
+    ids = sorted({int(t) for t in gmail_thrids})
+    if not ids:
+        return []
+    placeholders = ",".join(["%s"] * len(ids))
+    return query(_SELECT + f" WHERE t.gmail_thrid IN ({placeholders}) ORDER BY t.last_message_at, t.gmail_thrid", tuple(ids))
+
+
+def list_for_counterpart(address: str, domain: bool = False, unlinked_only: bool = False) -> list[dict]:
+    """Threads whose counterpart is ``address`` (or, with ``domain``, any
+    address at that host or a subdomain of it)."""
+    addr = (address or "").strip().lower()
+    if not addr:
+        return []
+    if domain:
+        host = addr.rsplit("@", 1)[-1]
+        where = "(LOWER(t.counterpart_email) LIKE %s OR LOWER(t.counterpart_email) LIKE %s)"
+        params: list[Any] = [f"%@{host}", f"%.{host}"]
+    else:
+        where = "LOWER(t.counterpart_email) = %s"
+        params = [addr]
+    if unlinked_only:
+        where += " AND t.booking_id IS NULL"
+    return query(_SELECT + f" WHERE {where} ORDER BY t.last_message_at, t.gmail_thrid", tuple(params))
+
+
 def messages_for_thread(gmail_thrid: int) -> list[dict]:
     """The columns ``conversations.derive_thread`` needs, oldest first."""
     return query(
@@ -208,13 +239,40 @@ def delete(gmail_thrid: int) -> int:
     return execute("DELETE FROM email_threads WHERE gmail_thrid = %s", (int(gmail_thrid),))
 
 
-def set_status(gmail_thrid: int, status: str, actor: int | None) -> None:
+def set_status(gmail_thrid: int, status: str, actor: int | None, keep_mark: bool = False) -> None:
+    """Set the thread status. Done stamps ``done_at``/``done_by``; open clears
+    them unless ``keep_mark`` (a new inbound reopening a done thread keeps
+    the mark so the party computation still knows what was handled)."""
+    set_status_many([gmail_thrid], status, actor, keep_mark=keep_mark)
+
+
+def set_status_many(
+    gmail_thrids: list[int] | tuple[int, ...] | set[int], status: str, actor: int | None,
+    keep_mark: bool = False, when: datetime | None = None,
+) -> int:
     if status not in STATUSES:
         raise ValueError(f"Unknown status: {status}")
+    ids = sorted({int(t) for t in gmail_thrids})
+    if not ids:
+        return 0
+    placeholders = ",".join(["%s"] * len(ids))
+    if status == "open" and keep_mark:
+        return execute(f"UPDATE email_threads SET status = 'open' WHERE gmail_thrid IN ({placeholders})", tuple(ids))
     done = status == "done"
-    execute(
-        "UPDATE email_threads SET status = %s, done_at = %s, done_by = %s WHERE gmail_thrid = %s",
-        (status, _now() if done else None, actor if done else None, int(gmail_thrid)),
+    return execute(
+        f"UPDATE email_threads SET status = %s, done_at = %s, done_by = %s WHERE gmail_thrid IN ({placeholders})",
+        (status, (when or _now()) if done else None, actor if done else None, *ids),
+    )
+
+
+def set_not_booking_many(gmail_thrids: list[int] | tuple[int, ...] | set[int], value: bool) -> int:
+    ids = sorted({int(t) for t in gmail_thrids})
+    if not ids:
+        return 0
+    placeholders = ",".join(["%s"] * len(ids))
+    return execute(
+        f"UPDATE email_threads SET not_booking = %s WHERE gmail_thrid IN ({placeholders})",
+        (int(bool(value)), *ids),
     )
 
 

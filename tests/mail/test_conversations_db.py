@@ -151,11 +151,13 @@ def test_done_reopen_and_not_booking(sandbox):
     assert et.get(thrid)["status"] == "done"
     add_message(sandbox, thrid, "inbound", now + timedelta(minutes=1))
     cv.refresh_thread(thrid)
-    assert et.get(thrid)["status"] == "open" and et.get(thrid)["done_at"] is None
+    # Open again, but the mark survives: the party computation still knows
+    # everything up to done_at was handled (docs/handoff/waiting-v3.md).
+    assert et.get(thrid)["status"] == "open" and et.get(thrid)["done_at"] is not None
     assert thrid in thread_ids_in("needs_reply")
 
     reopened = cv.reopen(thrid, actor=None)
-    assert reopened["status"] == "open"
+    assert reopened["status"] == "open" and reopened["done_at"] is None
 
     flagged = cv.set_not_booking(thrid, actor=None)
     assert flagged["not_booking"] is True and flagged["status"] == "done"
