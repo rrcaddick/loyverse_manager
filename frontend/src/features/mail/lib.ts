@@ -9,7 +9,7 @@ import { toZonedTime } from "date-fns-tz";
 
 import { TIME_ZONE, formatDate, formatDateShort, formatDateTime, formatRelativeDay, formatTime, parseDate } from "@/lib/format";
 
-import type { MessageItem, StreamItem, Thread } from "./types";
+import type { MessageItem, Party, StreamItem, Thread } from "./types";
 
 // ------------------------------------------------------------------ dates
 
@@ -65,16 +65,84 @@ export function cardTime(value: string | null | undefined): string {
 
 /** Whole days a reply has been waiting (0 when nothing is waiting). */
 export function waitingDays(thread: Thread): number {
+  if (thread.unanswered_count !== undefined) {
+    // v3: the server decides what is unanswered; the age comes from the last inbound.
+    if (thread.unanswered_count === 0) return 0;
+    return daysSince(thread.last_inbound_at ?? thread.last_message_at);
+  }
   if (thread.status !== "open" || thread.last_direction !== "inbound") return 0;
   const at = parseDate(thread.last_inbound_at ?? thread.last_message_at);
   if (!at) return 0;
   return Math.max(0, Math.floor(differenceInHours(new Date(), at) / 24));
 }
 
+/** Whole days since a timestamp (0 for today or anything unparseable). */
+export function daysSince(value: string | null | undefined): number {
+  const at = parseDate(value);
+  if (!at) return 0;
+  return Math.max(0, Math.floor(differenceInHours(new Date(), at) / 24));
+}
+
+/** Whole days the party's oldest unanswered message has waited. */
+export function partyWaitingDays(party: Pick<Party, "unanswered_count" | "oldest_unanswered_at">): number {
+  if (!party.unanswered_count) return 0;
+  return daysSince(party.oldest_unanswered_at);
+}
+
+/** "today" / "yesterday" / "Mon" / "4 Jun" — the relative date for "oldest …". */
+export function oldestLabel(value: string | null | undefined): string {
+  const date = parseDate(value);
+  if (!date) return "";
+  const now = toZonedTime(new Date(), TIME_ZONE);
+  const local = toZonedTime(date, TIME_ZONE);
+  const days = differenceInCalendarDays(now, local);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return local.toLocaleDateString("en-ZA", { weekday: "short" });
+  if (local.getFullYear() === now.getFullYear()) return local.toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
+  return formatDate(date);
+}
+
+/** "2 messages waiting · oldest 4 Jun" / "1 message waiting · yesterday". */
+export function waitingLine(party: Pick<Party, "unanswered_count" | "oldest_unanswered_at">): string {
+  const n = party.unanswered_count;
+  if (!n) return "Nothing waiting";
+  const head = n === 1 ? "1 message waiting" : `${n} messages waiting`;
+  const oldest = oldestLabel(party.oldest_unanswered_at);
+  if (!oldest) return head;
+  return n === 1 ? `${head} · ${oldest}` : `${head} · oldest ${oldest}`;
+}
+
+/** The newest thread of a party by last message (the default reply target). */
+export function newestThread(threads: Thread[]): Thread | null {
+  let best: Thread | null = null;
+  for (const t of threads) {
+    if (!best) {
+      best = t;
+      continue;
+    }
+    const a = parseDate(t.last_message_at)?.getTime() ?? 0;
+    const b = parseDate(best.last_message_at)?.getTime() ?? 0;
+    if (a > b) best = t;
+  }
+  return best;
+}
+
 // ------------------------------------------------------------------ names
 
 export function threadName(thread: Pick<Thread, "counterpart_name" | "counterpart_email">): string {
   return titleCase(thread.counterpart_name) || thread.counterpart_email || "Unknown sender";
+}
+
+/** A party reads as its person first, then the booking's contact, then the group. */
+export function partyName(party: Pick<Party, "counterpart_name" | "counterpart_email" | "booking">): string {
+  return titleCase(party.counterpart_name) || party.booking?.contact_name || party.counterpart_email || party.booking?.group_name || "Unknown sender";
+}
+
+/** The sender's domain as a rule pattern ("@acme.co.za"), or null. */
+export function domainPattern(email: string | null | undefined): string | null {
+  const host = email?.split("@")[1]?.trim().toLowerCase();
+  return host ? `@${host}` : null;
 }
 
 export function senderName(message: Pick<MessageItem, "from_name" | "from_email">): string {

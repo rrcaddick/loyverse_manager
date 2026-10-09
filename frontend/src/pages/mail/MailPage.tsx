@@ -1,16 +1,19 @@
 /**
- * /mail and /mail/:thrid — queues over conversations (spec §7).
+ * /mail, /mail/:thrid and /mail?party=<key> — queues over conversations
+ * (spec §7, v3 per-person waiting).
  *
  * Left: the queue rail (Needs reply · Unmatched · Waiting on customer ·
- * Done · All mail with chips), search, and the list. Middle: the
- * ConversationView (stream + docked composer). Right (wide layouts): the
- * booking context or the attach panel. Below ~1150 px of content width the
- * context becomes a one-line strip; below ~768 px the page stacks and a
- * thread opens full-screen with a back button.
+ * Done · All mail with chips), search, and the list. Needs reply lists one
+ * row per PERSON ("2 messages waiting · oldest 4 Jun"); the other views
+ * list threads. Middle: the ConversationView (every thread of the person
+ * merged, unanswered marks, docked composer with "Reply in:"). Right (wide
+ * layouts): the booking context or the attach panel. Below ~1150 px of
+ * content width the context becomes a one-line strip; below ~768 px the
+ * page stacks and a conversation opens full-screen with a back button.
  *
- * URL: /mail/:thrid?view=needs_reply&chip=&q=&page=
+ * URL: /mail/:thrid?view=&chip=&q=&page=   or   /mail?party=b:124&view=…
  * Keys: J K move the cursor (and flip the open conversation), Enter opens,
- * E done, A attach, R reply, N note, / search, ; expand all.
+ * E done (the whole person), A attach, R reply, N note, / search, ; expand.
  */
 
 import { ArrowLeft, Check, Link2, Link2Off, MoreHorizontal, RefreshCw, RotateCcw, Search, X } from "lucide-react";
@@ -28,10 +31,11 @@ import { useComposerBridge } from "@/features/mail/composer-bridge";
 import { ConversationList } from "@/features/mail/conversation-list";
 import { ConversationView } from "@/features/mail/conversation-view";
 import { AttachPanel, BookingContextPanel, ContextStrip, PanelEmpty } from "@/features/mail/context-panel";
-import { useConversation, useConversations, useMarkDone, useNotBooking, useReopen, useSyncMail } from "@/features/mail/api";
-import { threadName } from "@/features/mail/lib";
+import { useConversation, useConversations, useMarkDone, useNotBooking, useParty, usePartyDone, usePartyReopen, useReopen, useSyncMail } from "@/features/mail/api";
+import { newestThread, partyName, threadName, waitingLine } from "@/features/mail/lib";
+import { NotBookingDialog } from "@/features/mail/not-booking-dialog";
 import { OriginalDialog } from "@/features/mail/original-dialog";
-import { MAIL_CHIPS, MAIL_VIEWS, type MailChip, type MailView, type Thread } from "@/features/mail/types";
+import { isParty, listKey, MAIL_CHIPS, MAIL_VIEWS, type MailChip, type MailView, type Party, type Thread } from "@/features/mail/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useShortcut } from "@/hooks/use-keyboard";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
@@ -50,7 +54,7 @@ const VIEW_LABELS: Record<MailView, string> = {
 const CHIP_LABELS: Record<MailChip, string> = { inbound: "Inbound", sent: "Sent", failed: "Failed", automated: "Automated" };
 
 const EMPTY_COPY: Record<MailView, { title: string; hint: string }> = {
-  needs_reply: { title: "Nothing waiting on you", hint: "Mail is checked every minute; customer replies land here." },
+  needs_reply: { title: "Nobody is waiting on you", hint: "Mail is checked every minute; a person appears here as soon as they write and stays until you reply or press E." },
   unmatched: { title: "Every conversation is attached to a booking", hint: "New mail from an unknown sender appears here until you attach it." },
   waiting: { title: "Nobody is waiting on a customer", hint: "Conversations where the last word was ours show here." },
   done: { title: "Nothing marked done yet", hint: "Press E on a conversation to finish it; a new reply reopens it." },
@@ -63,7 +67,7 @@ export default function MailPage() {
   useDocumentTitle("Mail");
   useSidebarCollapsed();
   const navigate = useNavigate();
-  const { thrid: openThrid = null } = useParams<{ thrid: string }>();
+  const { thrid: routeThrid = null } = useParams<{ thrid: string }>();
   const [params, setParams] = useSearchParams();
 
   const rawView = params.get("view");
@@ -72,8 +76,12 @@ export default function MailPage() {
   const chip: MailChip | null = MAIL_CHIPS.includes(rawChip as MailChip) ? (rawChip as MailChip) : null;
   const q = params.get("q") ?? "";
   const page = Math.max(1, Number(params.get("page")) || 1);
+  // A thread in the path wins; otherwise ?party= opens a person (v3).
+  const openThrid = routeThrid;
+  const openParty = routeThrid ? null : params.get("party");
+  const openKey = openThrid ?? openParty;
 
-  function update(changes: Partial<Record<"view" | "chip" | "q" | "page", string | null>>) {
+  function update(changes: Partial<Record<"view" | "chip" | "q" | "page" | "party", string | null>>) {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === "" || (key === "view" && value === "needs_reply") || (key === "page" && value === "1")) next.delete(key);
@@ -83,34 +91,71 @@ export default function MailPage() {
     setParams(next, { replace: true });
   }
 
+  function searchString(extra?: Record<string, string | null>): string {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(extra ?? {})) {
+      if (value === null) next.delete(key);
+      else next.set(key, value);
+    }
+    const s = next.toString();
+    return s ? `?${s}` : "";
+  }
+
   // ---- list
   const list = useConversations({ view, chip, q, page, page_size: PAGE_SIZE });
-  const threads = useMemo(() => list.data?.items ?? [], [list.data]);
+  const items = useMemo(() => list.data?.items ?? [], [list.data]);
   const counts = list.data?.counts;
   const total = list.data?.total ?? 0;
   const [cursor, setCursor] = useState(0);
-  const openIndex = threads.findIndex((t) => t.thrid === openThrid);
-  const effectiveCursor = Math.min(Math.max(0, openIndex >= 0 && cursor === 0 ? openIndex : cursor), Math.max(0, threads.length - 1));
+  const openIndex = items.findIndex((t) => listKey(t) === openKey);
+  const effectiveCursor = Math.min(Math.max(0, openIndex >= 0 && cursor === 0 ? openIndex : cursor), Math.max(0, items.length - 1));
 
   // ---- the open conversation (shares the cache with the ConversationView)
   const conversation = useConversation(openThrid);
-  const thread: Thread | null = conversation.data?.thread ?? threads.find((t) => t.thrid === openThrid) ?? null;
-  const booking = conversation.data?.booking ?? thread?.booking ?? null;
+  const party = useParty(openParty);
+  const listRow = items.find((t) => listKey(t) === openKey) ?? null;
+  const partyRow: Party | null = party.data
+    ? {
+        party_key: party.data.party_key,
+        booking: party.data.booking,
+        counterpart_name: party.data.counterpart_name,
+        counterpart_email: party.data.counterpart_email,
+        unanswered_count: party.data.unanswered_count,
+        oldest_unanswered_at: listRow && isParty(listRow) ? listRow.oldest_unanswered_at : null,
+        last_message_at: listRow && isParty(listRow) ? listRow.last_message_at : null,
+        last_snippet: null,
+        subject: listRow && isParty(listRow) ? listRow.subject : null,
+        thread_count: party.data.threads.length,
+        primary_thrid: newestThread(party.data.threads)?.thrid ?? null,
+        has_attachments: false,
+      }
+    : listRow && isParty(listRow)
+      ? listRow
+      : null;
+  // The thread the page acts on: the open one, or the person's newest.
+  const thread: Thread | null = openThrid
+    ? conversation.data?.thread ?? (listRow && !isParty(listRow) ? listRow : null)
+    : newestThread(party.data?.threads ?? []);
+  const booking = openThrid ? conversation.data?.booking ?? thread?.booking ?? null : party.data?.booking ?? partyRow?.booking ?? null;
+  const streamItems = openThrid ? conversation.data?.items : party.data?.items;
   const latestInbound = useMemo(() => {
-    const items = conversation.data?.items ?? [];
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i];
+    const all = streamItems ?? [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const item = all[i];
       if (item && item.type === "inbound" && !item.is_auto_generated) return item;
     }
     return null;
-  }, [conversation.data]);
+  }, [streamItems]);
 
   const bridge = useComposerBridge();
   const markDone = useMarkDone();
   const reopen = useReopen();
+  const partyDone = usePartyDone();
+  const partyReopen = usePartyReopen();
   const notBooking = useNotBooking();
   const sync = useSyncMail();
   const [attachOpen, setAttachOpen] = useState(false);
+  const [notBookingOpen, setNotBookingOpen] = useState(false);
   const [originalId, setOriginalId] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(q);
@@ -123,62 +168,93 @@ export default function MailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  function open(t: Thread) {
-    navigate({ pathname: `/mail/${t.thrid}`, search: params.toString() ? `?${params.toString()}` : "" });
+  function open(item: Thread | Party) {
+    if (isParty(item)) navigate({ pathname: "/mail", search: searchString({ party: item.party_key }) });
+    else navigate({ pathname: `/mail/${item.thrid}`, search: searchString({ party: null }) });
+  }
+
+  function closeConversation() {
+    navigate({ pathname: "/mail", search: searchString({ party: null }) });
   }
 
   function openNext(after: string | null) {
-    const index = threads.findIndex((t) => t.thrid === after);
-    const next = threads[index + 1] ?? threads[index - 1] ?? null;
-    if (next && next.thrid !== after) open(next);
-    else navigate({ pathname: "/mail", search: params.toString() ? `?${params.toString()}` : "" });
+    const index = items.findIndex((t) => listKey(t) === after);
+    const next = items[index + 1] ?? items[index - 1] ?? null;
+    if (next && listKey(next) !== after) open(next);
+    else closeConversation();
   }
 
-  async function finish(t: Thread) {
+  async function finishThread(t: Thread) {
     await markDone.mutateAsync({ thrid: t.thrid });
     toastWithUndo("Marked done", { description: `${threadName(t)} · ${t.subject ?? ""}`, onUndo: () => reopen.mutateAsync({ thrid: t.thrid }) });
     if (view !== "done" && view !== "all") openNext(t.thrid);
   }
 
-  async function setNotBooking(t: Thread, value: boolean) {
-    await notBooking.mutateAsync({ thrid: t.thrid, body: { value } });
-    if (value) {
-      toastWithUndo("Marked as not a booking", { description: "It leaves every queue.", onUndo: () => notBooking.mutateAsync({ thrid: t.thrid, body: { value: false } }) });
-      if (view !== "done" && view !== "all") openNext(t.thrid);
-    }
+  async function finishParty(key: string, label: string) {
+    await partyDone.mutateAsync({ partyKey: key });
+    toastWithUndo("Marked done", { description: `${label} · every conversation handled`, onUndo: () => partyReopen.mutateAsync({ partyKey: key }) });
+    if (view !== "done" && view !== "all") openNext(key);
+  }
+
+  function finishOpen() {
+    if (openParty) void finishParty(openParty, partyRow ? partyName(partyRow) : openParty);
+    else if (thread && thread.status === "open") void finishThread(thread);
+  }
+
+  async function undoNotBooking(t: Thread) {
+    await notBooking.mutateAsync({ thrid: t.thrid, body: { learn: false, value: false } });
   }
 
   // ---- keys
   function moveCursor(delta: number) {
-    if (!threads.length) return;
-    const next = Math.min(Math.max(0, effectiveCursor + delta), threads.length - 1);
+    if (!items.length) return;
+    const next = Math.min(Math.max(0, effectiveCursor + delta), items.length - 1);
     setCursor(next);
-    const target = threads[next];
-    if (openThrid && target && target.thrid !== openThrid) open(target);
+    const target = items[next];
+    if (openKey && target && listKey(target) !== openKey) open(target);
   }
   useShortcut("j", () => moveCursor(1));
   useShortcut("k", () => moveCursor(-1));
   useShortcut("enter", () => {
-    const target = threads[effectiveCursor];
+    const target = items[effectiveCursor];
     if (target) open(target);
   });
-  useShortcut("e", () => {
-    if (thread && thread.status === "open") void finish(thread);
-  });
+  useShortcut("e", finishOpen);
   useShortcut("a", () => {
     if (thread && !booking) setAttachOpen(true);
   });
   useShortcut("/", () => searchRef.current?.focus());
 
   const empty = EMPTY_COPY[view];
-  const showList = !openThrid; // on narrow layouts the list hides while a thread is open
+  const showList = !openKey; // on narrow layouts the list hides while a conversation is open
   const tabItems = MAIL_VIEWS.map((v) => ({ value: v, label: VIEW_LABELS[v], count: v === "done" ? null : counts?.[v] ?? null }));
+  const headerBusy = markDone.isPending || partyDone.isPending || reopen.isPending || partyReopen.isPending;
+
+  // ---- the reading-pane header: a person (party) or a thread
+  let headerTitle = "";
+  let headerLine = "";
+  let doneState: "done" | "reopen" | null = null;
+  if (openParty) {
+    const p = partyRow;
+    headerTitle = p ? partyName(p) : party.isError ? "Could not load this person" : "";
+    if (p) {
+      const bits = [waitingLine(p)];
+      if (p.thread_count > 1) bits.push(pluralise(p.thread_count, "conversation"));
+      if (p.counterpart_email && p.counterpart_email !== headerTitle) bits.push(p.counterpart_email);
+      headerLine = bits.join(" · ");
+      doneState = p.unanswered_count > 0 ? "done" : "reopen";
+    }
+  } else if (openThrid) {
+    headerTitle = thread?.subject || "(no subject)";
+    headerLine = thread ? [threadName(thread), thread.counterpart_email, pluralise(thread.message_count, "message"), thread.unanswered_count ? `${thread.unanswered_count} unanswered` : null].filter(Boolean).join(" · ") : "";
+    doneState = thread ? (thread.status === "done" ? "reopen" : "done") : null;
+  }
 
   return (
     <div className="@container flex h-[calc(100dvh-var(--spacing-header)-2.5rem)] min-h-0 flex-col gap-3">
       <PageHeader
         title="Mail"
-        className={cn("shrink-0 gap-3", openThrid && "hidden @3xl:flex")}
+        className={cn("shrink-0 gap-3", openKey && "hidden @3xl:flex")}
         actions={
           <Button variant="ghost" size="sm" onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Check for new mail now">
             <RefreshCw data-icon="inline-start" className={cn(sync.isPending && "animate-spin")} />
@@ -230,9 +306,9 @@ export default function MailPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
             <ConversationList
-              threads={threads}
+              items={items}
               view={view}
-              openThrid={openThrid}
+              openKey={openKey}
               cursor={effectiveCursor}
               onCursor={setCursor}
               onOpen={open}
@@ -244,7 +320,7 @@ export default function MailPage() {
           {total > PAGE_SIZE ? (
             <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground tabular">
               <span>
-                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {pluralise(total, "conversation")}
+                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {pluralise(total, view === "needs_reply" ? "person" : "conversation", view === "needs_reply" ? "people" : undefined)}
               </span>
               <span className="flex gap-1">
                 <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => update({ page: String(page - 1) })}>
@@ -259,30 +335,35 @@ export default function MailPage() {
         </section>
 
         {/* Reading pane */}
-        <section aria-label="Conversation" className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-3", !openThrid && "hidden @3xl:flex")}>
-          {openThrid ? (
+        <section aria-label="Conversation" className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-3", !openKey && "hidden @3xl:flex")}>
+          {openKey ? (
             <>
               <header className="flex shrink-0 items-center gap-2 border-b border-border pb-2">
-                <Button variant="ghost" size="icon-sm" className="@3xl:hidden" aria-label="Back to the list" onClick={() => navigate({ pathname: "/mail", search: params.toString() ? `?${params.toString()}` : "" })}>
+                <Button variant="ghost" size="icon-sm" className="@3xl:hidden" aria-label="Back to the list" onClick={closeConversation}>
                   <ArrowLeft />
                 </Button>
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-section">{thread?.subject || "(no subject)"}</h2>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {thread ? threadName(thread) : ""}
-                    {thread?.counterpart_email ? ` · ${thread.counterpart_email}` : ""}
-                    {thread ? ` · ${pluralise(thread.message_count, "message")}` : ""}
+                  <h2 className="truncate text-section" data-testid="pane-title">
+                    {headerTitle}
+                  </h2>
+                  <p className={cn("truncate text-sm", openParty && partyRow && partyRow.unanswered_count > 0 ? "text-amber-text" : "text-muted-foreground")} data-testid="pane-line">
+                    {headerLine}
                   </p>
                 </div>
-                {thread ? (
+                {doneState ? (
                   <div className="flex shrink-0 items-center gap-1.5">
-                    {thread.status === "done" ? (
-                      <Button variant="outline" size="sm" onClick={() => reopen.mutate({ thrid: thread.thrid })} disabled={reopen.isPending}>
+                    {doneState === "reopen" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={headerBusy}
+                        onClick={() => (openParty ? partyReopen.mutate({ partyKey: openParty }) : thread && reopen.mutate({ thrid: thread.thrid }))}
+                      >
                         <RotateCcw data-icon="inline-start" />
                         Reopen
                       </Button>
                     ) : (
-                      <Button size="sm" onClick={() => void finish(thread)} disabled={markDone.isPending}>
+                      <Button size="sm" onClick={finishOpen} disabled={headerBusy} aria-label={openParty ? "Done — every conversation with this person is handled" : "Done"}>
                         <Check data-icon="inline-start" />
                         Done
                         <KeyboardHint keys={["E"]} className="ml-1 hidden text-primary-foreground/80 @3xl:flex" />
@@ -293,13 +374,13 @@ export default function MailPage() {
                         <Link2 data-icon="inline-start" />
                         {booking.reference}
                       </Button>
-                    ) : (
+                    ) : thread ? (
                       <Button variant="outline" size="sm" onClick={() => setAttachOpen(true)}>
                         <Link2 data-icon="inline-start" />
                         Attach
                         <KeyboardHint keys={["A"]} className="ml-1 hidden @3xl:flex" />
                       </Button>
-                    )}
+                    ) : null}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon-sm" aria-label="More actions">
@@ -307,12 +388,14 @@ export default function MailPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
-                        {thread.not_booking ? (
-                          <DropdownMenuItem onSelect={() => void setNotBooking(thread, false)}>Undo “not a booking”</DropdownMenuItem>
+                        {thread?.not_booking ? (
+                          <DropdownMenuItem onSelect={() => thread && void undoNotBooking(thread)}>Undo “not a booking”</DropdownMenuItem>
                         ) : (
-                          <DropdownMenuItem onSelect={() => void setNotBooking(thread, true)}>Not a booking</DropdownMenuItem>
+                          <DropdownMenuItem disabled={!thread} onSelect={() => setNotBookingOpen(true)}>
+                            Not a booking…
+                          </DropdownMenuItem>
                         )}
-                        {booking ? (
+                        {booking && thread ? (
                           <DropdownMenuItem onSelect={() => setAttachOpen(true)}>
                             <Link2Off />
                             Attach to a different booking…
@@ -322,7 +405,7 @@ export default function MailPage() {
                           View original
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled={!latestInbound} onSelect={() => setAttachOpen(true)}>
+                        <DropdownMenuItem disabled={!latestInbound || !thread} onSelect={() => setAttachOpen(true)}>
                           Send form link…
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -331,7 +414,11 @@ export default function MailPage() {
                 ) : null}
               </header>
               <ContextStrip booking={booking} onAttach={() => setAttachOpen(true)} className="shrink-0 @6xl:hidden" />
-              <ConversationView thrid={openThrid} bridge={bridge} markDone={view === "needs_reply" ? "default" : "offer"} className="min-h-0" />
+              {openParty ? (
+                <ConversationView partyKey={openParty} bridge={bridge} markDone={view === "needs_reply" ? "default" : "offer"} className="min-h-0" />
+              ) : openThrid ? (
+                <ConversationView thrid={openThrid} bridge={bridge} markDone={view === "needs_reply" ? "default" : "offer"} className="min-h-0" />
+              ) : null}
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center rounded-xl bg-card ring-1 ring-border">
@@ -341,13 +428,13 @@ export default function MailPage() {
         </section>
 
         {/* Context panel */}
-        <aside aria-label="Context" className={cn("hidden min-h-0 w-72 shrink-0 overflow-y-auto scrollbar-thin @6xl:block", !openThrid && "@6xl:hidden")}>
-          {openThrid && thread ? (
+        <aside aria-label="Context" className={cn("hidden min-h-0 w-72 shrink-0 overflow-y-auto scrollbar-thin @6xl:block", !openKey && "@6xl:hidden")}>
+          {openKey && (booking || thread) ? (
             booking ? (
               <BookingContextPanel booking={booking} thread={thread} onAttachDocument={(id) => bridge.attachDocument(id)} onDetach={() => undefined} />
-            ) : (
-              <AttachPanel thread={thread} latestInbound={latestInbound} onNotBooking={() => openNext(thread.thrid)} />
-            )
+            ) : thread ? (
+              <AttachPanel thread={thread} latestInbound={latestInbound} partyKey={openParty} onNotBooking={() => openNext(openKey)} />
+            ) : null
           ) : null}
         </aside>
       </div>
@@ -363,16 +450,18 @@ export default function MailPage() {
             <AttachPanel
               thread={thread}
               latestInbound={latestInbound}
+              partyKey={openParty}
               autoFocus
               onAttached={() => setAttachOpen(false)}
               onNotBooking={() => {
                 setAttachOpen(false);
-                openNext(thread.thrid);
+                openNext(openKey);
               }}
             />
           ) : null}
         </DialogContent>
       </Dialog>
+      <NotBookingDialog open={notBookingOpen} onOpenChange={setNotBookingOpen} thread={thread} partyKey={openParty} onDone={() => openNext(openKey)} />
       <OriginalDialog messageId={originalId} onClose={() => setOriginalId(null)} />
     </div>
   );

@@ -8,7 +8,9 @@
  *   event     one muted line with an icon, linking to the document or payment
  *
  * Older messages collapse to one line (name · first line · time) and open on
- * click; the stream decides which are open.
+ * click; the stream decides which are open. An inbound message the person is
+ * still waiting on carries a small amber "Unanswered" mark (v3: decided per
+ * person by the server, cleared by any reply to them or by Done).
  */
 
 import {
@@ -128,9 +130,21 @@ function MessageBody({ message, expandAll, onViewOriginal }: BodyProps) {
 
 // --------------------------------------------------------------- messages
 
+/** The small amber mark on a message nobody has answered yet. */
+export function UnansweredMark({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex h-5 shrink-0 items-center gap-1 rounded-md bg-amber-soft px-1.5 text-xs font-medium text-amber-text ring-1 ring-pill-ring ring-inset", className)}>
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-amber-solid" />
+      Unanswered
+    </span>
+  );
+}
+
 interface MessageCardProps extends BodyProps {
   open: boolean;
   onToggle: () => void;
+  /** v3: show the amber "Unanswered" mark (inbound only). */
+  unanswered?: boolean;
   /** Resend a failed outbound message (refills the composer). */
   onRetry?: (message: MessageItem) => void;
   /** Scroll anchor for the newest message. */
@@ -143,7 +157,7 @@ export function MessageCard(props: MessageCardProps) {
   return message.type === "inbound" ? <InboundCard {...props} /> : <OutboundCard {...props} />;
 }
 
-function CollapsedLine({ message, onToggle, id }: MessageCardProps) {
+function CollapsedLine({ message, onToggle, id, unanswered }: MessageCardProps) {
   const inbound = message.type === "inbound";
   const name = inbound ? senderName(message) : "Farmyard Park";
   const chip = kindChip(message);
@@ -166,6 +180,7 @@ function CollapsedLine({ message, onToggle, id }: MessageCardProps) {
       )}
       <span className="w-32 shrink-0 truncate text-body font-medium text-foreground">{name}</span>
       {chip ? <span className="shrink-0 rounded-md bg-nested px-1.5 py-0.5 text-xs font-medium text-muted-foreground ring-1 ring-border">{chip}</span> : null}
+      {inbound && unanswered ? <UnansweredMark /> : null}
       <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{firstLine(message)}</span>
       {message.has_attachments ? <Paperclip aria-label="Has attachments" className="size-3.5 shrink-0 text-muted-foreground" /> : null}
       <span className={cn("shrink-0 text-xs tabular", failed ? "font-medium text-red-text" : "text-muted-foreground")}>{failed ? "Failed" : formatTime(message.at)}</span>
@@ -173,10 +188,10 @@ function CollapsedLine({ message, onToggle, id }: MessageCardProps) {
   );
 }
 
-function InboundCard({ message, onToggle, id, ...body }: MessageCardProps) {
+function InboundCard({ message, onToggle, id, unanswered, ...body }: MessageCardProps) {
   const name = senderName(message);
   return (
-    <article id={id} className="rounded-xl bg-card p-card ring-1 ring-border" aria-label={`From ${name}`}>
+    <article id={id} className={cn("rounded-xl bg-card p-card ring-1 ring-border", unanswered && "edge-amber")} aria-label={`From ${name}${unanswered ? " (unanswered)" : ""}`} data-unanswered={unanswered ? "true" : undefined}>
       <header className="mb-3 flex items-start gap-3">
         <Avatar name={name} />
         <div className="min-w-0 flex-1">
@@ -190,7 +205,8 @@ function InboundCard({ message, onToggle, id, ...body }: MessageCardProps) {
           </div>
           {message.cc_emails.length ? <div className="truncate text-sm text-muted-foreground">cc {message.cc_emails.join(", ")}</div> : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1.5">
+          {unanswered ? <UnansweredMark /> : null}
           <time dateTime={message.at} className="text-sm text-muted-foreground tabular">
             {cardTime(message.at)}
           </time>
@@ -204,7 +220,7 @@ function InboundCard({ message, onToggle, id, ...body }: MessageCardProps) {
   );
 }
 
-function OutboundCard({ message, onToggle, onRetry, id, ...body }: MessageCardProps) {
+function OutboundCard({ message, onToggle, onRetry, id, unanswered: _unanswered, ...body }: MessageCardProps) {
   const chip = kindChip(message);
   const failed = message.send_status === "failed";
   const sender = message.sent_by_name || (message.kind ? "Farmyard Park" : message.from_name || "Farmyard Park");

@@ -28,6 +28,7 @@ import { QuestionsCard } from "@/features/bookings/components/questions-card";
 import { Rail } from "@/features/bookings/components/rail";
 import { NextStepCard, RecordHeader } from "@/features/bookings/components/record-header";
 import type { BookingDetail } from "@/features/bookings/types";
+import { useBookingConversation } from "@/features/mail/api";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useShortcut } from "@/hooks/use-keyboard";
 import { errorMessage, isApiError } from "@/lib/api";
@@ -107,6 +108,8 @@ function Record({ booking }: { booking: BookingDetail }) {
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get("tab") === "conversation" ? "conversation" : "booking";
   const actions = useBookingActions();
+  // v3: shares ["mail","booking-conversation",id] with the Conversation tab's ConversationView.
+  const conversation = useBookingConversation(booking.id);
 
   useShortcut("e", () => actions.openEdit());
   useShortcut("n", () => {
@@ -137,7 +140,8 @@ function Record({ booking }: { booking: BookingDetail }) {
         onChange={setTab}
         items={[
           { value: "booking", label: "Booking" },
-          { value: "conversation", label: "Conversation", count: booking.emails.length },
+          // v3: the badge is what the person is still waiting on, not the email count.
+          { value: "conversation", label: "Conversation", count: conversation.data?.unanswered_count ?? 0 },
         ]}
       />
 

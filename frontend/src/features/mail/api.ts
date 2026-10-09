@@ -9,6 +9,8 @@
  *   ["mail", "suggestions", thrid]         GET /inbox/conversations/:thrid/suggestions
  *   ["mail", "templates"]                  GET /inbox/templates
  *   ["mail", "original", messageId]        GET /inbox/messages/:id/original
+ *   ["mail", "party", partyKey]            GET /inbox/parties/:party_key   (v3)
+ *   ["mail", "ignored-senders"]            GET /inbox/ignored-senders      (v3)
  * Every action invalidates ["mail"], ["inbox"] (first build), ["work"],
  * ["queue"], ["bookings"] and ["today"].
  */
@@ -23,9 +25,15 @@ import type {
   ConversationListParams,
   ConversationResponse,
   ConversationsResponse,
+  IgnoredSender,
   MailTemplate,
+  NotBookingInput,
+  NotBookingResponse,
   NoteItem,
   OriginalMessage,
+  PartyActionResponse,
+  PartyResponse,
+  StreamItem,
   ThreadActionResponse,
   ThreadReplyInput,
   ThreadReplyResponse,
@@ -40,7 +48,40 @@ export const mailKeys = {
   suggestions: (thrid: string) => ["mail", "suggestions", thrid] as const,
   templates: ["mail", "templates"] as const,
   original: (id: number) => ["mail", "original", id] as const,
+  party: (partyKey: string) => ["mail", "party", partyKey] as const,
+  ignoredSenders: ["mail", "ignored-senders"] as const,
 };
+
+/** `b:12` → `b%3A12`: the key travels as one path segment. */
+function partyPath(partyKey: string): string {
+  return `/inbox/parties/${encodeURIComponent(partyKey)}`;
+}
+
+/** Clear every unanswered mark in a stream (after a reply or Done, before the refetch confirms). */
+export function clearUnanswered(items: StreamItem[]): StreamItem[] {
+  return items.map((item) => ((item.type === "inbound" || item.type === "outbound") && item.unanswered ? { ...item, unanswered: false } : item));
+}
+
+/** Write the cleared marks into every cached stream that could show this party. */
+function settleParty(qc: QueryClient, partyKey: string | null, bookingId: number | null) {
+  if (partyKey) {
+    qc.setQueryData(mailKeys.party(partyKey), (current: PartyResponse | undefined) =>
+      current ? { ...current, unanswered_count: 0, items: clearUnanswered(current.items) } : current,
+    );
+  }
+  if (bookingId !== null) {
+    qc.setQueryData(mailKeys.bookingConversation(bookingId), (current: BookingConversationResponse | undefined) =>
+      current ? { ...current, unanswered_count: 0, items: clearUnanswered(current.items) } : current,
+    );
+  }
+}
+
+/** `b:<id>` → the booking id, else null. */
+export function bookingIdOfParty(partyKey: string | null | undefined): number | null {
+  if (!partyKey || !partyKey.startsWith("b:")) return null;
+  const id = Number(partyKey.slice(2));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 /** Everything a mail action can change: queues, badges, work, bookings, today. */
 export function invalidateMailWorld(qc: QueryClient): void {
@@ -85,6 +126,24 @@ export function useBookingConversation(bookingId: number | null) {
     queryFn: () => api.get<BookingConversationResponse>(`/bookings/${bookingId}/conversation`),
     enabled: bookingId !== null && Number.isFinite(bookingId),
     refetchInterval: 60_000,
+  });
+}
+
+/** v3: one person's conversations merged — GET /inbox/parties/:party_key. */
+export function useParty(partyKey: string | null) {
+  return useQuery({
+    queryKey: mailKeys.party(partyKey ?? ""),
+    queryFn: () => api.get<PartyResponse>(partyPath(partyKey ?? "")),
+    enabled: !!partyKey,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useIgnoredSenders(enabled = true) {
+  return useQuery({
+    queryKey: mailKeys.ignoredSenders,
+    queryFn: () => api.get<{ items: IgnoredSender[] }>("/inbox/ignored-senders").then((r) => r.items),
+    enabled,
   });
 }
 
@@ -142,8 +201,96 @@ function useThreadAction(path: string, meta?: { successMessage?: string; silent?
 
 export const useMarkDone = () => useThreadAction("done");
 export const useReopen = () => useThreadAction("reopen");
-export const useNotBooking = () => useThreadAction("not-booking");
 export const useAttachThread = () => useThreadAction("attach");
+
+/**
+ * v3: POST /inbox/conversations/:thrid/not-booking {learn, scope?} marks every
+ * thread of the sender not-a-booking + done and, with `learn`, adds the sender
+ * to the ignored list; the response carries the rule so the toast can undo it.
+ */
+export function useNotBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ thrid, body }: { thrid: string; body: NotBookingInput }) => api.post<NotBookingResponse>(`/inbox/conversations/${thrid}/not-booking`, body),
+    onSuccess: (result, { thrid }) => {
+      if (result.thread) {
+        const thread = result.thread;
+        qc.setQueryData(mailKeys.conversation(thrid), (current: ConversationResponse | undefined) => (current ? { ...current, thread, booking: thread.booking } : current));
+      }
+      invalidateMailWorld(qc);
+    },
+  });
+}
+
+function usePartyAction(path: "done" | "reopen") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ partyKey }: { partyKey: string }) => api.post<PartyActionResponse>(`${partyPath(partyKey)}/${path}`, {}),
+    onSuccess: (_result, { partyKey }) => {
+      if (path === "done") settleParty(qc, partyKey, bookingIdOfParty(partyKey));
+      invalidateMailWorld(qc);
+    },
+  });
+}
+
+/** v3: POST /inbox/parties/:key/done — every thread of the person is handled. */
+export const usePartyDone = () => usePartyAction("done");
+export const usePartyReopen = () => usePartyAction("reopen");
+
+/**
+ * v3: POST /inbox/parties/:key/reply — one reply covers the whole person; it
+ * lands on the newest thread unless `thrid` picks another. The sent item is
+ * appended to the party stream (and the booking's, for `b:` keys) and every
+ * unanswered mark clears at once.
+ */
+export function usePartyReply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ partyKey, ...input }: { partyKey: string } & ThreadReplyInput) => api.post<ThreadReplyResponse>(`${partyPath(partyKey)}/reply`, input),
+    meta: { silent: true },
+    onSuccess: (result, { partyKey }) => {
+      const append = (items: StreamItem[]) => [...clearUnanswered(items).filter((i) => i.key !== result.item.key), result.item];
+      qc.setQueryData(mailKeys.party(partyKey), (current: PartyResponse | undefined) =>
+        current ? { ...current, unanswered_count: 0, items: append(current.items), threads: current.threads.map((t) => (t.thrid === result.thread?.thrid ? result.thread : t)) } : current,
+      );
+      const bookingId = bookingIdOfParty(partyKey);
+      if (bookingId !== null) {
+        qc.setQueryData(mailKeys.bookingConversation(bookingId), (current: BookingConversationResponse | undefined) =>
+          current ? { ...current, unanswered_count: 0, items: append(current.items) } : current,
+        );
+      }
+      if (result.thread) {
+        qc.setQueryData(mailKeys.conversation(result.thread.thrid), (current: ConversationResponse | undefined) =>
+          current ? { ...current, thread: result.thread, items: append(current.items) } : current,
+        );
+      }
+      invalidateMailWorld(qc);
+    },
+    onError: () => invalidateMailWorld(qc),
+  });
+}
+
+export function useAddIgnoredSender() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { pattern: string; reason?: string }) =>
+      api.post<{ item?: IgnoredSender; rule?: IgnoredSender } & Partial<IgnoredSender>>("/inbox/ignored-senders", input).then((r) => r.item ?? r.rule ?? (r as IgnoredSender)),
+    meta: { silent: true },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: mailKeys.ignoredSenders });
+    },
+  });
+}
+
+export function useDeleteIgnoredSender() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<unknown>(`/inbox/ignored-senders/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: mailKeys.ignoredSenders });
+    },
+  });
+}
 export const useDetachThread = () => useThreadAction("detach", { successMessage: "Detached from the booking" });
 
 export function useAddThreadNote() {

@@ -4,7 +4,8 @@
  *   BookingContextPanel  attached: contact, date, status, visitors, balance,
  *                        documents with "Attach" buttons (into the composer)
  *   AttachPanel          unattached: the matcher's suggestions, a booking
- *                        search, "Not a booking" and "Send form link"
+ *                        search, "Not a booking" (v3: the learn dialog) and
+ *                        "Send form link"
  *   ContextStrip         the one-line version for narrow layouts
  */
 
@@ -24,8 +25,9 @@ import { formatMoney, formatPhone, pluralise } from "@/lib/format";
 import { toastWithUndo } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
-import { useAttachThread, useBookingContext, useBounceBack, useDetachThread, useNotBooking, useThreadSuggestions } from "./api";
+import { useAttachThread, useBookingContext, useBounceBack, useDetachThread, useThreadSuggestions } from "./api";
 import { parseApiDate, visitDateShort } from "./lib";
+import { NotBookingDialog } from "./not-booking-dialog";
 import type { MessageItem, Thread, ThreadBooking } from "./types";
 
 /** "in 44 days" / "today" / "12 days ago". */
@@ -182,20 +184,23 @@ interface AttachPanelProps {
   /** The latest inbound message (bounce-back is per message). */
   latestInbound: MessageItem | null;
   onAttached?: (booking: { id: number; reference: string }) => void;
+  /** After "Not a booking" succeeds (the page moves on). */
   onNotBooking?: () => void;
+  /** The open party, so Undo reopens the whole person. */
+  partyKey?: string | null;
   /** Focus the search when the panel mounts (the A key). */
   autoFocus?: boolean;
   className?: string;
 }
 
-export function AttachPanel({ thread, latestInbound, onAttached, onNotBooking, autoFocus = false, className }: AttachPanelProps) {
+export function AttachPanel({ thread, latestInbound, onAttached, onNotBooking, partyKey = null, autoFocus = false, className }: AttachPanelProps) {
   const suggestions = useThreadSuggestions(thread.thrid);
   const attach = useAttachThread();
   const detach = useDetachThread();
-  const notBooking = useNotBooking();
   const bounce = useBounceBack();
   const [picked, setPicked] = useState<BookingListItem | null>(null);
   const [confirmBounce, setConfirmBounce] = useState(false);
+  const [notBookingOpen, setNotBookingOpen] = useState(false);
   const busy = attach.isPending;
 
   async function attachTo(booking: { id: number; reference: string }) {
@@ -205,15 +210,6 @@ export function AttachPanel({ thread, latestInbound, onAttached, onNotBooking, a
       onUndo: () => detach.mutateAsync({ thrid: thread.thrid }),
     });
     onAttached?.(booking);
-  }
-
-  async function markNotBooking() {
-    await notBooking.mutateAsync({ thrid: thread.thrid, body: { value: true } });
-    toastWithUndo("Marked as not a booking", {
-      description: "It leaves every queue.",
-      onUndo: () => notBooking.mutateAsync({ thrid: thread.thrid, body: { value: false } }),
-    });
-    onNotBooking?.();
   }
 
   return (
@@ -279,9 +275,10 @@ export function AttachPanel({ thread, latestInbound, onAttached, onNotBooking, a
       </section>
 
       <section className="flex flex-col gap-1 rounded-xl bg-card p-4 ring-1 ring-border" aria-label="Other options">
-        <Button variant="ghost" size="sm" className="justify-start" disabled={notBooking.isPending} onClick={() => void markNotBooking()}>
+        <Button variant="ghost" size="sm" className="justify-start" onClick={() => setNotBookingOpen(true)}>
           Not a booking
         </Button>
+        <NotBookingDialog open={notBookingOpen} onOpenChange={setNotBookingOpen} thread={thread} partyKey={partyKey} onDone={onNotBooking} />
         <Button variant="ghost" size="sm" className="justify-start" disabled={!latestInbound || bounce.isPending} onClick={() => setConfirmBounce(true)}>
           Send form link
         </Button>

@@ -39,10 +39,12 @@ export interface OpenBookingAction extends ActionBase {
 
 export interface OpenConversationAction extends ActionBase {
   action: "open_conversation";
-  /** Gmail thread id as a string (exceeds 2^53). */
+  /** Gmail thread id as a string (exceeds 2^53); the person's newest thread on v3 rows. */
   thrid: string;
   booking_id: number;
   message_id?: number;
+  /** v3: `b:<booking_id>` or `e:<address>` — opens the whole person in Mail (`/mail?party=`). */
+  party_key?: string;
 }
 
 export interface OpenTransactionAction extends ActionBase {

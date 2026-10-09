@@ -45,6 +45,41 @@ export interface Thread {
   done_by: number | null;
   created_at: string;
   updated_at: string;
+  /** v3: inbound messages on this thread newer than the party's last handled moment. */
+  unanswered_count?: number;
+  /** v3: `b:<booking_id>` or `e:<address>` — the person this thread belongs to. */
+  party_key?: string;
+}
+
+/**
+ * v3 (docs/handoff/waiting-v3-contract.md): "waiting on us" is per PERSON.
+ * The Needs reply list is one row per party: a booking (all its contacts and
+ * threads) or, unmatched, a sender address.
+ */
+export interface Party {
+  party_key: string;
+  booking: ThreadBooking | null;
+  counterpart_name: string | null;
+  counterpart_email: string | null;
+  unanswered_count: number;
+  oldest_unanswered_at: string | null;
+  last_message_at: string | null;
+  last_snippet: string | null;
+  subject: string | null;
+  thread_count: number;
+  /** The newest thread — where a reply lands unless another is picked. */
+  primary_thrid: string | null;
+  has_attachments: boolean;
+}
+
+/** A needs-reply row is a party; every other view lists threads. */
+export function isParty(item: Thread | Party): item is Party {
+  return "primary_thrid" in item && !("thrid" in item);
+}
+
+/** What the list's cursor and selection key on, whichever shape the row has. */
+export function listKey(item: Thread | Party): string {
+  return isParty(item) ? item.party_key : item.thrid;
 }
 
 export interface ConversationCounts {
@@ -56,7 +91,8 @@ export interface ConversationCounts {
 }
 
 export interface ConversationsResponse {
-  items: Thread[];
+  /** Parties in `needs_reply` (v3), threads elsewhere; use `isParty()`. */
+  items: (Thread | Party)[];
   total: number;
   page: number;
   page_size: number;
@@ -114,6 +150,8 @@ export interface MessageItem {
   match_method: string | null;
   review_status: string;
   message_id_header: string | null;
+  /** v3: inbound, not automated, and newer than the party's last handled moment. */
+  unanswered?: boolean;
 }
 
 export interface NoteItem {
@@ -177,6 +215,51 @@ export interface BookingConversationResponse {
   booking: BookingConversationBooking;
   threads: Thread[];
   items: StreamItem[];
+  /** v3: the party `b:<id>`'s unanswered messages across every thread. */
+  unanswered_count?: number;
+}
+
+/** GET /inbox/parties/:party_key — every thread of the person merged in time order. */
+export interface PartyResponse {
+  party_key: string;
+  booking: ThreadBooking | null;
+  counterpart_name: string | null;
+  counterpart_email: string | null;
+  unanswered_count: number;
+  threads: Thread[];
+  items: StreamItem[];
+}
+
+export interface PartyActionResponse {
+  party_key?: string;
+  unanswered_count?: number;
+  threads?: Thread[];
+  counts?: ConversationCounts;
+}
+
+/** A learned "not a booking" sender (GET /inbox/ignored-senders). */
+export interface IgnoredSender {
+  id: number;
+  /** `name@host` or `@host`. */
+  pattern: string;
+  kind: "address" | "domain" | string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface NotBookingInput {
+  /** Add the sender to the ignored list (default on in the UI). */
+  learn: boolean;
+  scope?: "address" | "domain";
+  /** Legacy: false undoes the flag. */
+  value?: boolean;
+}
+
+export interface NotBookingResponse {
+  thread?: Thread;
+  counts?: ConversationCounts;
+  /** The ignored-sender rule created when `learn` was true. */
+  rule?: IgnoredSender | null;
 }
 
 /** GET /inbox/conversations/:thrid/suggestions — the matcher's candidates (0–1 score). */
@@ -209,6 +292,8 @@ export interface OriginalMessage {
 }
 
 export interface ThreadReplyInput {
+  /** Party replies only: the thread to reply in (default: the newest). */
+  thrid?: string;
   body_html: string;
   body_text?: string;
   subject?: string;

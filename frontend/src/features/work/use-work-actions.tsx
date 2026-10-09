@@ -91,7 +91,8 @@ export function useWorkActions(): WorkActions {
   function run(action: WorkAction, row: WorkRow, input?: ActionInput) {
     switch (action.action) {
       case "open_conversation":
-        navigate(`/mail/${action.thrid}`);
+        // v3: a reply row is a person; Mail opens every conversation with them.
+        navigate(action.party_key ? `/mail?party=${encodeURIComponent(action.party_key)}` : `/mail/${action.thrid}`);
         return;
       case "open_booking":
         navigate(`/bookings/${action.booking_id}`);

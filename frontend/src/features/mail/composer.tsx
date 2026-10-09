@@ -6,13 +6,15 @@
  * Template and Attach document menus, bold / list / link as Markdown
  * shortcuts converted to simple HTML on send, Send (Ctrl+Enter) and
  * "Send and mark done". Drafts autosave to localStorage per thread; Esc
- * collapses (the draft stays).
+ * collapses (the draft stays). When the person has more than one thread
+ * (v3 parties) a "Reply in: <subject>" selector picks where the reply
+ * lands — the newest thread by default.
  *
  * It is controlled: the conversation view owns `open` and `mode` so the
  * R / N keys work from anywhere in the pane.
  */
 
-import { Bold, ChevronDown, FileText, Link as LinkIcon, List, Paperclip, Reply, Send, StickyNote, X } from "lucide-react";
+import { Bold, ChevronDown, FileText, Link as LinkIcon, List, MessagesSquare, Paperclip, Reply, Send, StickyNote, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { KeyboardHint } from "@/components/keyboard-hint";
@@ -23,6 +25,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -36,7 +40,14 @@ import { errorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 import { useTemplates } from "./api";
-import { htmlToComposerText, isValidEmail, markdownToHtml, readDraft, writeDraft, type ComposerMode } from "./lib";
+import { htmlToComposerText, isValidEmail, listTime, markdownToHtml, readDraft, writeDraft, type ComposerMode } from "./lib";
+
+/** A thread the reply could land in (v3 parties). */
+export interface ReplyThreadOption {
+  thrid: string;
+  subject: string | null;
+  last_message_at: string | null;
+}
 
 export interface ComposerSend {
   to: string[];
@@ -70,6 +81,10 @@ export interface ComposerProps {
   /** Attached document ids (controlled, so the context panel can add one). */
   documentIds: number[];
   onDocumentIdsChange: (ids: number[]) => void;
+  /** v3: when the person has several threads, "Reply in:" picks one (controlled by the view). */
+  replyThreads?: ReplyThreadOption[];
+  replyThrid?: string | null;
+  onReplyThridChange?: (thrid: string) => void;
   onSend: (input: ComposerSend) => Promise<void>;
   onNote: (body: string) => Promise<void>;
   className?: string;
@@ -92,6 +107,9 @@ export function Composer({
   prefill,
   documentIds: docIds,
   onDocumentIdsChange,
+  replyThreads = [],
+  replyThrid = null,
+  onReplyThridChange,
   onSend,
   onNote,
   className,
@@ -111,6 +129,14 @@ export function Composer({
 
   const setDocIds = (next: number[] | ((current: number[]) => number[])) => onDocumentIdsChange(typeof next === "function" ? next(docIds) : next);
   const hasDraft = body.trim().length > 0;
+
+  // "Reply in:" changes the default subject; follow it unless the subject was edited.
+  const previousDefault = useRef(defaultSubject);
+  useEffect(() => {
+    if (previousDefault.current === defaultSubject) return;
+    setSubject((current) => (current.trim() === previousDefault.current.trim() ? defaultSubject : current));
+    previousDefault.current = defaultSubject;
+  }, [defaultSubject]);
   const subjectDiffers = subject.trim() !== defaultSubject.trim();
   const note = mode === "note";
 
@@ -401,6 +427,9 @@ export function Composer({
               </button>
             </div>
           )}
+          {replyThreads.length > 1 ? (
+            <ReplyInSelector threads={replyThreads} value={replyThrid} onChange={(thrid) => onReplyThridChange?.(thrid)} />
+          ) : null}
         </div>
       ) : null}
 
@@ -586,5 +615,47 @@ function ModeTab({ active, onClick, disabled, icon: Icon, label, amber }: { acti
       <Icon aria-hidden="true" className={cn("size-3.5", amber && "text-amber-solid")} />
       {label}
     </button>
+  );
+}
+
+/** "Reply in: <thread subject> ▾" — which of the person's threads the reply lands in. */
+function ReplyInSelector({ threads, value, onChange }: { threads: ReplyThreadOption[]; value: string | null; onChange: (thrid: string) => void }) {
+  const current = threads.find((t) => t.thrid === value) ?? threads[0];
+  const isNewest = current?.thrid === threads[0]?.thrid;
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-1 text-sm text-muted-foreground">
+      <span className="shrink-0">Reply in:</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Reply in: ${current?.subject || "(no subject)"}`}
+            data-testid="reply-in"
+            className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 text-sm text-foreground ring-1 ring-border transition-colors hover:bg-nested focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:outline-none"
+          >
+            <MessagesSquare aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{current?.subject || "(no subject)"}</span>
+            {isNewest ? <span className="shrink-0 text-xs text-muted-foreground">· newest</span> : null}
+            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-80">
+          <DropdownMenuLabel>Which conversation the reply continues</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={current?.thrid} onValueChange={onChange}>
+            {threads.map((t, index) => (
+              <DropdownMenuRadioItem key={t.thrid} value={t.thrid}>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{t.subject || "(no subject)"}</span>
+                  <span className="text-xs text-muted-foreground tabular">
+                    {index === 0 ? "Newest · " : ""}
+                    {listTime(t.last_message_at)}
+                  </span>
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

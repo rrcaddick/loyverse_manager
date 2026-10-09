@@ -2,7 +2,7 @@
  * /settings/:section — Settings with a left rail (spec §2, §10):
  *
  *   Park              Season · Pricing & deposits
- *   Documents & mail  Documents · Email · Reminders · Templates
+ *   Documents & mail  Documents · Email · Reminders · Templates · Mail rules
  *   Public            Booking form
  *   Personal          Appearance · Password
  *   Admin             Users · System (links)
@@ -65,6 +65,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
       { value: "email", label: "Email", roles: ADMIN, kind: "settings", component: lazy(() => import("./EmailTab")) },
       { value: "reminders", label: "Reminders", roles: ADMIN, kind: "settings", component: lazy(() => import("./RemindersTab")) },
       { value: "templates", label: "Templates", roles: ADMIN, kind: "page", component: lazy(() => import("./TemplatesSection")) },
+      { value: "mail-rules", label: "Mail rules", roles: ADMIN, kind: "page", component: lazy(() => import("./MailRulesSection")) },
     ],
   },
   {
