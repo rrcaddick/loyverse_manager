@@ -102,6 +102,10 @@ BRIDGE_PERMISSIONS = [
     "bridge.replace_ticket_items",
     # type a registration instead of scanning the licence disc
     "bridge.manual_plate",
+    # the Settings entry in the terminal's drawer (Loyverse has no permission for it)
+    "bridge.settings",
+    # the Apps entry in the terminal's drawer
+    "bridge.apps",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -124,8 +128,12 @@ DEFAULT_ROLES = [
             "ACCESS_OPEN_CASH_DRAWER",
             "ACCESS_LPOS_CLIENT_RECALL",
             "ACCESS_CONNECT_PRINTERS",
+            "ACCESS_EDIT_WARE",
+            "ACCESS_LPOS_SUPPORT",
             "bridge.replace_ticket_items",
             "bridge.manual_plate",
+            "bridge.settings",
+            "bridge.apps",
         ],
     ),
     (
@@ -159,6 +167,7 @@ EVENT_NAMES = {
     "refund",
     "ticket_saved",
     "ticket_replaced",
+    "ticket_printed",
     "ticket_opened",
     "roster_refreshed",
 }
