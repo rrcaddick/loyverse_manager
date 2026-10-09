@@ -323,6 +323,29 @@ class PosStaffService:
         return PosDevice.enrol(device_id, secret_hex, note.strip()), secret_hex
 
     @staticmethod
+    def register_device(device_id, secret_hex, model=""):
+        """Self-enrolment: a terminal presents the secret it made for itself. A new device is
+        recorded active; a known active device may re-key (its storage was reset); a revoked
+        device stays revoked. Returns the device row or raises DeviceAuthError."""
+        if not isinstance(device_id, str) or not isinstance(secret_hex, str):
+            raise DeviceAuthError("device not authorised")
+        device_id = device_id.strip()
+        secret_hex = secret_hex.strip().lower()
+        if not device_id or len(device_id) > 64 or len(secret_hex) != DEVICE_SECRET_BYTES * 2:
+            raise DeviceAuthError("device not authorised")
+        try:
+            bytes.fromhex(secret_hex)
+        except ValueError as e:
+            raise DeviceAuthError("device not authorised") from e
+        existing = PosDevice.get_by_device_id(device_id)
+        if existing is not None and not existing["active"]:
+            raise DeviceAuthError("device not authorised")
+        note = (existing or {}).get("note") or ""
+        if model and model not in note:
+            note = (note + " " if note else "") + f"self-enrolled ({str(model)[:40]})"
+        return PosDevice.enrol(device_id, secret_hex, note[:255])
+
+    @staticmethod
     def authenticate_device(device_id, secret_hex):
         """The device row, or DeviceAuthError. Same cost and message whatever went wrong."""
         if not isinstance(device_id, str) or not isinstance(secret_hex, str):

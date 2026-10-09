@@ -10,6 +10,10 @@ POST /api/pos/roster
     -> {"version", "generated_at", "auth": {...}, "policy": {...}, "employees": [...]}
        or {"version": "<same>", "unchanged": true} when known_version still matches
 
+POST /api/pos/devices/register
+    {"device_id": "redmi-a3-gate", "device_secret": "<hex the terminal made>", "model": "Xiaomi 23129RAA4G"}
+    -> {"status": "ok", "device_id": ...}   (403 for a revoked device)
+
 POST /api/pos/events
     {"device_id": ..., "device_secret": ..., "events": [
         {"uuid": "...", "event": "login", "employee_id": 3, "employee_name": "Thandi",
@@ -57,3 +61,16 @@ def events():
         return error
     accepted, rejected = service.record_events(device, payload.get("events"))
     return jsonify({"status": "ok", "accepted": accepted, "rejected": rejected})
+
+
+@pos_staff_bp.route("/pos/devices/register", methods=["POST"])
+@require_bridge_token
+def register_device():
+    payload = request.get_json(force=True, silent=True) or {}
+    try:
+        device = PosStaffService.register_device(
+            payload.get("device_id"), payload.get("device_secret"), str(payload.get("model") or "")
+        )
+    except DeviceAuthError:
+        return jsonify({"error": "device not authorised"}), 403
+    return jsonify({"status": "ok", "device_id": device["device_id"]})

@@ -165,11 +165,16 @@ constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: 
 hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
 makes shared PINs impossible, and `validate_pin` rejects runs and repeats. Permission names are
 Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.settings` and `bridge.apps` show those
-drawer entries, `bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features); `DEFAULT_ROLES` are created on the
+drawer entries, `bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features,
+`bridge.reduce_saved_ticket` lets a charging role reduce a saved ticket without a manager's PIN);
+`PosStaffService.reductions_report` / `pos-staff reductions` lists reductions of saved tickets with
+approvals and any cash sale that followed; `DEFAULT_ROLES` are created on the
 first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
-`PosStaffService`, never straight to the tables. Enrolling a device prints its secret once; it
-goes into that terminal's bridge config as `staff.deviceSecret`.
+`PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use
+the bridge makes its own secret and `POST /api/pos/devices/register` records it under the device's
+name (a revoked device stays revoked); `pos-staff devices enrol` remains for a fixed secret placed in
+`staff.deviceSecret`.
 
 ## Commands
 

@@ -48,6 +48,7 @@ PUBLIC_ENDPOINTS = {
     # Also require the terminal's own enrolment secret - see web/routes/pos_staff.py.
     "pos_staff.roster",
     "pos_staff.events",
+    "pos_staff.register_device",
 }
 
 SESSION_KEY = "authenticated_as"
