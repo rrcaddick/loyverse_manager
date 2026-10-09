@@ -359,11 +359,8 @@ def test_reply_rows_are_parties_and_clear_once_written_to(rows):
         (9_500_000_000_000_000_002, TEST_THRID + 1, now - timedelta(hours=1)),
     )
     reply = work.snapshot()["views"]["reply"]
-    walkin = by_id(reply, "reply:e:walkin@example.test")
-    assert walkin["booking"] is None and walkin["title"] == "Walk In" and walkin["secondary"] == []
-    assert walkin["context"] == f"1 message waiting · oldest {now.day} {now:%b}" and walkin["age_days"] == 0
-    assert walkin["primary"] == {"verb": "Reply", "action": "open_conversation", "party_key": "e:walkin@example.test",
-                                 "thrid": str(TEST_THRID + 1)}
+    # Unattached senders are Mail's job (Needs reply / Unmatched), never Work's.
+    assert "reply:e:walkin@example.test" not in ids(reply)
     # Writing to the booking's contact (even only in cc) answers the booking party.
     execute(
         """
@@ -375,7 +372,7 @@ def test_reply_rows_are_parties_and_clear_once_written_to(rows):
         (9_500_000_000_000_000_003, TEST_THRID, now, bid),
     )
     reply = work.snapshot()["views"]["reply"]
-    assert f"reply:b:{bid}" not in ids(reply) and "reply:e:walkin@example.test" in ids(reply)
+    assert f"reply:b:{bid}" not in ids(reply) and "reply:e:walkin@example.test" not in ids(reply)
 
 
 # ---------------------------------------------------------------- up next ---
