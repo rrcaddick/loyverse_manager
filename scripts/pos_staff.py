@@ -20,6 +20,8 @@
     pos-staff devices revoke p5-till-1 | activate p5-till-1
 
     pos-staff events [--limit 50] [--employee <id>] [--device <id>] [--event login]
+    pos-staff reductions [--days 1]                 saved tickets whose value went down, by whom,
+                                                    and whether a (cash) sale on them followed
 
 PINs are entered on the command line only here; they are hashed before they touch the DB.
 """
@@ -117,6 +119,28 @@ def cmd_events(args, svc):
         print(f"{r['occurred_at']}  {r['device_id']:<14} {r['event']:<18} {who:<24} {detail}")
 
 
+def cmd_reductions(args, svc):
+    from datetime import datetime, timedelta
+
+    since = datetime.now() - timedelta(days=args.days)
+    rows = svc.reductions_report(since)
+    if not rows:
+        print(f"no reductions of saved tickets since {since:%Y-%m-%d %H:%M}")
+        return
+    for r in rows:
+        who = r["staff"] or {}
+        removed = ", ".join(f"{x['quantity'] / 1000:g} x {x['name']}" for x in r["removed"]) or "-"
+        flag = " CASH SALE FOLLOWED" if r["cash_sale_after"] else (" sale followed" if r["sales_after"] else "")
+        approved = ", ".join(a["approved_by"] or "?" for a in r["approvals"] if a.get("approved_by"))
+        print(
+            f"{r['at']}  {r['device'] or '-':<14} ticket {r['ticket'] or r['sync_id']:<12} "
+            f"by {who.get('name', '-')!s:<18} removed {removed}"
+            f"{'  approved by ' + approved if approved else ''}{flag}"
+        )
+        for s in r["sales_after"]:
+            print(f"{'':>21}  -> {s['at']} sale by {s['employee_name']} {s['payments']} amount {s['amount_paid']}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="group", required=True)
@@ -150,6 +174,9 @@ def main(argv=None):
     events.add_argument("--device")
     events.add_argument("--event")
 
+    reductions = sub.add_parser("reductions")
+    reductions.add_argument("--days", type=int, default=1)
+
     args = parser.parse_args(argv)
     svc = PosStaffService()
     try:
@@ -159,6 +186,7 @@ def main(argv=None):
             "employees": cmd_employees,
             "devices": cmd_devices,
             "events": cmd_events,
+            "reductions": cmd_reductions,
         }[args.group](args, svc)
     except (PinPolicyError, PinInUseError, DeviceAuthError, ValueError) as e:
         sys.exit(f"error: {e}")

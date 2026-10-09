@@ -26,11 +26,18 @@ import hmac
 import json
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pymysql
 
-from src.models.pos_staff import PosAuthParams, PosDevice, PosEmployee, PosEmployeeEvent, PosRole
+from src.models.pos_staff import (
+    PosAuthParams,
+    PosDevice,
+    PosEmployee,
+    PosEmployeeEvent,
+    PosReductionReport,
+    PosRole,
+)
 
 ALGORITHM = "pbkdf2-sha256"
 ITERATIONS = 50_000
@@ -106,6 +113,10 @@ BRIDGE_PERMISSIONS = [
     "bridge.settings",
     # the Apps entry in the terminal's drawer
     "bridge.apps",
+    # reduce a saved ticket (remove a saved line, REPLACE ITEMS) without a manager's PIN; only
+    # roles that can take payments are ever asked for it (a reduction is worth nothing to a
+    # role that cannot turn it into cash), so marshals correct tickets freely
+    "bridge.reduce_saved_ticket",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -134,6 +145,7 @@ DEFAULT_ROLES = [
             "bridge.manual_plate",
             "bridge.settings",
             "bridge.apps",
+            "bridge.reduce_saved_ticket",
         ],
     ),
     (
@@ -146,12 +158,13 @@ DEFAULT_ROLES = [
             "ACCESS_NOT_MY_OPENED_RECEIPTS",
             "ACCESS_VIEW_CURRENT_SHIFT",
             "bridge.manual_plate",
+            "bridge.replace_ticket_items",
         ],
     ),
     (
         "Marshal",
         "Opens tickets at the gate on a phone; no payments, refunds or discounts",
-        ["ACCESS_LPOS", "ACCESS_NOT_MY_OPENED_RECEIPTS", "bridge.manual_plate"],
+        ["ACCESS_LPOS", "ACCESS_NOT_MY_OPENED_RECEIPTS", "bridge.manual_plate", "bridge.replace_ticket_items"],
     ),
 ]
 
@@ -168,6 +181,7 @@ EVENT_NAMES = {
     "ticket_saved",
     "ticket_replaced",
     "ticket_printed",
+    "ticket_reduced",
     "ticket_opened",
     "roster_refreshed",
 }
@@ -385,3 +399,106 @@ class PosStaffService:
             accepted += 1
         PosDevice.touch(device["device_id"])
         return accepted, rejected
+
+    # ---- reductions report -------------------------------------------------------------------
+
+    @staticmethod
+    def _ticket_value(receipt_json):
+        """(units, value) of a ticket version: units = summed quantities (thousandths), value = sum of
+        quantity x price in Loyverse's raw units; voided lines are skipped. Only comparability
+        between versions of the same ticket matters here."""
+        units = value = 0
+        for line in (receipt_json or {}).get("items") or []:
+            if line.get("voided"):
+                continue
+            qty = int(line.get("quantity") or 0)
+            units += qty
+            value += qty * int(line.get("price") or 0)
+        return units, value
+
+    @staticmethod
+    def _lines_by_id(receipt_json):
+        return {
+            str(line.get("item_id")): line
+            for line in (receipt_json or {}).get("items") or []
+            if not line.get("voided")
+        }
+
+    def reductions_report(self, since, until=None, follow_minutes=10):
+        """Every time a saved ticket's value went down, who did it, and whether a sale on that
+        ticket followed within ``follow_minutes`` (a cash one is the pattern to look at).
+
+        Reads the back office's own ticket history (every version the terminals reported, each
+        carrying ``_bridge.staff``) and the staff audit trail, so this covers managers and
+        approved reductions too, not just refused ones.
+        """
+        until = until or datetime.now()
+        versions = PosReductionReport.ticket_versions(since - timedelta(hours=12), until)
+        events = PosReductionReport.staff_events(since, until + timedelta(minutes=follow_minutes))
+        sales_by_sync = {}
+        marks_by_sync = {}
+        for evt in events:
+            detail = evt.get("detail") or {}
+            sync_id = detail.get("open_sync_id") if evt["event"] == "sale" else detail.get("sync_id")
+            if sync_id in (None, ""):
+                continue
+            bucket = sales_by_sync if evt["event"] == "sale" else marks_by_sync
+            bucket.setdefault(int(sync_id), []).append(evt)
+
+        rows = []
+        previous = {}
+        for v in versions:
+            receipt = v["receipt_json"] or {}
+            ticket_id = v["ticket_id"]
+            units, value = self._ticket_value(receipt)
+            prev = previous.get(ticket_id)
+            previous[ticket_id] = (units, value, receipt)
+            if prev is None or v["observed_at"] < since:
+                continue
+            prev_units, prev_value, prev_receipt = prev
+            if value >= prev_value and units >= prev_units:
+                continue
+            before, after = self._lines_by_id(prev_receipt), self._lines_by_id(receipt)
+            removed = [
+                {"name": l.get("name"), "quantity": int(l.get("quantity") or 0) - int(after.get(k, {}).get("quantity") or 0)}
+                for k, l in before.items()
+                if int(l.get("quantity") or 0) > int(after.get(k, {}).get("quantity") or 0)
+            ]
+            bridge = receipt.get("_bridge") or {}
+            sync_id = receipt.get("sync_id")
+            window_end = v["observed_at"] + timedelta(minutes=follow_minutes)
+            sales = [
+                {
+                    "at": s["occurred_at"],
+                    "employee_id": s["employee_id"],
+                    "employee_name": s["employee_name"],
+                    "payments": [p.get("name") for p in (s.get("detail") or {}).get("payments") or []],
+                    "amount_paid": sum(int(p.get("amount_paid") or 0) for p in (s.get("detail") or {}).get("payments") or []),
+                }
+                for s in sales_by_sync.get(int(sync_id), []) if sync_id not in (None, "")
+                if v["observed_at"] <= s["occurred_at"] <= window_end
+            ]
+            approvals = [
+                {"event": m["event"], "at": m["occurred_at"], "approved_by": (m.get("detail") or {}).get("approved_by_name")}
+                for m in marks_by_sync.get(int(sync_id), []) if sync_id not in (None, "")
+                if abs((m["occurred_at"] - v["observed_at"]).total_seconds()) <= 120
+            ]
+            rows.append(
+                {
+                    "at": v["observed_at"],
+                    "ticket_id": ticket_id,
+                    "sync_id": sync_id,
+                    "ticket": receipt.get("name"),
+                    "device": bridge.get("device"),
+                    "staff": bridge.get("staff"),
+                    "units_before": prev_units,
+                    "units_after": units,
+                    "value_before": prev_value,
+                    "value_after": value,
+                    "removed": removed,
+                    "approvals": approvals,
+                    "sales_after": sales,
+                    "cash_sale_after": any("cash" in (p or "").lower() for s in sales for p in s["payments"]),
+                }
+            )
+        return rows

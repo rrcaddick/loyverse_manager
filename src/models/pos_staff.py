@@ -349,3 +349,44 @@ class PosEmployeeEvent:
         for row in rows:
             row["detail"] = _json(row["detail"])
         return rows
+
+
+class PosReductionReport:
+    """Raw material for the reductions report: ticket versions and the staff events around them."""
+
+    @classmethod
+    def ticket_versions(cls, since, until):
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT ticket_id, event_type, receipt_json, observed_at
+                    FROM open_tickets_history
+                    WHERE observed_at BETWEEN %s AND %s AND receipt_json IS NOT NULL
+                    ORDER BY ticket_id, observed_at, id
+                    """,
+                    (since, until),
+                )
+                rows = cursor.fetchall()
+        for row in rows:
+            row["receipt_json"] = _json(row["receipt_json"])
+        return rows
+
+    @classmethod
+    def staff_events(cls, since, until):
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * FROM pos_employee_events
+                    WHERE occurred_at BETWEEN %s AND %s
+                      AND event IN ('sale', 'ticket_reduced', 'ticket_replaced')
+                    ORDER BY occurred_at, id
+                    """,
+                    (since, until),
+                )
+                rows = cursor.fetchall()
+        for row in rows:
+            row["detail"] = _json(row["detail"])
+        return rows
+

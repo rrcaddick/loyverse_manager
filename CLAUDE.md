@@ -164,7 +164,8 @@ device's `device_id` + `device_secret` in the body (`PosStaffService.authenticat
 constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: the service
 hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
 makes shared PINs impossible, and `validate_pin` rejects runs and repeats. Permission names are
-Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`); `DEFAULT_ROLES` are created on the
+Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.settings` and `bridge.apps` show those
+drawer entries, `bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features); `DEFAULT_ROLES` are created on the
 first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
 `PosStaffService`, never straight to the tables. Enrolling a device prints its secret once; it
