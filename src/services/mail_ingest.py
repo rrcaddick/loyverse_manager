@@ -748,7 +748,8 @@ def _import_since(since: date | None) -> date:
 
 
 def _sync_folder(
-    imap: GmailImap, folder: str, full: bool, since: date | None, window_days: int
+    imap: GmailImap, folder: str, full: bool, since: date | None, window_days: int,
+    before: date | None = None,
 ) -> dict:
     stats: dict[str, Any] = {
         "folder": folder, "mode": "incremental", "fetched": 0, "inserted": 0, "updated": 0,
@@ -762,7 +763,10 @@ def _sync_folder(
         stats["mode"] = "full" if (full or state is None) else "uidvalidity_reset"
         if reset:
             logger.warning(f"{folder}: UIDVALIDITY changed, resyncing from {_import_since(since)}")
-        uids = imap.search_since(_import_since(since))
+        if before is not None:
+            uids = imap.search_between(_import_since(since), before)
+        else:
+            uids = imap.search_since(_import_since(since))
         if not full and not reset and state is None:
             last_uid = 0
     else:
@@ -799,9 +803,13 @@ def _sync_folder(
             logger.error(f"{folder} uid {uid}: {exc}", exc_info=True)
         max_uid = max(max_uid, uid)
         if stats["fetched"] % 50 == 0:
-            em.set_sync_state(folder, uidvalidity, max_uid)
-    em.set_sync_state(folder, uidvalidity, max(max_uid, last_uid if stats["mode"] == "incremental" else 0))
-    stats["last_uid"] = max(max_uid, last_uid if stats["mode"] == "incremental" else 0)
+            # Never lower the watermark while backfilling an older slice.
+            em.set_sync_state(folder, uidvalidity, max(max_uid, last_uid if before is not None else 0))
+    # A bounded backfill (before=...) fetches an older slice: keep the newer
+    # watermark so the next incremental sync does not refetch everything.
+    keep_last = last_uid if (stats["mode"] == "incremental" or before is not None) else 0
+    em.set_sync_state(folder, uidvalidity, max(max_uid, keep_last))
+    stats["last_uid"] = max(max_uid, keep_last)
     return stats
 
 
@@ -828,7 +836,7 @@ def match_unlinked(window_days: int | None = None, limit: int = 300) -> int:
     return linked
 
 
-def sync_mailbox(full: bool = False, since: date | None = None) -> dict:
+def sync_mailbox(full: bool = False, since: date | None = None, before: date | None = None) -> dict:
     """Pull new mail from INBOX and Sent Mail, store, match, flag for review.
 
     Incremental by UID per folder; a UIDVALIDITY change or ``full=True`` resyncs
@@ -848,7 +856,7 @@ def sync_mailbox(full: bool = False, since: date | None = None) -> dict:
         with GmailImap() as imap:
             for folder in FOLDERS:
                 try:
-                    stats = _sync_folder(imap, folder, full, since, window_days)
+                    stats = _sync_folder(imap, folder, full, since, window_days, before=before)
                 except Exception as exc:  # noqa: BLE001
                     logger.error(f"Sync of {folder} failed: {exc}", exc_info=True)
                     summary["errors"].append(f"{folder}: {exc}")

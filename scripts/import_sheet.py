@@ -386,7 +386,8 @@ def _existing_by_name_date(group_name: str, visit: date) -> dict | None:
     )
 
 
-def build_plan(bookings: list[SheetBooking], today: date) -> list[PlanItem]:
+def build_plan(bookings: list[SheetBooking], today: date, from_date: date | None = None) -> list[PlanItem]:
+    cutoff = from_date or today
     plan: list[PlanItem] = []
     seen_docs: set[int] = set()
     seen_keys: set[tuple[str, date]] = set()
@@ -394,7 +395,7 @@ def build_plan(bookings: list[SheetBooking], today: date) -> list[PlanItem]:
         if b.visit_date is None:
             plan.append(PlanItem(b, "skip", "no visit date"))
             continue
-        if b.visit_date < today:
+        if b.visit_date < cutoff:
             plan.append(PlanItem(b, "skip", "past"))
             continue
         key = (b.group_name.lower(), b.visit_date)
@@ -461,6 +462,11 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
     """Pin the import-specific fields whichever create path ran: status, the
     sheet's dates for the stamps, source, notes and the raw row."""
     status = b.status
+    # A visit that has already happened is history: completed, whatever the
+    # sheet said about its deposit. Arrivals are unknown, so none are recorded.
+    is_past = b.visit_date is not None and b.visit_date < today
+    final_status = "completed" if is_past else status
+    completed_at = datetime.combine(b.visit_date, time(17, 0)) if is_past else None
     with transaction() as conn:
         execute(
             """
@@ -469,6 +475,7 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
                 source = 'import',
                 proforma_sent_at = CASE WHEN %s IN ('proforma_sent', 'confirmed') THEN %s ELSE NULL END,
                 confirmed_at = CASE WHEN %s = 'confirmed' THEN %s ELSE NULL END,
+                completed_at = %s,
                 enquiry_date = %s,
                 internal_notes = %s,
                 legacy_sheet_row = %s,
@@ -476,11 +483,12 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
             WHERE id = %s
             """,
             (
-                status,
+                final_status,
                 status,
                 b.proforma_sent_at(today),
                 status,
                 datetime.combine(b.paid_on(today), time(9, 0)),
+                completed_at,
                 b.enquiry_date or today,
                 f"Imported from the 2026/27 booking sheet on {today.isoformat()} (row {b.row_number})",
                 dumps(b.raw),
@@ -489,7 +497,7 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
             ),
             conn=conn,
         )
-        if status != "enquiry":
+        if final_status != "enquiry":
             execute(
                 """
                 INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
@@ -497,8 +505,9 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
                 """,
                 (
                     booking_id,
-                    f"Imported as {status} from the booking sheet",
-                    dumps({"from": "enquiry", "to": status, "sheet_row": b.row_number}),
+                    f"Imported as {final_status} from the booking sheet"
+                    + (f" (visit on {b.visit_date.isoformat()} is in the past)" if is_past else ""),
+                    dumps({"from": "enquiry", "to": final_status, "sheet_status": status, "sheet_row": b.row_number}),
                 ),
                 conn=conn,
             )
@@ -641,6 +650,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE)
     parser.add_argument("--dry-run", action="store_true", help="Show the plan, write nothing")
     parser.add_argument("--show-past", action="store_true", help="Also list rows before today in the plan")
+    parser.add_argument(
+        "--from-date", type=date.fromisoformat, default=None,
+        help="Import visits on or after this date (default today); earlier visits in range become completed",
+    )
     args = parser.parse_args(argv)
 
     if not args.file.exists():
@@ -650,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
     bookings, notes = parse_sheet(read_csv(args.file))
     for number, note in notes:
         logger.info(f"Row {number}: {note}")
-    plan = build_plan(bookings, today)
+    plan = build_plan(bookings, today, from_date=args.from_date)
     max_doc = max((b.doc_number for b in bookings if b.doc_number is not None), default=None)
 
     print_plan(plan, today, show_past=args.show_past)

@@ -213,6 +213,18 @@ class GmailImap:
 
         return self._retry("search_since", _do)
 
+    def search_between(self, since: date | datetime, before: date | datetime) -> list[int]:
+        """UIDs received on/after ``since`` and strictly before ``before`` (date-granular)."""
+        if isinstance(since, datetime):
+            since = since.date()
+        if isinstance(before, datetime):
+            before = before.date()
+
+        def _do():
+            return sorted(int(u) for u in self.client.search(["SINCE", since, "BEFORE", before]))
+
+        return self._retry("search_between", _do)
+
     def search_above_uid(self, last_uid: int) -> list[int]:
         """UIDs strictly greater than ``last_uid``.
 
