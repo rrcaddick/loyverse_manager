@@ -335,6 +335,29 @@ def apply_open_rule(open_from: date) -> dict:
     return dict(counts)
 
 
+# ---------------------------------------------------------- keep rule ----
+
+def prune_non_qualifying() -> dict:
+    """Keep only what the operator asked for: conversations attached to a
+    booking (their whole history) and open conversations that still wait on us.
+    Everything else that was read for matching is discarded."""
+    rows = query("SELECT gmail_thrid FROM email_threads WHERE booking_id IS NULL AND status <> 'open'")
+    removed_threads, removed_messages = 0, 0
+    for r in rows:
+        t = int(r["gmail_thrid"])
+        for m in query("SELECT id, gmail_msgid FROM email_messages WHERE gmail_thrid = %s", (t,)):
+            execute("DELETE FROM email_attachments WHERE email_message_id = %s", (m["id"],))
+            d = DATA_DIR / "attachments" / str(m["gmail_msgid"])
+            if d.exists():
+                shutil.rmtree(d, ignore_errors=True)
+        removed_messages += execute("DELETE FROM email_messages WHERE gmail_thrid = %s", (t,))
+        execute("DELETE FROM email_thread_notes WHERE gmail_thrid = %s", (t,))
+        execute("DELETE FROM email_threads WHERE gmail_thrid = %s", (t,))
+        removed_threads += 1
+    logger.info(f"Pruned {removed_threads} threads / {removed_messages} messages that belong to no booking and need nothing")
+    return {"threads": removed_threads, "messages": removed_messages}
+
+
 # ------------------------------------------------------------------ run ---
 
 def run(sheet_file: Path, from_visit: date, open_from: date, max_expand_months: int = 24) -> dict:
@@ -379,6 +402,7 @@ def run(sheet_file: Path, from_visit: date, open_from: date, max_expand_months: 
     report["emails_learned"] = query_one("SELECT COUNT(*) n FROM bookings WHERE contact_email IS NOT NULL")["n"]
 
     report["open_rule"] = apply_open_rule(open_from)
+    report["pruned_non_qualifying"] = prune_non_qualifying()
     report["conversation_counts"] = thread_model.counts()
 
     from src.services.settings import bump_document_number_past
