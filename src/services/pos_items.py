@@ -17,11 +17,12 @@ Lines arrive from the terminals with ``sku`` and ``category`` (bridge build 32+)
 thousandths.
 """
 
+import re
 import threading
 import time
 
 from config.constants import CATEGORIES
-from config.settings import LOYVERSE_API_KEY
+from config.settings import LOYVERSE_API_KEY, POS_REENTRY_CUTOFF
 from src.utils.logging import setup_logger
 
 logger = setup_logger("pos_items")
@@ -32,7 +33,7 @@ GROUP_PAYMENT_SKU = "10037"
 HEAD_SKUS = (VISITOR_SKU,)
 # CATEGORIES keys whose items count as heads, with the names to assume when the account cannot be asked.
 HEAD_CATEGORY_KEYS = {"online_ticket": "Online Tickets", "groups": "Groups"}
-REENTRY_CUTOFF = "18:00"  # a re-entry pass is dead at this time on the day it was issued
+REENTRY_CUTOFF = POS_REENTRY_CUTOFF if re.fullmatch(r"[0-2]?\d:[0-5]\d", POS_REENTRY_CUTOFF) else "18:00"  # a pass is dead at this time on its day
 THOUSANDTHS = 1000
 NAMES_TTL_SECONDS = 15 * 60
 

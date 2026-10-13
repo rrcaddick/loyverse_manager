@@ -126,3 +126,6 @@ POS_ALERT_EMAILS = (
     else [e.strip() for e in _pos_alert_emails.split(",") if e.strip() and e.strip() != "-"]
 )
 POS_ALERT_WHATSAPP = os.getenv("POS_ALERT_WHATSAPP", "").strip()
+# Time of day after which a re-entry pass is dead (HH:MM, local). 18:00 is the park's rule;
+# override only for a test, and put it back.
+POS_REENTRY_CUTOFF = os.getenv("POS_REENTRY_CUTOFF", "18:00").strip() or "18:00"
