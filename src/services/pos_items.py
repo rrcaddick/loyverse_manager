@@ -79,7 +79,7 @@ class ItemKinds:
         try:
             from src.clients.loyverse import LoyverseClient
 
-            categories = LoyverseClient(LOYVERSE_API_KEY).get("categories").get("categories") or []
+            categories = LoyverseClient(LOYVERSE_API_KEY).get("categories", {}).get("categories") or []
         except Exception as e:  # the gate must keep working on the configured names
             logger.warning(f"could not read Loyverse categories, using configured names: {e}")
             return fallback
@@ -142,12 +142,12 @@ class ItemKinds:
         from src.clients.loyverse import LoyverseClient
 
         client = LoyverseClient(LOYVERSE_API_KEY)
-        categories = {c.get("id"): c for c in client.get("categories").get("categories") or []}
+        categories = {c.get("id"): c for c in client.get("categories", {}).get("categories") or []}
         for key in HEAD_CATEGORY_KEYS:
             cat = categories.get(CATEGORIES.get(key))
             if not cat or cat.get("deleted_at"):
                 problems.append(f"category for {key} ({CATEGORIES.get(key)}) is missing from the account")
-        items = client.get("items").get("items") or []
+        items = client.get("items", {}).get("items") or []
         skus = {}
         for item in items:
             if item.get("deleted_at"):
