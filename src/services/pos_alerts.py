@@ -35,6 +35,7 @@ REDUCTION_EVENTS = ("ticket_reduced", "ticket_replaced")
 FOLLOW_MINUTES = 10
 SUBJECT = "Farmyard POS: ticket reduced"
 VOID_SUBJECT = "Farmyard POS: ticket voided"
+REENTRY_SUBJECT = "Farmyard POS: re-entry flagged"
 # Loyverse's reasons for deleting an open ticket; only a deliberate delete is a void.
 VOID_REASONS = ("deleted_by_user",)
 
@@ -88,9 +89,33 @@ class ReductionAlerts:
         elif event == "ticket_voided":
             text = self._void_text(device_id, employee_name, detail, occurred_at)
             subject = VOID_SUBJECT
+        elif event == "reentry_issued":
+            text = self._reentry_text(device_id, employee_name, detail, occurred_at)
+            subject = REENTRY_SUBJECT
         if text:
             self._deliver(subject, text)
         return text
+
+    @staticmethod
+    def _reentry_text(device_id, employee_name, detail, occurred_at):
+        """Only the flagged passes: more heads than paid for (manager-approved), a typed plate,
+        or an anchor with no countable heads. An ordinary pass is silent."""
+        flags = detail.get("flags") or []
+        if not flags:
+            return None
+        plate = detail.get("plate") or "unknown plate"
+        heads = detail.get("heads")
+        anchor = detail.get("anchor_heads")
+        what = []
+        if "over_anchor" in flags:
+            what.append(f"{heads} heads against an admission for {anchor}")
+        if "zero_count_anchor" in flags:
+            what.append("an admission with no countable heads")
+        if "typed_plate" in flags:
+            what.append("a typed registration")
+        approver = detail.get("approved_by_name")
+        by = f"{employee_name or 'unknown'}" + (f", approved by {approver}'s PIN" if approver else "")
+        return f"{by} issued a re-entry for {plate} at {occurred_at.strftime('%H:%M')} on {device_id}: {'; '.join(what)}."
 
     @staticmethod
     def _void_text(device_id, employee_name, detail, occurred_at):

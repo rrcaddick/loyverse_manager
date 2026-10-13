@@ -173,7 +173,22 @@ that can take payments reduces a ticket, when a cash sale follows any reduction 
 and on every `ticket_voided`; `PosStaffService.reductions_report` / `pos-staff reductions` lists
 reductions. Deleting a whole ticket is blocked for everyone but a Manager: Loyverse checks the same
 permission for it, so the terminal additionally requires `bridge.void_ticket` (Manager only) on
-that check and on the manager PIN that follows a refusal. `DEFAULT_ROLES` (Manager,
+that check and on the manager PIN that follows a refusal.
+
+**Re-entry passes** (`src/services/pos_reentry.py`, agreed 2026-10-13): a re-entry is any ticket
+carrying the Re-Entry line (SKU 10001, R0). The terminal asks `POST /api/pos/reentry/check` before
+saving one (plate, typed?, heads) and `POST /api/pos/reentry/status` before admitting one. Rules:
+an anchor is required (a closed, unrefunded sale today for the plate with heads > 0); scan-or-stricter
+(a scanned anchor refuses a typed re-entry); one open pass per plate; heads up to the anchor's paid
+heads, more needs the Manager PIN on the terminal (`bridge.approve_reentry`) and is flagged; bearer,
+single use, dead at the cut-off (18:00). A refund of the anchor voids open passes (full) or lowers the
+cap (partial). Heads = Visitor (SKU 10000) quantity + any line in the Online Tickets / Groups
+categories; `src/services/pos_items.py` (`ItemKinds`) is the one mapping of SKUs and category ids to
+meanings, served to terminals in the roster `policy.items` block (category *names* resolved from the
+live account, refreshed every 15 min) and checked against the account by `pos-staff items`.
+Anchors come from `open_tickets_history` closed rows (lines carry `sku` + `category` from bridge
+build 32 on), refunds from `refund` audit events. Events `reentry_issued` / `reentry_admitted` /
+`reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report. `DEFAULT_ROLES` (Manager,
 Payment Marshal, Ticket Marshal) are created on the first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
 `PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use

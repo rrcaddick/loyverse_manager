@@ -23,6 +23,10 @@
     pos-staff events [--limit 50] [--employee <id>] [--device <id>] [--event login]
     pos-staff reductions [--days 1]                 saved tickets whose value went down, by whom,
                                                     and whether a (cash) sale on them followed
+    pos-staff reentries [--days 1]                  re-entry passes issued: plate, heads vs the
+                                                    paid admission, who, how each one ended
+    pos-staff items                                 what the Loyverse items mean to the gate and
+                                                    whether the live account still matches
 
 PINs are entered on the command line only here; they are hashed before they touch the DB.
 """
@@ -147,6 +151,42 @@ def cmd_reductions(args, svc):
             print(f"{'':>21}  -> {s['at']} sale by {s['employee_name']} {s['payments']} amount {s['amount_paid']}")
 
 
+def cmd_reentries(args, svc):
+    from datetime import datetime, timedelta
+
+    from src.services.pos_reentry import ReentryService
+
+    since = datetime.now() - timedelta(days=args.days)
+    rows = ReentryService().report(since)
+    if not rows:
+        print(f"no re-entry passes issued since {since:%Y-%m-%d %H:%M}")
+        return
+    for r in rows:
+        over = " OVER PAID COUNT" if r["heads"] > r["anchor_heads"] else ""
+        typed = " typed" if r["typed"] else ""
+        ended = {"used": f"admitted {r['used_at']:%H:%M} by {r['used_by'] or '?'}" + (f" +{r['extras_paid']} paid" if r["extras_paid"] else ""),
+                 "voided": "voided", "expired": "expired unused", "open": "open"}[r["status"]]
+        approved = f"  approved by {r['approved_by']}" if r["approved_by"] else ""
+        print(
+            f"{r['issued_at']:%Y-%m-%d %H:%M}  {r['device'] or '-':<14} {r['plate']:<10} {r['heads']:>2} heads "
+            f"(paid {r['anchor_heads']}){over}{typed}  by {r['issued_by'] or '-':<18} {ended}{approved}"
+        )
+
+
+def cmd_items(args, svc):
+    from src.services.pos_items import ItemKinds
+
+    kinds = ItemKinds.current()
+    print("re-entry SKU:   ", kinds.reentry_sku)
+    print("head SKUs:      ", ", ".join(kinds.head_skus))
+    print("head categories:", ", ".join(kinds.head_categories))
+    print("cut-off:        ", kinds.cutoff)
+    problems = kinds.verify()
+    print("live account:   ", "matches" if not problems else "PROBLEMS")
+    for p in problems:
+        print("  -", p)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="group", required=True)
@@ -183,6 +223,9 @@ def main(argv=None):
 
     reductions = sub.add_parser("reductions")
     reductions.add_argument("--days", type=int, default=1)
+    reentries = sub.add_parser("reentries")
+    reentries.add_argument("--days", type=int, default=1)
+    sub.add_parser("items")
 
     args = parser.parse_args(argv)
     svc = PosStaffService()
@@ -194,6 +237,8 @@ def main(argv=None):
             "devices": cmd_devices,
             "events": cmd_events,
             "reductions": cmd_reductions,
+            "reentries": cmd_reentries,
+            "items": cmd_items,
         }[args.group](args, svc)
     except (PinPolicyError, PinInUseError, DeviceAuthError, ValueError) as e:
         sys.exit(f"error: {e}")

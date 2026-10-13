@@ -19,10 +19,19 @@ POST /api/pos/events
         {"uuid": "...", "event": "login", "employee_id": 3, "employee_name": "Thandi",
          "occurred_at": 1760000000000, "detail": {...}}, ...]}
     -> {"status": "ok", "accepted": n, "rejected": m}
+
+POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/pos_reentry.py)
+    {"device_id", "device_secret", "plate": "CJ90587", "typed": false, "heads": 3}
+    -> {"allowed", "reason", "requires_manager", "anchor_heads", "anchors", "anchor_scanned", "flags"}
+
+POST /api/pos/reentry/status     is this open pass still good to admit?
+    {"device_id", "device_secret", "plate": "CJ90587", "sync_id": 1791889697637449}
+    -> {"valid", "reason", "heads", "heads_cap", "over_cap", "flags"}
 """
 
 from flask import Blueprint, jsonify, request
 
+from src.services.pos_reentry import ReentryService
 from src.services.pos_staff import DeviceAuthError, PosStaffService
 from web.routes.bridge_auth import require_bridge_token
 
@@ -61,6 +70,28 @@ def events():
         return error
     accepted, rejected = service.record_events(device, payload.get("events"))
     return jsonify({"status": "ok", "accepted": accepted, "rejected": rejected})
+
+
+@pos_staff_bp.route("/pos/reentry/check", methods=["POST"])
+@require_bridge_token
+def reentry_check():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    verdict = ReentryService().check_issue(payload.get("plate"), bool(payload.get("typed")), payload.get("heads"))
+    return jsonify(verdict)
+
+
+@pos_staff_bp.route("/pos/reentry/status", methods=["POST"])
+@require_bridge_token
+def reentry_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    verdict = ReentryService().check_return(payload.get("plate"), payload.get("sync_id"))
+    return jsonify(verdict)
 
 
 @pos_staff_bp.route("/pos/devices/register", methods=["POST"])

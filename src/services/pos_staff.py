@@ -39,6 +39,7 @@ from src.models.pos_staff import (
     PosRole,
 )
 from src.services.pos_alerts import ReductionAlerts
+from src.services.pos_items import ItemKinds
 from src.utils.logging import setup_logger
 
 logger = setup_logger("pos_staff")
@@ -121,13 +122,17 @@ BRIDGE_PERMISSIONS = [
     "bridge.apps",
     # delete a whole open ticket (a ticket, once created, must end in a sale or a manager's void)
     "bridge.void_ticket",
+    # issue a re-entry pass at the exit (anchored to a paid admission; src/services/pos_reentry.py)
+    "bridge.issue_reentry",
+    # approve a re-entry for more heads than the admission paid for (the manager PIN on the terminal)
+    "bridge.approve_reentry",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
 
 # Starter roles, created the first time the roster is built on an empty pos_roles table.
 # The permission names are Loyverse's; the back office UI shows them under Loyverse's labels.
-GATE_BRIDGE_PERMISSIONS = ["bridge.manual_plate", "bridge.replace_ticket_items"]
+GATE_BRIDGE_PERMISSIONS = ["bridge.manual_plate", "bridge.replace_ticket_items", "bridge.issue_reentry"]
 PAYMENT_MARSHAL_PERMISSIONS = [
     "ACCESS_LPOS",
     "ACCESS_ACCEPT_PAYMENTS",  # Accept payments
@@ -149,6 +154,7 @@ DEFAULT_ROLES = [
             "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
             "ACCESS_VIEW_CURRENT_SHIFT",  # View shift report
             "bridge.void_ticket",  # delete a whole open ticket
+            "bridge.approve_reentry",  # re-entry for more heads than were paid for
         ],
     ),
     (
@@ -183,6 +189,9 @@ EVENT_NAMES = {
     "ticket_printed",
     "ticket_reduced",
     "ticket_voided",
+    "reentry_issued",
+    "reentry_admitted",
+    "reentry_refused",
     "ticket_opened",
     "roster_refreshed",
 }
@@ -383,7 +392,13 @@ class PosStaffService:
                 "iterations": int(params["iterations"]),
                 "length": int(params["key_length"]),
             },
-            "policy": {"max_attempts": MAX_ATTEMPTS, "lockout_seconds": LOCKOUT_SECONDS},
+            "policy": {
+                "max_attempts": MAX_ATTEMPTS,
+                "lockout_seconds": LOCKOUT_SECONDS,
+                # What the Loyverse items mean, so every terminal and this back office agree
+                # (re-entry line, which lines count as heads, the re-entry cut-off time).
+                "items": ItemKinds.current().policy(),
+            },
             "employees": employees,
         }
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
