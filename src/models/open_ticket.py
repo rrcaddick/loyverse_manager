@@ -254,31 +254,45 @@ class OpenTicket:
     @classmethod
     def held_quantities(cls, keys, exclude_sync_id=0):
         """Held quantity (thousandths) per (product_id, variant_id) key in one pass over the
-        open tickets. A key with variant_id None matches every variant of the product."""
+        open tickets. A key with variant_id None matches every variant of the product.
+        See ``held_by`` for the same with the holding tickets named."""
+        return {k: sum(h["quantity"] for h in holders) for k, holders in cls.held_by(keys, exclude_sync_id).items()}
+
+    @classmethod
+    def held_by(cls, keys, exclude_sync_id=0):
+        """Per (product_id, variant_id) key: the open tickets holding it, as
+        [{"name", "sync_id", "ticket_id", "quantity"}] (quantity in thousandths). A line is
+        counted once per key even when the feed did not say which variant it was."""
         wanted = {(int(pid), vid) for pid, vid in keys}
-        held = {k: 0 for k in wanted}
+        held = {k: [] for k in wanted}
         if not wanted:
             return held
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "SELECT receipt_json FROM open_tickets_current WHERE status = 'open'"
+                    "SELECT ticket_id, receipt_json FROM open_tickets_current WHERE status = 'open'"
                 )
-                for row in cursor.fetchall():
-                    try:
-                        receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}
-                    except (TypeError, ValueError):
-                        continue
-                    if exclude_sync_id and int(receipt.get("sync_id") or 0) == int(exclude_sync_id):
-                        continue
-                    for item in receipt.get("items") or []:
-                        if item.get("voided"):
-                            continue
-                        pid = int(item.get("product_id") or 0)
-                        vid = item.get("variant_id")
-                        for key in ((pid, None), (pid, vid)):
-                            if key in held and (key[1] is None or vid == key[1]):
-                                held[key] += int(item.get("quantity") or 0)
+                rows = cursor.fetchall()
+        for row in rows:
+            try:
+                receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}
+            except (TypeError, ValueError):
+                continue
+            if exclude_sync_id and int(receipt.get("sync_id") or 0) == int(exclude_sync_id):
+                continue
+            per_key = {}
+            for item in receipt.get("items") or []:
+                if item.get("voided"):
+                    continue
+                pid = int(item.get("product_id") or 0)
+                vid = item.get("variant_id")
+                matching = {(pid, None)} | ({(pid, vid)} if vid is not None else set())
+                for key in matching & wanted:
+                    per_key[key] = per_key.get(key, 0) + int(item.get("quantity") or 0)
+            for key, quantity in per_key.items():
+                if quantity > 0:
+                    held[key].append({"name": receipt.get("name") or "", "sync_id": receipt.get("sync_id"),
+                                      "ticket_id": row["ticket_id"], "quantity": quantity})
         return held
 
     @classmethod
