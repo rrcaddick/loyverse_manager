@@ -49,6 +49,8 @@ PUBLIC_ENDPOINTS = {
     "pos_staff.roster",
     "pos_staff.events",
     "pos_staff.register_device",
+    "pos_staff.reentry_check",
+    "pos_staff.reentry_status",
 }
 
 SESSION_KEY = "authenticated_as"
