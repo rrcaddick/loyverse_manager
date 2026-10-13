@@ -1,9 +1,12 @@
-"""Alerts on reductions of saved tickets: the one thing the staff system flags rather than blocks.
+"""Alerts on reductions and voids of saved tickets.
 
-The money trail is already complete (every ticket version, who changed it, the sale that
-followed and how it was paid), so a reduction by a role that can take payments is not
-stopped; it is reported the moment it arrives, and again if a cash sale on that ticket follows
-within ``follow_minutes``. One such alert proves nothing; the pattern over weeks does.
+Reductions are flagged rather than blocked: the money trail is already complete (every ticket
+version, who changed it, the sale that followed and how it was paid), so a reduction by a role
+that can take payments is reported the moment it arrives, and a cash sale that follows any
+reduction (by anyone: a marshal's correction and a cashier's cash sale is the pairing to watch)
+within ``follow_minutes`` is reported too. One such alert proves nothing; the pattern over weeks
+does. Whole-ticket voids are blocked on the terminal for everyone but a Manager, so the rare
+one that happens is reported as well.
 
 Hooked from ``PosStaffService.record_events`` for every event the terminals upload. Sending
 runs on a thread so the terminal's upload never waits on SMTP or WhatsApp.
@@ -31,6 +34,9 @@ CHARGING_PERMISSION = "ACCESS_ACCEPT_PAYMENTS"
 REDUCTION_EVENTS = ("ticket_reduced", "ticket_replaced")
 FOLLOW_MINUTES = 10
 SUBJECT = "Farmyard POS: ticket reduced"
+VOID_SUBJECT = "Farmyard POS: ticket voided"
+# Loyverse's reasons for deleting an open ticket; only a deliberate delete is a void.
+VOID_REASONS = ("deleted_by_user",)
 
 
 def _rands(minor_units):
@@ -76,14 +82,27 @@ class ReductionAlerts:
         if not self.enabled():
             return None
         text = None
+        subject = SUBJECT
         if event in REDUCTION_EVENTS:
             if self._can_charge(employee_id):
                 text = self._reduction_text(device_id, employee_name, event, detail, occurred_at)
         elif event == "sale":
             text = self._cash_after_reduction_text(device_id, employee_name, detail, occurred_at)
+        elif event == "ticket_voided":
+            text = self._void_text(device_id, employee_name, detail, occurred_at)
+            subject = VOID_SUBJECT
         if text:
-            self._deliver(SUBJECT, text)
+            self._deliver(subject, text)
         return text
+
+    @staticmethod
+    def _void_text(device_id, employee_name, detail, occurred_at):
+        if str(detail.get("reason") or "") not in VOID_REASONS:
+            return None
+        ticket = detail.get("ticket") or f"sync {detail.get('sync_id')}"
+        approver = detail.get("approved_by_name")
+        by = f"{employee_name or 'unknown'}" + (f", approved by {approver}'s PIN" if approver else "")
+        return f"{by} voided ticket {ticket} at {occurred_at.strftime('%H:%M')} on {device_id}."
 
     def _reduction_text(self, device_id, employee_name, event, detail, occurred_at):
         when = occurred_at.strftime("%H:%M")
@@ -108,7 +127,6 @@ class ReductionAlerts:
             r for r in self._events_since(since, list(REDUCTION_EVENTS))
             if str((r.get("detail") or {}).get("sync_id")) == str(sync_id)
             and r["occurred_at"] <= occurred_at
-            and self._can_charge(r.get("employee_id"))
         ]
         if not reductions:
             return None

@@ -109,7 +109,9 @@ LOYVERSE_PERMISSIONS = [
 
 # Permissions for the bridge's own features. Reductions of saved tickets are not gated by the
 # bridge: Loyverse's own ACCESS_DELETE_OPEN_RECEIPT decides who may remove a saved line, and
-# the back office alerts on reductions by charging roles (src/services/pos_alerts.py).
+# the back office alerts on them (src/services/pos_alerts.py). Deleting a whole ticket is the
+# exception: Loyverse checks the same permission for it, so the terminal additionally requires
+# bridge.void_ticket there (and on the manager PIN that follows a refusal).
 BRIDGE_PERMISSIONS = [
     # REPLACE ITEMS on the "ticket already open" screen (rewrites a saved ticket's lines)
     "bridge.replace_ticket_items",
@@ -117,6 +119,8 @@ BRIDGE_PERMISSIONS = [
     "bridge.manual_plate",
     # the Apps entry in the terminal's drawer (Loyverse has no permission for it)
     "bridge.apps",
+    # delete a whole open ticket (a ticket, once created, must end in a sale or a manager's void)
+    "bridge.void_ticket",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -144,6 +148,7 @@ DEFAULT_ROLES = [
             "ACCESS_CONNECT_PRINTERS",  # Change settings
             "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
             "ACCESS_VIEW_CURRENT_SHIFT",  # View shift report
+            "bridge.void_ticket",  # delete a whole open ticket
         ],
     ),
     (
@@ -153,11 +158,11 @@ DEFAULT_ROLES = [
     ),
     (
         "Ticket Marshal",
-        "Opens and corrects tickets at the gate on a phone; no payments",
+        "Opens and corrects tickets at the gate on a phone; no payments, cannot delete a ticket",
         [
             "ACCESS_LPOS",
             "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
-            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
+            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets (lines, not whole tickets)
             *GATE_BRIDGE_PERMISSIONS,
         ],
     ),
@@ -177,6 +182,7 @@ EVENT_NAMES = {
     "ticket_replaced",
     "ticket_printed",
     "ticket_reduced",
+    "ticket_voided",
     "ticket_opened",
     "roster_refreshed",
 }

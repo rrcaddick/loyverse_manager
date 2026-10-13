@@ -159,7 +159,7 @@ append-only `pos_employee_events`. The terminals no longer trust Loyverse's empl
 permissions and a *per-device verifier* (HMAC-SHA256 of the stored PBKDF2 PIN hash under that
 device's secret), and `POST /api/pos/events` receives the terminal's audit trail (login,
 logout, login_failed, locked, approval, approval_failed, permission_denied, sale, refund,
-ticket_replaced; de-duplicated on the event's UUID). Both need the bridge token **and** the
+ticket_replaced, ticket_reduced, ticket_voided, ...; de-duplicated on the event's UUID). Both need the bridge token **and** the
 device's `device_id` + `device_secret` in the body (`PosStaffService.authenticate_device`,
 constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: the service
 hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
@@ -169,8 +169,11 @@ Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.apps` shows t
 tickets are flagged, not blocked: Loyverse's own `ACCESS_DELETE_OPEN_RECEIPT` ("Void saved items in
 open tickets") decides who may remove a saved line, and `src/services/pos_alerts.py` (hooked into
 `record_events`) e-mails `POS_ALERT_EMAILS` (optionally WhatsApps `POS_ALERT_WHATSAPP`) when a role
-that can take payments reduces a ticket and when a cash sale follows within ten minutes;
-`PosStaffService.reductions_report` / `pos-staff reductions` lists them. `DEFAULT_ROLES` (Manager,
+that can take payments reduces a ticket, when a cash sale follows any reduction within ten minutes,
+and on every `ticket_voided`; `PosStaffService.reductions_report` / `pos-staff reductions` lists
+reductions. Deleting a whole ticket is blocked for everyone but a Manager: Loyverse checks the same
+permission for it, so the terminal additionally requires `bridge.void_ticket` (Manager only) on
+that check and on the manager PIN that follows a refusal. `DEFAULT_ROLES` (Manager,
 Payment Marshal, Ticket Marshal) are created on the first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
 `PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use
