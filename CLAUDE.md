@@ -168,7 +168,7 @@ Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.apps` shows t
 `bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features). Reductions of saved
 tickets are flagged, not blocked: Loyverse's own `ACCESS_DELETE_OPEN_RECEIPT` ("Void saved items in
 open tickets") decides who may remove a saved line, and `src/services/pos_alerts.py` (hooked into
-`record_events`) e-mails `POS_ALERT_EMAILS` (optionally WhatsApps `POS_ALERT_WHATSAPP`) when a role
+`record_events`) e-mails `POS_ALERT_EMAILS` only (never `NOTIFICATION_RECIPIENTS`, which includes the managers; unset = no e-mail; optionally WhatsApps `POS_ALERT_WHATSAPP`) when a role
 that can take payments reduces a ticket, when a cash sale follows any reduction within ten minutes,
 and on every `ticket_voided`; `PosStaffService.reductions_report` / `pos-staff reductions` lists
 reductions. Deleting a whole ticket is blocked for everyone but a Manager: Loyverse checks the same

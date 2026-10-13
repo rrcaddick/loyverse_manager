@@ -118,6 +118,8 @@ ARONIUM_PATH = BASE_DIR / "db" / "aronium" / "pos.db"
 # "-" = no e-mail. POS_ALERT_WHATSAPP (27821234567) sends the same text over WhatsApp as well,
 # which only reaches a number that has messaged the business in the last 24 hours (Meta's rule
 # for free-form text).
+# Staff audit alerts (reductions, voids) go ONLY to these addresses; unset or "-" = no e-mail.
+# Never route them to NOTIFICATION_RECIPIENTS: that list includes the managers the alerts concern.
 _pos_alert_emails = os.getenv("POS_ALERT_EMAILS")
 POS_ALERT_EMAILS = (
     None if _pos_alert_emails is None

@@ -64,13 +64,10 @@ class ReductionAlerts:
 
     @classmethod
     def default(cls):
+        """Recipients come only from POS_ALERT_EMAILS / POS_ALERT_WHATSAPP. Never the general
+        notification list: staff audit alerts are for the owner, not the managers they concern."""
         if cls._default is None:
-            emails = POS_ALERT_EMAILS
-            if emails is None:
-                from config.constants import NOTIFICATION_RECIPIENTS
-
-                emails = NOTIFICATION_RECIPIENTS
-            cls._default = cls(emails, POS_ALERT_WHATSAPP)
+            cls._default = cls(POS_ALERT_EMAILS or [], POS_ALERT_WHATSAPP)
         return cls._default
 
     def enabled(self):
