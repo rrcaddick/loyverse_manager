@@ -4,6 +4,7 @@
     pos-staff roles                                 list roles and their permissions
     pos-staff roles add "Gate lead" --perm ACCESS_LPOS --perm bridge.manual_plate [--description ...]
     pos-staff roles set-perms <role id> --perm ... [--perm ...]
+    pos-staff roles rename <role> --to "Payment Marshal" [--description ...]
     pos-staff permissions                           list every permission name
 
     pos-staff employees [--all]                     list employees (active only by default)
@@ -64,6 +65,11 @@ def cmd_roles(args, svc):
     elif args.action == "set-perms":
         r = svc.update_role(_role_id(args.name), permissions=args.perm or [])
         print(f"role {r['id']} {r['name']}: {', '.join(r['permissions'])}")
+    elif args.action == "rename":
+        if not args.to and args.description is None:
+            sys.exit("give --to and/or --description")
+        r = svc.update_role(_role_id(args.name), name=args.to, description=args.description)
+        print(f"role {r['id']} {r['name']}: {r['description']}")
 
 
 def cmd_permissions(args, svc):
@@ -146,9 +152,10 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="group", required=True)
 
     roles = sub.add_parser("roles")
-    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms"])
+    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename"])
     roles.add_argument("name", nargs="?")
     roles.add_argument("--description")
+    roles.add_argument("--to", help="new name for 'rename'")
     roles.add_argument("--perm", action="append")
 
     sub.add_parser("permissions")

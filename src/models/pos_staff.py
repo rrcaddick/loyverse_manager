@@ -323,6 +323,27 @@ class PosEmployeeEvent:
         return inserted == 1
 
     @classmethod
+    def since(cls, since, events):
+        """Events of the given kinds at or after ``since``, oldest first, detail parsed."""
+        if not events:
+            return []
+        placeholders = ", ".join(["%s"] * len(events))
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM pos_employee_events
+                    WHERE occurred_at >= %s AND event IN ({placeholders})
+                    ORDER BY occurred_at, id
+                    """,
+                    (since, *events),
+                )
+                rows = cursor.fetchall()
+        for row in rows:
+            row["detail"] = _json(row["detail"])
+        return rows
+
+    @classmethod
     def recent(cls, limit=200, employee_id=None, device_id=None, event=None, since=None):
         where, params = [], []
         if employee_id is not None:

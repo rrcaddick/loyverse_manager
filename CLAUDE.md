@@ -164,12 +164,14 @@ device's `device_id` + `device_secret` in the body (`PosStaffService.authenticat
 constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: the service
 hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
 makes shared PINs impossible, and `validate_pin` rejects runs and repeats. Permission names are
-Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.settings` and `bridge.apps` show those
-drawer entries, `bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features,
-`bridge.reduce_saved_ticket` lets a charging role reduce a saved ticket without a manager's PIN);
-`PosStaffService.reductions_report` / `pos-staff reductions` lists reductions of saved tickets with
-approvals and any cash sale that followed; `DEFAULT_ROLES` are created on the
-first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
+Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.apps` shows the Apps drawer entry,
+`bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features). Reductions of saved
+tickets are flagged, not blocked: Loyverse's own `ACCESS_DELETE_OPEN_RECEIPT` ("Void saved items in
+open tickets") decides who may remove a saved line, and `src/services/pos_alerts.py` (hooked into
+`record_events`) e-mails `POS_ALERT_EMAILS` (optionally WhatsApps `POS_ALERT_WHATSAPP`) when a role
+that can take payments reduces a ticket and when a cash sale follows within ten minutes;
+`PosStaffService.reductions_report` / `pos-staff reductions` lists them. `DEFAULT_ROLES` (Manager,
+Payment Marshal, Ticket Marshal) are created on the first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
 `PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use
 the bridge makes its own secret and `POST /api/pos/devices/register` records it under the device's

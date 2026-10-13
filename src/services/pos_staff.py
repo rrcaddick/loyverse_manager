@@ -38,6 +38,10 @@ from src.models.pos_staff import (
     PosReductionReport,
     PosRole,
 )
+from src.services.pos_alerts import ReductionAlerts
+from src.utils.logging import setup_logger
+
+logger = setup_logger("pos_staff")
 
 ALGORITHM = "pbkdf2-sha256"
 ITERATIONS = 50_000
@@ -64,12 +68,12 @@ LOCKOUT_SECONDS = 30
 #   ACCESS_VIEW_RECEIPTS                 open the receipts list
 #   ACCESS_REPRINT_RECEIPTS              reprint receipts
 #   ACCESS_NOT_MY_OPENED_RECEIPTS        open tickets saved by other employees
-#   ACCESS_DELETE_OPEN_RECEIPT           delete (void) an open ticket
+#   ACCESS_DELETE_OPEN_RECEIPT           "Void saved items in open tickets" (also deletes a ticket)
 #   ACCESS_VIEW_CURRENT_SHIFT            see the shift report
 #   ACCESS_OPEN_CASH_DRAWER              open the drawer without a sale
 #   ACCESS_VIEW_COST_POS                 see item costs
 #   ACCESS_LPOS_CLIENT_RECALL            look up customers
-#   ACCESS_CONNECT_PRINTERS              printer settings
+#   ACCESS_CONNECT_PRINTERS              "Change settings" (the Settings screen)
 #   ACCESS_LPOS_SUPPORT                  support menu
 # The rest are back-office rights Loyverse never checks on the terminal.
 LOYVERSE_PERMISSIONS = [
@@ -103,68 +107,59 @@ LOYVERSE_PERMISSIONS = [
     "ACCESS_WARES",
 ]
 
-# Permissions for the bridge's own features.
+# Permissions for the bridge's own features. Reductions of saved tickets are not gated by the
+# bridge: Loyverse's own ACCESS_DELETE_OPEN_RECEIPT decides who may remove a saved line, and
+# the back office alerts on reductions by charging roles (src/services/pos_alerts.py).
 BRIDGE_PERMISSIONS = [
     # REPLACE ITEMS on the "ticket already open" screen (rewrites a saved ticket's lines)
     "bridge.replace_ticket_items",
     # type a registration instead of scanning the licence disc
     "bridge.manual_plate",
-    # the Settings entry in the terminal's drawer (Loyverse has no permission for it)
-    "bridge.settings",
-    # the Apps entry in the terminal's drawer
+    # the Apps entry in the terminal's drawer (Loyverse has no permission for it)
     "bridge.apps",
-    # reduce a saved ticket (remove a saved line, REPLACE ITEMS) without a manager's PIN; only
-    # roles that can take payments are ever asked for it (a reduction is worth nothing to a
-    # role that cannot turn it into cash), so marshals correct tickets freely
-    "bridge.reduce_saved_ticket",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
 
 # Starter roles, created the first time the roster is built on an empty pos_roles table.
+# The permission names are Loyverse's; the back office UI shows them under Loyverse's labels.
+GATE_BRIDGE_PERMISSIONS = ["bridge.manual_plate", "bridge.replace_ticket_items"]
+PAYMENT_MARSHAL_PERMISSIONS = [
+    "ACCESS_LPOS",
+    "ACCESS_ACCEPT_PAYMENTS",  # Accept payments
+    "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
+    *GATE_BRIDGE_PERMISSIONS,
+]
 DEFAULT_ROLES = [
     (
         "Manager",
-        "Runs the gate: everything on the terminal, approves cashiers' restricted actions",
+        "Takes payments and runs the gate: receipts, refunds, items, settings, shift report",
         [
-            "ACCESS_LPOS",
-            "ACCESS_ACCEPT_PAYMENTS",
-            "ACCESS_REFUND",
-            "ACCESS_DISCOUNT",
-            "ACCESS_VIEW_RECEIPTS",
-            "ACCESS_REPRINT_RECEIPTS",
-            "ACCESS_NOT_MY_OPENED_RECEIPTS",
-            "ACCESS_DELETE_OPEN_RECEIPT",
-            "ACCESS_VIEW_CURRENT_SHIFT",
-            "ACCESS_OPEN_CASH_DRAWER",
-            "ACCESS_LPOS_CLIENT_RECALL",
-            "ACCESS_CONNECT_PRINTERS",
-            "ACCESS_EDIT_WARE",
-            "ACCESS_LPOS_SUPPORT",
-            "bridge.replace_ticket_items",
-            "bridge.manual_plate",
-            "bridge.settings",
-            "bridge.apps",
-            "bridge.reduce_saved_ticket",
+            *PAYMENT_MARSHAL_PERMISSIONS,
+            "ACCESS_VIEW_RECEIPTS",  # View all receipts
+            "ACCESS_REPRINT_RECEIPTS",  # Reprint and resend receipts
+            "ACCESS_REFUND",  # Perform refunds
+            "ACCESS_EDIT_WARE",  # Manage items
+            "ACCESS_VIEW_COST_POS",  # View cost of items
+            "ACCESS_CONNECT_PRINTERS",  # Change settings
+            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
+            "ACCESS_VIEW_CURRENT_SHIFT",  # View shift report
         ],
     ),
     (
-        "Cashier",
-        "Takes payments at the terminal; refunds, discounts and deleting tickets need a manager's PIN",
-        [
-            "ACCESS_LPOS",
-            "ACCESS_ACCEPT_PAYMENTS",
-            "ACCESS_VIEW_RECEIPTS",
-            "ACCESS_NOT_MY_OPENED_RECEIPTS",
-            "ACCESS_VIEW_CURRENT_SHIFT",
-            "bridge.manual_plate",
-            "bridge.replace_ticket_items",
-        ],
+        "Payment Marshal",
+        "Takes payments on open tickets; cannot void saved items without a manager's PIN",
+        PAYMENT_MARSHAL_PERMISSIONS,
     ),
     (
-        "Marshal",
-        "Opens tickets at the gate on a phone; no payments, refunds or discounts",
-        ["ACCESS_LPOS", "ACCESS_NOT_MY_OPENED_RECEIPTS", "bridge.manual_plate", "bridge.replace_ticket_items"],
+        "Ticket Marshal",
+        "Opens and corrects tickets at the gate on a phone; no payments",
+        [
+            "ACCESS_LPOS",
+            "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
+            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
+            *GATE_BRIDGE_PERMISSIONS,
+        ],
     ),
 ]
 
@@ -416,10 +411,17 @@ class PosStaffService:
             except (KeyError, TypeError, ValueError, OverflowError):
                 rejected += 1
                 continue
-            PosEmployeeEvent.record(
+            inserted = PosEmployeeEvent.record(
                 event_uuid, device["device_id"], employee_id, employee_name, event, detail, occurred_at, received_at
             )
             accepted += 1
+            if inserted:
+                try:
+                    ReductionAlerts.default().consider(
+                        device["device_id"], employee_id, employee_name, event, detail or {}, occurred_at
+                    )
+                except Exception as e:  # an alert must never cost the terminal its upload
+                    logger.error(f"pos alert failed for {event} {event_uuid}: {e}")
         PosDevice.touch(device["device_id"])
         return accepted, rejected
 

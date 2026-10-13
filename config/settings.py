@@ -111,3 +111,16 @@ PAYCLOUD_APP_PRIVATE_KEY = load_key_file("paycloud/app_private_key.pem")
 PAYCLOUD_GATEWAY_PUBLIC_KEY = load_key_file("paycloud/gateway_public_key.pem")
 
 ARONIUM_PATH = BASE_DIR / "db" / "aronium" / "pos.db"
+
+# POS staff alerts (src/services/pos_alerts.py): a saved ticket reduced by a role that can take
+# payments, and any cash sale that follows one. Comma-separated e-mail addresses, sent through
+# the SMTP settings above; unset = the inventory NOTIFICATION_RECIPIENTS (config/constants.py),
+# "-" = no e-mail. POS_ALERT_WHATSAPP (27821234567) sends the same text over WhatsApp as well,
+# which only reaches a number that has messaged the business in the last 24 hours (Meta's rule
+# for free-form text).
+_pos_alert_emails = os.getenv("POS_ALERT_EMAILS")
+POS_ALERT_EMAILS = (
+    None if _pos_alert_emails is None
+    else [e.strip() for e in _pos_alert_emails.split(",") if e.strip() and e.strip() != "-"]
+)
+POS_ALERT_WHATSAPP = os.getenv("POS_ALERT_WHATSAPP", "").strip()
