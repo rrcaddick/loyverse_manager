@@ -188,7 +188,12 @@ meanings, served to terminals in the roster `policy.items` block (category *name
 live account, refreshed every 15 min) and checked against the account by `pos-staff items`.
 Anchors come from `open_tickets_history` closed rows (lines carry `sku` + `category` from bridge
 build 32 on), refunds from `refund` audit events. Events `reentry_issued` / `reentry_admitted` /
-`reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report. `DEFAULT_ROLES` (Manager,
+`reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report.
+`bridge.admit_reentry` (Ticket Marshal) lets a role without Accept payments close a pass and
+nothing else: the terminal hands Loyverse a copy of the role with Accept payments so its payment
+screen opens, but answers the permission itself only while the current ticket is a live pure pass,
+and offers only the Re-Entry payment type (payment types Online / Group / Re-Entry, kind "Other",
+must exist in the Loyverse account; the API cannot create them). `DEFAULT_ROLES` (Manager,
 Payment Marshal, Ticket Marshal) are created on the first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
 PINs, device enrolment, events) until the portal pages exist; UI work goes through
 `PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use

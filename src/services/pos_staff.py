@@ -126,6 +126,8 @@ BRIDGE_PERMISSIONS = [
     "bridge.issue_reentry",
     # approve a re-entry for more heads than the admission paid for (the manager PIN on the terminal)
     "bridge.approve_reentry",
+    # admit a re-entry pass without Accept payments: the only ticket such a role may ever close
+    "bridge.admit_reentry",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -170,6 +172,7 @@ DEFAULT_ROLES = [
             "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
             "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets (lines, not whole tickets)
             *GATE_BRIDGE_PERMISSIONS,
+            "bridge.admit_reentry",  # close a re-entry pass (and nothing else) at the gate
         ],
     ),
 ]
