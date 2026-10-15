@@ -52,6 +52,8 @@ PUBLIC_ENDPOINTS = {
     "pos_staff.receipt_cashiers",
     "pos_staff.reentry_check",
     "pos_staff.reentry_status",
+    "pos_staff.conversions_lookup",
+    "pos_staff.conversions_record",
 }
 
 SESSION_KEY = "authenticated_as"
