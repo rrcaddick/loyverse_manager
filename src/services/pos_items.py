@@ -56,6 +56,10 @@ class ItemKinds:
         self.group_payment_sku = str(group_payment_sku)
         self.head_categories = tuple(head_categories or HEAD_CATEGORY_KEYS.values())
         self._head_categories_norm = {_norm(c) for c in self.head_categories}
+        # the Groups category by name: the terminals keep it out of the sales list and search,
+        # so a group line can only come from scanning the group's ticket
+        keys = list(HEAD_CATEGORY_KEYS)
+        self.groups_category = self.head_categories[keys.index("groups")] if len(self.head_categories) == len(keys) else HEAD_CATEGORY_KEYS["groups"]
         self.cutoff = cutoff
 
     # ---- the live mapping ---------------------------------------------------------------------
@@ -100,6 +104,7 @@ class ItemKinds:
             "reentry_sku": self.reentry_sku,
             "head_skus": list(self.head_skus),
             "head_categories": list(self.head_categories),
+            "groups_category": self.groups_category,
             "cutoff": self.cutoff,
         }
 

@@ -13,6 +13,7 @@
     pos-staff employees clear-pin <employee id>
     pos-staff employees deactivate <employee id> | activate <employee id>
     pos-staff employees set-role <employee id> --role Manager
+    pos-staff employees rename <employee id> --to "Ray"   (first names: it prints on receipts)
 
     pos-staff devices                               list enrolled terminals
     pos-staff devices enrol p5-till-1 [--note "Front gate P5"]
@@ -107,6 +108,11 @@ def cmd_employees(args, svc):
     elif args.action in ("deactivate", "activate"):
         svc.set_active(int(args.name), args.action == "activate")
         print(args.action + "d")
+    elif args.action == "rename":
+        if not args.to:
+            sys.exit("--to required")
+        PosEmployee.update(int(args.name), name=args.to.strip())
+        print(f"employee {args.name} is now {args.to.strip()!r}")
     elif args.action == "set-role":
         e = PosEmployee.update(int(args.name), role_id=_role_id(args.role))
         print(f"{e['name']} is now {e['role_name']}")
@@ -256,12 +262,13 @@ def main(argv=None):
     employees = sub.add_parser("employees")
     employees.add_argument(
         "action", nargs="?", default="list",
-        choices=["list", "add", "set-pin", "clear-pin", "deactivate", "activate", "set-role"],
+        choices=["list", "add", "set-pin", "clear-pin", "deactivate", "activate", "set-role", "rename"],
     )
     employees.add_argument("name", nargs="?", help="employee name (add) or id (other actions)")
     employees.add_argument("--role")
     employees.add_argument("--pin")
     employees.add_argument("--all", action="store_true")
+    employees.add_argument("--to", help="new name for 'rename'")
 
     devices = sub.add_parser("devices")
     devices.add_argument("action", nargs="?", default="list", choices=["list", "enrol", "revoke", "activate"])
