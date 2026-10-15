@@ -208,6 +208,20 @@ book) goes onto the ticket comment and the slip; the `group_entry` event carries
 heads, `person` (the name line), surname, names, ID number, source and the manual flag. `pos-staff groups` lists them; the portal's group page
 should show them. ID numbers live only in the audit (owner/manager access), never on slips.
 
+**Group conversions** (`src/services/pos_conversions.py`, migration 009, agreed 2026-10-15): a car
+that belongs to a group but arrived without the group ticket pays public price; later the same day a
+manager converts it on the terminal (drawer entry "Convert to group", permission
+`bridge.convert_group`): group ticket scanned, receipt named by slip QR or licence disc, the person
+entering captured as at the entrance, then Loyverse's own refund screen where the Visitor quantity
+chosen is the heads. The terminal calls `POST /api/pos/conversions/record` BEFORE the refund runs
+(the row is what waives the refund window), refunds, then closes a group ticket for the heads.
+`POST /api/pos/conversions/lookup` finds today's paid sales by plate or slip sync id. Later stages
+(`refunded`, `admitted`, `refund_failed`, `cancelled`) arrive as `group_conversion` audit events and
+are mirrored by `record_events`. `PosConversionService.heads_for_group(name, day)` is what a group
+invoice adds at the group rate. A conversion's refund does not void re-entry passes
+(`pos_reentry._refunds_from_audit` skips `detail.conversion`). CLI: `pos-staff conversions`,
+`pos-staff roles grant Manager bridge.convert_group` for roles created before this.
+
 **Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
 terminal cannot refund a sale (the refund window has closed, or a card refund failed inside it) it
 offers "Log a refund dispute" instead of a dead end: the customer's name, e-mail, mobile and their

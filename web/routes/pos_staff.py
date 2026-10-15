@@ -32,10 +32,22 @@ POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/po
 POST /api/pos/reentry/status     is this open pass still good to admit?
     {"device_id", "device_secret", "plate": "CJ90587", "sync_id": 1791889697637449}
     -> {"valid", "reason", "heads", "heads_cap", "over_cap", "flags"}
+
+POST /api/pos/conversions/lookup   today's paid sales a group conversion may take (src/services/pos_conversions.py)
+    {"device_id", "device_secret", "plate": "CJ90587"}  or  {..., "open_sync_id": 1791889697637449}  (the slip QR)
+    -> {"receipts": [{"receipt_id", "printed_no", "plate", "closed_at", "heads", "amount", "payment_summary", ...}],
+        "others": [{"printed_no", "closed_at", "reason"}]}
+
+POST /api/pos/conversions/record   the conversion, recorded BEFORE the refund runs (it waives the refund window)
+    {"device_id", "device_secret", "conversion_id": "<uuid>", "receipt_id", "group": "Sunnyside Primary", "heads": 4,
+     "amount_cents", "person": {...}, "employee_id", "employee_name", "recorded_at": ms, ...}
+    -> {"status": "ok", "conversion_id", "stage"}   or 409 {"error": "<why, for the manager>"}
+    Later stages (refunded, admitted, refund_failed, cancelled) come in as "group_conversion" audit events.
 """
 
 from flask import Blueprint, jsonify, request
 
+from src.services.pos_conversions import ConversionRefused, PosConversionService
 from src.services.pos_reentry import ReentryService
 from src.services.pos_staff import DeviceAuthError, PosStaffService
 from web.routes.bridge_auth import require_bridge_token
@@ -126,3 +138,33 @@ def register_device():
     except DeviceAuthError:
         return jsonify({"error": "device not authorised"}), 403
     return jsonify({"status": "ok", "device_id": device["device_id"]})
+
+
+@pos_staff_bp.route("/pos/conversions/lookup", methods=["POST"])
+@require_bridge_token
+def conversions_lookup():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        result = PosConversionService().lookup(plate=payload.get("plate"), open_sync_id=payload.get("open_sync_id"))
+    except ConversionRefused as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"status": "ok", **result})
+
+
+@pos_staff_bp.route("/pos/conversions/record", methods=["POST"])
+@require_bridge_token
+def conversions_record():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        row = PosConversionService().record(device, payload)
+    except ConversionRefused as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"status": "ok", "conversion_id": row["conversion_id"], "stage": row["stage"]})

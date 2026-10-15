@@ -122,7 +122,10 @@ class ReentryService:
         for evt in PosEmployeeEvent.since(start, ["refund"]):
             if evt["occurred_at"] >= end:
                 continue
-            receipt_id = (evt.get("detail") or {}).get("receipt_id")
+            detail = evt.get("detail") or {}
+            if detail.get("conversion"):
+                continue  # the people stay inside, now under a group ticket (pos_conversions.py)
+            receipt_id = detail.get("receipt_id")
             if receipt_id:
                 ids.add(str(receipt_id))
         return ids

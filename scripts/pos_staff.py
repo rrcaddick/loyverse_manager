@@ -35,6 +35,10 @@
     pos-staff disputes show RD-7K3M9P               one dispute with the plate's events that day
     pos-staff disputes resolve RD-7K3M9P --status approved|declined|refunded|investigating
                                         [--note "..."] [--by Ray]
+    pos-staff conversions [--days 7] [--all]        group conversions (public sale moved onto a
+                                                    group ticket) and how far each got
+    pos-staff conversions show <conversion id>      one conversion in full
+    pos-staff roles grant Manager bridge.convert_group   add one permission to an existing role
     pos-staff disputes reply RD-7K3M9P --text "..." [--by Ray]   e-mails the customer (when an
                                                     address was given) and records the answer
 
@@ -84,6 +88,15 @@ def cmd_roles(args, svc):
             sys.exit("give --to and/or --description")
         r = svc.update_role(_role_id(args.name), name=args.to, description=args.description)
         print(f"role {r['id']} {r['name']}: {r['description']}")
+    elif args.action == "grant":
+        if getattr(args, "permission", None):
+            args.perm = (args.perm or []) + [args.permission]
+        if not args.perm:
+            sys.exit("give --perm <permission> (or the permission as the second argument)")
+        role = PosRole.get(_role_id(args.name))
+        wanted = [p for p in args.perm if p not in role["permissions"]]
+        r = svc.update_role(role["id"], permissions=role["permissions"] + wanted)
+        print(f"role {r['id']} {r['name']}: {', '.join(r['permissions'])}" + ("" if wanted else "  (already held)"))
 
 
 def cmd_permissions(args, svc):
@@ -208,6 +221,35 @@ def cmd_groups(args, svc):
         )
 
 
+def cmd_conversions(args, svc):
+    from datetime import datetime, timedelta
+
+    from src.services.pos_conversions import PosConversionService
+
+    if args.action == "show":
+        row = PosConversionService.get(args.number or "")
+        if not row:
+            sys.exit(f"no conversion {args.number}")
+        for k, v in row.items():
+            if k == "detail":
+                continue
+            print(f"{k:<22} {v}")
+        print(json.dumps(row.get("detail") or {}, indent=2, default=str))
+        return
+    since = datetime.now() - timedelta(days=args.days)
+    rows = PosConversionService.list(since=since)
+    if not rows:
+        print(f"no group conversions since {since:%Y-%m-%d}")
+        return
+    for r in rows:
+        print(
+            f"{r['recorded_at']:%Y-%m-%d %H:%M}  {r['device_id']:<14} {str(r['printed_no'] or '?'):<9} {str(r['plate'] or '-'):<10} "
+            f"-> {r['group_name']:<24} {r['heads']:>3} heads  R{(r['amount_cents'] or 0) / 100:.2f}  {r['stage']:<14} "
+            f"{str(r['person'] or '')}{' MANUAL' if r['id_manual'] else ''}  by {r['employee_name'] or '-'}"
+            + (f"  [{r['error']}]" if r.get('error') else "")
+        )
+
+
 def cmd_disputes(args, svc):
     from datetime import datetime, timedelta
 
@@ -273,8 +315,9 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="group", required=True)
 
     roles = sub.add_parser("roles")
-    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename"])
+    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename", "grant"])
     roles.add_argument("name", nargs="?")
+    roles.add_argument("permission", nargs="?", help="for 'grant': the permission to add")
     roles.add_argument("--description")
     roles.add_argument("--to", help="new name for 'rename'")
     roles.add_argument("--perm", action="append")
@@ -310,6 +353,11 @@ def main(argv=None):
     sub.add_parser("items")
     groups = sub.add_parser("groups")
     groups.add_argument("--days", type=int, default=1)
+    conversions = sub.add_parser("conversions")
+    conversions.add_argument("action", nargs="?", default="list", choices=["list", "show"])
+    conversions.add_argument("number", nargs="?", help="conversion id (uuid)")
+    conversions.add_argument("--days", type=int, default=7)
+    conversions.add_argument("--all", action="store_true")
     disputes = sub.add_parser("disputes")
     disputes.add_argument("action", nargs="?", default="list", choices=["list", "show", "resolve", "reply"])
     disputes.add_argument("number", nargs="?", help="dispute number, e.g. RD-7K3M9P")
@@ -332,6 +380,7 @@ def main(argv=None):
             "reductions": cmd_reductions,
             "reentries": cmd_reentries,
             "disputes": cmd_disputes,
+            "conversions": cmd_conversions,
             "groups": cmd_groups,
             "items": cmd_items,
         }[args.group](args, svc)

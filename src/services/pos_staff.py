@@ -128,6 +128,9 @@ BRIDGE_PERMISSIONS = [
     "bridge.approve_reentry",
     # admit a re-entry pass without Accept payments: the only ticket such a role may ever close
     "bridge.admit_reentry",
+    # Convert to group in the terminal's drawer: move a public sale onto a group ticket, refund
+    # outside the window on the strength of the record (src/services/pos_conversions.py)
+    "bridge.convert_group",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -157,6 +160,7 @@ DEFAULT_ROLES = [
             "ACCESS_VIEW_CURRENT_SHIFT",  # View shift report
             "bridge.void_ticket",  # delete a whole open ticket
             "bridge.approve_reentry",  # re-entry for more heads than were paid for
+            "bridge.convert_group",  # move a public sale onto a group ticket later in the day
         ],
     ),
     (
@@ -201,6 +205,7 @@ EVENT_NAMES = {
     "refund_receipt",
     # a person entered under a group ticket: who (licence / smart ID / ID book / typed), which group, which plate
     "group_entry",
+    "group_conversion",
     "ticket_opened",
     "roster_refreshed",
 }
@@ -454,6 +459,13 @@ class PosStaffService:
                     )
                 except Exception as e:  # the audit row is kept; the mirror can be rebuilt from it
                     logger.error(f"mirroring dispute {event_uuid} failed: {e}")
+            if inserted and event == "group_conversion":
+                try:
+                    from src.services.pos_conversions import PosConversionService
+
+                    PosConversionService().on_event(device["device_id"], employee_id, employee_name, detail or {}, occurred_at)
+                except Exception as e:  # the audit row is kept; the stage can be replayed from it
+                    logger.error(f"mirroring conversion event {event_uuid} failed: {e}")
             if inserted:
                 try:
                     ReductionAlerts.default().consider(
