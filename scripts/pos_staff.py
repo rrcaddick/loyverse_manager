@@ -28,6 +28,8 @@
                                                     paid admission, who, how each one ended
     pos-staff items                                 what the Loyverse items mean to the gate and
                                                     whether the live account still matches
+    pos-staff groups [--days 1]                     who entered under each group ticket (surname,
+                                                    initials, ID number, how it was captured)
     pos-staff disputes [--all] [--days 30]          refund disputes logged at the terminals (open
                                                     ones by default)
     pos-staff disputes show RD-7K3M9P               one dispute with the plate's events that day
@@ -186,6 +188,26 @@ def cmd_reentries(args, svc):
         )
 
 
+def cmd_groups(args, svc):
+    from datetime import datetime, timedelta
+
+    since = datetime.now() - timedelta(days=args.days)
+    rows = PosEmployeeEvent.since(since, ["group_entry"])
+    if not rows:
+        print(f"no group entries since {since:%Y-%m-%d %H:%M}")
+        return
+    for r in rows:
+        d = r["detail"] or {}
+        person = d.get("person") or "?"
+        source = d.get("source") or "?"
+        flag = " MANUAL" if d.get("manual") else ""
+        print(
+            f"{r['occurred_at']:%Y-%m-%d %H:%M}  {r['device_id']:<14} {str(d.get('group') or '?'):<24} "
+            f"{str(d.get('plate') or '-'):<10} {str(d.get('heads') or '?'):>3} heads  {person:<22} "
+            f"{str(d.get('id_number') or ''):<14} {source}{flag}  by {r['employee_name'] or '-'}"
+        )
+
+
 def cmd_disputes(args, svc):
     from datetime import datetime, timedelta
 
@@ -286,6 +308,8 @@ def main(argv=None):
     reentries = sub.add_parser("reentries")
     reentries.add_argument("--days", type=int, default=1)
     sub.add_parser("items")
+    groups = sub.add_parser("groups")
+    groups.add_argument("--days", type=int, default=1)
     disputes = sub.add_parser("disputes")
     disputes.add_argument("action", nargs="?", default="list", choices=["list", "show", "resolve", "reply"])
     disputes.add_argument("number", nargs="?", help="dispute number, e.g. RD-7K3M9P")
@@ -308,6 +332,7 @@ def main(argv=None):
             "reductions": cmd_reductions,
             "reentries": cmd_reentries,
             "disputes": cmd_disputes,
+            "groups": cmd_groups,
             "items": cmd_items,
         }[args.group](args, svc)
     except (PinPolicyError, PinInUseError, DeviceAuthError, ValueError) as e:

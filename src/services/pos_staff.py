@@ -199,6 +199,8 @@ EVENT_NAMES = {
     "refund_disputed",
     # a refund receipt was written (its receipt_no and the refunding employee)
     "refund_receipt",
+    # a person entered under a group ticket: who (licence / smart ID / ID book / typed), which group, which plate
+    "group_entry",
     "ticket_opened",
     "roster_refreshed",
 }

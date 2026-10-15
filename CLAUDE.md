@@ -197,6 +197,16 @@ terminal the receipt -> cashier list so the receipt screen, list and reprints sh
 closed the sale on any terminal. The portal's sales pages must take the cashier from these events,
 never from Loyverse's receipt employee field or API.
 
+**Group entries** (agreed 2026-10-15): a group ticket reaches a terminal's ticket only by scanning
+the group's barcode (the Groups category is hidden from the sales list, search and dropdown; a tap
+is refused and logged as `permission_denied`), and before such a ticket is saved or printed the
+terminal captures the person entering: a driving licence card (PDF417, decoded on the terminal
+with the published keys), a smart ID card (plain-text PDF417) or a green ID book (the number
+only), or typed and flagged manual. Surname and initials (or the ID number) go onto the ticket
+comment and the slip; the `group_entry` event carries group, plate, heads, surname, initials,
+ID number, source and the manual flag. `pos-staff groups` lists them; the portal's group page
+should show them. ID numbers live only in the audit (owner/manager access), never on slips.
+
 **Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
 terminal cannot refund a sale (the refund window has closed, or a card refund failed inside it) it
 offers "Log a refund dispute" instead of a dead end: the customer's name, e-mail, mobile and their
