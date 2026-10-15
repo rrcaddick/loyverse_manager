@@ -27,6 +27,13 @@
                                                     paid admission, who, how each one ended
     pos-staff items                                 what the Loyverse items mean to the gate and
                                                     whether the live account still matches
+    pos-staff disputes [--all] [--days 30]          refund disputes logged at the terminals (open
+                                                    ones by default)
+    pos-staff disputes show RD-7K3M9P               one dispute with the plate's events that day
+    pos-staff disputes resolve RD-7K3M9P --status approved|declined|refunded|investigating
+                                        [--note "..."] [--by Ray]
+    pos-staff disputes reply RD-7K3M9P --text "..." [--by Ray]   e-mails the customer (when an
+                                                    address was given) and records the answer
 
 PINs are entered on the command line only here; they are hashed before they touch the DB.
 """
@@ -173,6 +180,52 @@ def cmd_reentries(args, svc):
         )
 
 
+def cmd_disputes(args, svc):
+    from datetime import datetime, timedelta
+
+    from src.services.pos_disputes import PosDisputeService
+
+    if args.action == "list":
+        since = datetime.now() - timedelta(days=args.days)
+        rows = PosDisputeService.list(open_only=not args.all, since=since)
+        if not rows:
+            print("no " + ("" if args.all else "open ") + f"refund disputes since {since:%Y-%m-%d}")
+            return
+        for r in rows:
+            amount = f"R{r['amount_cents'] / 100:.2f}" if r["amount_cents"] is not None else "R?"
+            print(
+                f"{r['dispute_number']:<10} {r['status']:<13} {r['logged_at']:%Y-%m-%d %H:%M}  {r['device_id']:<14} "
+                f"{r['printed_no'] or '?':<8} {r['plate'] or '-':<10} {amount:>9} {r['payment_summary'] or '':<16} "
+                f"{r['customer_name']:<20} {r['customer_mobile'] or r['customer_email'] or '-'}"
+            )
+        return
+    if not args.number:
+        sys.exit("dispute number required")
+    if args.action == "show":
+        d = PosDisputeService.get(args.number)
+        if not d:
+            sys.exit(f"no dispute {args.number}")
+        for key in ("dispute_number", "status", "logged_at", "device_id", "employee_name", "trigger_kind", "refusal",
+                    "printed_no", "order_number", "plate", "sale_at", "register", "sold_by", "amount_cents",
+                    "payment_summary", "transaction_code", "customer_name", "customer_email", "customer_mobile",
+                    "reason", "resolution", "resolved_by", "resolved_at", "reply", "replied_at"):
+            print(f"{key:<17} {d.get(key) if d.get(key) is not None else ''}")
+        print("history (that plate, that day):")
+        for e in d["history"]:
+            who = e["employee_name"] or "-"
+            print(f"  {e['occurred_at']:%H:%M:%S}  {e['device_id']:<14} {e['event']:<16} {who:<18} {json.dumps(e['detail'])[:160]}")
+        return
+    if args.action == "resolve":
+        d = PosDisputeService.resolve(args.number, args.status, args.note, args.by)
+        print(f"{d['dispute_number']} is now {d['status']}")
+        return
+    if args.action == "reply":
+        if not args.text:
+            sys.exit("--text required")
+        channels = PosDisputeService.reply(args.number, args.text, args.by)
+        print(f"reply recorded" + (f", sent by {', '.join(channels)}" if channels else " (no e-mail address; nothing sent)"))
+
+
 def cmd_items(args, svc):
     from src.services.pos_items import ItemKinds
 
@@ -226,6 +279,15 @@ def main(argv=None):
     reentries = sub.add_parser("reentries")
     reentries.add_argument("--days", type=int, default=1)
     sub.add_parser("items")
+    disputes = sub.add_parser("disputes")
+    disputes.add_argument("action", nargs="?", default="list", choices=["list", "show", "resolve", "reply"])
+    disputes.add_argument("number", nargs="?", help="dispute number, e.g. RD-7K3M9P")
+    disputes.add_argument("--all", action="store_true", help="list closed disputes too")
+    disputes.add_argument("--days", type=int, default=30)
+    disputes.add_argument("--status")
+    disputes.add_argument("--note")
+    disputes.add_argument("--text")
+    disputes.add_argument("--by")
 
     args = parser.parse_args(argv)
     svc = PosStaffService()
@@ -238,6 +300,7 @@ def main(argv=None):
             "events": cmd_events,
             "reductions": cmd_reductions,
             "reentries": cmd_reentries,
+            "disputes": cmd_disputes,
             "items": cmd_items,
         }[args.group](args, svc)
     except (PinPolicyError, PinInUseError, DeviceAuthError, ValueError) as e:

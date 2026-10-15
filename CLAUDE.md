@@ -189,6 +189,18 @@ live account, refreshed every 15 min) and checked against the account by `pos-st
 Anchors come from `open_tickets_history` closed rows (lines carry `sku` + `category` from bridge
 build 32 on), refunds from `refund` audit events. Events `reentry_issued` / `reentry_admitted` /
 `reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report.
+**Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
+terminal cannot refund a sale (the refund window has closed, or a card refund failed inside it) it
+offers "Log a refund dispute" instead of a dead end: the customer's name, e-mail, mobile and their
+own words, with the sale attached (receipt, plate, time, register, cashier, amount, card, AddPay
+code), and prints the receipt again with a dispute block and a number (`RD-XXXXXX`, made on the
+terminal) for the customer to keep. It arrives as the `refund_disputed` audit event and is mirrored
+into `pos_refund_disputes` by `record_events`; `PosDisputeService` lists, shows (with every terminal
+event for that plate that day: reductions, voids, re-entries), resolves (open / investigating /
+approved / declined / refunded) and replies (e-mail when an address was given). A dispute never
+moves money. Owner-only, like the audit: the history it carries must not reach managers. Alert to
+`POS_ALERT_EMAILS` on each new dispute. `pos-staff disputes` is the CLI. A card payment can only be
+refunded on the terminal that took it; the terminal says which one, that is a prompt, not a dispute.
 `bridge.admit_reentry` (Ticket Marshal) lets a role without Accept payments close a pass and
 nothing else: the terminal hands Loyverse a copy of the role with Accept payments so its payment
 screen opens, but answers the permission itself only while the current ticket is a live pure pass,

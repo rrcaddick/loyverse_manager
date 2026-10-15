@@ -36,6 +36,7 @@ FOLLOW_MINUTES = 10
 SUBJECT = "Farmyard POS: ticket reduced"
 VOID_SUBJECT = "Farmyard POS: ticket voided"
 REENTRY_SUBJECT = "Farmyard POS: re-entry flagged"
+DISPUTE_SUBJECT = "Farmyard POS: refund dispute logged"
 # Loyverse's reasons for deleting an open ticket; only a deliberate delete is a void.
 VOID_REASONS = ("deleted_by_user",)
 
@@ -92,6 +93,11 @@ class ReductionAlerts:
         elif event == "reentry_issued":
             text = self._reentry_text(device_id, employee_name, detail, occurred_at)
             subject = REENTRY_SUBJECT
+        elif event == "refund_disputed":
+            from src.services.pos_disputes import PosDisputeService
+
+            text = PosDisputeService.alert_text(device_id, employee_name, detail, occurred_at)
+            subject = DISPUTE_SUBJECT
         if text:
             self._deliver(subject, text)
         return text

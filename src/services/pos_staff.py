@@ -195,6 +195,8 @@ EVENT_NAMES = {
     "reentry_issued",
     "reentry_admitted",
     "reentry_refused",
+    # a refund the terminal could not do, logged with the customer's details for the owner
+    "refund_disputed",
     "ticket_opened",
     "roster_refreshed",
 }
@@ -439,6 +441,15 @@ class PosStaffService:
                 event_uuid, device["device_id"], employee_id, employee_name, event, detail, occurred_at, received_at
             )
             accepted += 1
+            if inserted and event == "refund_disputed":
+                try:
+                    from src.services.pos_disputes import PosDisputeService
+
+                    PosDisputeService.record(
+                        device["device_id"], employee_id, employee_name, event_uuid, detail or {}, occurred_at
+                    )
+                except Exception as e:  # the audit row is kept; the mirror can be rebuilt from it
+                    logger.error(f"mirroring dispute {event_uuid} failed: {e}")
             if inserted:
                 try:
                     ReductionAlerts.default().consider(

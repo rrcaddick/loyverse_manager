@@ -19,6 +19,7 @@ POST /api/pos/events
         {"uuid": "...", "event": "login", "employee_id": 3, "employee_name": "Thandi",
          "occurred_at": 1760000000000, "detail": {...}}, ...]}
     -> {"status": "ok", "accepted": n, "rejected": m}
+    A "refund_disputed" event is also mirrored into pos_refund_disputes (src/services/pos_disputes.py).
 
 POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/pos_reentry.py)
     {"device_id", "device_secret", "plate": "CJ90587", "typed": false, "heads": 3}
