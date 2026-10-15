@@ -323,6 +323,30 @@ class PosEmployeeEvent:
         return inserted == 1
 
     @classmethod
+    def received_after(cls, received_after, events, limit=2000):
+        """Events of the given kinds received after the cursor (a datetime), oldest received first,
+        detail parsed. Paged by ``limit``; the caller continues from the last row's received_at."""
+        if not events:
+            return []
+        placeholders = ", ".join(["%s"] * len(events))
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT id, device_id, employee_id, employee_name, event, detail, occurred_at, received_at
+                    FROM pos_employee_events
+                    WHERE received_at > %s AND event IN ({placeholders})
+                    ORDER BY received_at, id
+                    LIMIT %s
+                    """,
+                    (received_after, *events, int(limit)),
+                )
+                rows = cursor.fetchall()
+        for row in rows:
+            row["detail"] = _json(row["detail"])
+        return rows
+
+    @classmethod
     def since(cls, since, events):
         """Events of the given kinds at or after ``since``, oldest first, detail parsed."""
         if not events:

@@ -21,6 +21,10 @@ POST /api/pos/events
     -> {"status": "ok", "accepted": n, "rejected": m}
     A "refund_disputed" event is also mirrored into pos_refund_disputes (src/services/pos_disputes.py).
 
+POST /api/pos/receipts/cashiers  receipt number -> cashier from every terminal's sale / refund_receipt
+    {"device_id", "device_secret", "after": <received_at cursor, epoch ms>}
+    -> {"cashiers": [{"receipt_no": "#1-0020", "employee_id": 2, "name": "Ray", "at": ms}], "cursor": ms, "more": bool}
+
 POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/pos_reentry.py)
     {"device_id", "device_secret", "plate": "CJ90587", "typed": false, "heads": 3}
     -> {"allowed", "reason", "requires_manager", "anchor_heads", "anchors", "anchor_scanned", "flags"}
@@ -71,6 +75,22 @@ def events():
         return error
     accepted, rejected = service.record_events(device, payload.get("events"))
     return jsonify({"status": "ok", "accepted": accepted, "rejected": rejected})
+
+
+@pos_staff_bp.route("/pos/receipts/cashiers", methods=["POST"])
+@require_bridge_token
+def receipt_cashiers():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        after = int(payload.get("after") or 0)
+    except (TypeError, ValueError):
+        after = 0
+    entries, cursor, more = PosStaffService.cashiers(after)
+    return jsonify({"status": "ok", "cashiers": entries, "cursor": cursor, "more": more})
 
 
 @pos_staff_bp.route("/pos/reentry/check", methods=["POST"])

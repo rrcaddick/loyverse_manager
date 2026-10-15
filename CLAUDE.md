@@ -189,6 +189,14 @@ live account, refreshed every 15 min) and checked against the account by `pos-st
 Anchors come from `open_tickets_history` closed rows (lines carry `sku` + `category` from bridge
 build 32 on), refunds from `refund` audit events. Events `reentry_issued` / `reentry_admitted` /
 `reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report.
+**Who sold what** (agreed 2026-10-15): Loyverse only knows its own employees, so every receipt it
+stores and syncs carries the account owner ("Owner"); the real cashier is the bridge's. Sale and
+refund receipts report `receipt_no` ("#1-0020") in the `sale` / `refund_receipt` events, and
+`POST /api/pos/receipts/cashiers` (`PosStaffService.cashiers`, cursor on `received_at`) hands every
+terminal the receipt -> cashier list so the receipt screen, list and reprints show the cashier who
+closed the sale on any terminal. The portal's sales pages must take the cashier from these events,
+never from Loyverse's receipt employee field or API.
+
 **Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
 terminal cannot refund a sale (the refund window has closed, or a card refund failed inside it) it
 offers "Log a refund dispute" instead of a dead end: the customer's name, e-mail, mobile and their

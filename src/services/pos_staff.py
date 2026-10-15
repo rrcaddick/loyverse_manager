@@ -197,6 +197,8 @@ EVENT_NAMES = {
     "reentry_refused",
     # a refund the terminal could not do, logged with the customer's details for the owner
     "refund_disputed",
+    # a refund receipt was written (its receipt_no and the refunding employee)
+    "refund_receipt",
     "ticket_opened",
     "roster_refreshed",
 }
@@ -459,6 +461,34 @@ class PosStaffService:
                     logger.error(f"pos alert failed for {event} {event_uuid}: {e}")
         PosDevice.touch(device["device_id"])
         return accepted, rejected
+
+    # ---- who sold what: receipt -> cashier for the terminals -------------------------------------
+
+    CASHIER_EVENTS = ("sale", "refund_receipt")
+
+    @classmethod
+    def cashiers(cls, received_after_ms, limit=2000):
+        """Receipt number -> cashier, from every terminal's sale and refund_receipt events received
+        after the cursor (epoch ms). The terminals pull this every roster period so a receipt closed
+        on one terminal shows its real cashier on the others (Loyverse's own copy says the owner).
+        Returns (entries, cursor_ms, more)."""
+        cursor = datetime.fromtimestamp(max(0, int(received_after_ms or 0)) / 1000)
+        rows = PosEmployeeEvent.received_after(cursor, cls.CASHIER_EVENTS, limit)
+        entries = []
+        last = None
+        for row in rows:
+            detail = row["detail"] or {}
+            number = detail.get("receipt_no")
+            if number:
+                entries.append({
+                    "receipt_no": str(number),
+                    "employee_id": row["employee_id"],
+                    "name": row["employee_name"] or "",
+                    "at": int(row["occurred_at"].timestamp() * 1000),
+                })
+            last = row["received_at"]
+        cursor_ms = int(last.timestamp() * 1000) if last else int(received_after_ms or 0)
+        return entries, cursor_ms, len(rows) >= limit
 
     # ---- reductions report -------------------------------------------------------------------
 
