@@ -202,9 +202,10 @@ the group's barcode (the Groups category is hidden from the sales list, search a
 is refused and logged as `permission_denied`), and before such a ticket is saved or printed the
 terminal captures the person entering: a driving licence card (PDF417, decoded on the terminal
 with the published keys), a smart ID card (plain-text PDF417) or a green ID book (the number
-only), or typed and flagged manual. Surname and initials (or the ID number) go onto the ticket
-comment and the slip; the `group_entry` event carries group, plate, heads, surname, initials,
-ID number, source and the manual flag. `pos-staff groups` lists them; the portal's group page
+only), or the driver's name typed and flagged manual (nothing else is typed). The name line
+("TJ NKOSI" from a licence, "THANDI JANE NKOSI" from a smart ID, "ID 8001015009087" from an ID
+book) goes onto the ticket comment and the slip; the `group_entry` event carries group, plate,
+heads, `person` (the name line), surname, names, ID number, source and the manual flag. `pos-staff groups` lists them; the portal's group page
 should show them. ID numbers live only in the audit (owner/manager access), never on slips.
 
 **Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
