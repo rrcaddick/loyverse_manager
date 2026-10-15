@@ -29,8 +29,11 @@ logger = setup_logger(__name__)
 
 PUBLIC_CATEGORY = "Public"
 STAGES = ("recorded", "refunded", "admitted", "refund_failed", "cancelled")
-# a conversion in one of these still owns its receipt: a second record for the receipt is refused
-ACTIVE_STAGES = ("recorded", "refunded", "admitted", "refund_failed")
+# a conversion in one of these owns its receipt for good: a second record for the receipt is refused
+DONE_STAGES = ("refunded", "admitted")
+# a conversion in one of these is waiting for its refund; a new record for the same receipt supersedes it
+PENDING_STAGES = ("recorded", "refund_failed")
+ACTIVE_STAGES = DONE_STAGES + PENDING_STAGES
 # heads the group is invoiced for
 COUNTED_STAGES = ("refunded", "admitted")
 
@@ -166,13 +169,14 @@ class PosConversionService:
             heads = self.public_heads(receipt.get("items"))
             rid = str(receipt.get("receipt_id") or "")
             active = [c for c in PosGroupConversion.for_receipt(rid) if c["stage"] in ACTIVE_STAGES] if rid else []
+            done = [c for c in active if c["stage"] in DONE_STAGES]
             reason = None
             if heads <= 0:
                 reason = "no paid Public admission on this receipt"
             elif rid in refunded:
                 reason = "this receipt was refunded"
-            elif active:
-                c = active[0]
+            elif done:
+                c = done[0]
                 reason = f"already converted to {c['group_name']} ({c['stage'].replace('_', ' ')})"
             out.append(
                 {
@@ -232,6 +236,11 @@ class PosConversionService:
             raise ConversionRefused(receipt["reason"])
         if heads > receipt["heads"]:
             raise ConversionRefused(f"only {receipt['heads']} Public admission(s) on this receipt")
+        # a conversion still waiting for its refund (the terminal restarted, the refund never ran) gives way
+        for stale in PosGroupConversion.for_receipt(receipt_id):
+            if stale["stage"] in PENDING_STAGES and stale["conversion_id"] != conversion_id:
+                PosGroupConversion.update(stale["conversion_id"], {"stage": "cancelled", "error": f"superseded by {conversion_id}"})
+                logger.info(f"conversion {stale['conversion_id']} superseded by {conversion_id}")
         person = payload.get("person") or {}
         values = {
             "conversion_id": conversion_id,
