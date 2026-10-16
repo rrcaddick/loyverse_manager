@@ -47,16 +47,25 @@ class PosAuthParams:
         return cls.get()
 
 
+UNSET = object()
+
+
 class PosRole:
+    @classmethod
+    def _role(cls, row):
+        if row:
+            row["permissions"] = _json(row["permissions"]) or []
+            # None = every sales-screen category; otherwise the category names the role may pick
+            row["sales_categories"] = _json(row.get("sales_categories"))
+        return row
+
     @classmethod
     def all(cls):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM pos_roles ORDER BY name")
                 rows = cursor.fetchall()
-        for row in rows:
-            row["permissions"] = _json(row["permissions"]) or []
-        return rows
+        return [cls._role(row) for row in rows]
 
     @classmethod
     def get(cls, role_id):
@@ -64,9 +73,7 @@ class PosRole:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM pos_roles WHERE id = %s", (role_id,))
                 row = cursor.fetchone()
-        if row:
-            row["permissions"] = _json(row["permissions"]) or []
-        return row
+        return cls._role(row)
 
     @classmethod
     def get_by_name(cls, name):
@@ -74,24 +81,23 @@ class PosRole:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM pos_roles WHERE name = %s", (name,))
                 row = cursor.fetchone()
-        if row:
-            row["permissions"] = _json(row["permissions"]) or []
-        return row
+        return cls._role(row)
 
     @classmethod
-    def create(cls, name, description, permissions):
+    def create(cls, name, description, permissions, sales_categories=None):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO pos_roles (name, description, permissions) VALUES (%s, %s, %s)",
-                    (name, description, json.dumps(sorted(permissions))),
+                    "INSERT INTO pos_roles (name, description, permissions, sales_categories) VALUES (%s, %s, %s, %s)",
+                    (name, description, json.dumps(sorted(permissions)),
+                     None if sales_categories is None else json.dumps(list(sales_categories))),
                 )
                 role_id = cursor.lastrowid
             conn.commit()
         return cls.get(role_id)
 
     @classmethod
-    def update(cls, role_id, name=None, description=None, permissions=None):
+    def update(cls, role_id, name=None, description=None, permissions=None, sales_categories=UNSET):
         sets, params = [], []
         if name is not None:
             sets.append("name = %s")
@@ -102,6 +108,9 @@ class PosRole:
         if permissions is not None:
             sets.append("permissions = %s")
             params.append(json.dumps(sorted(permissions)))
+        if sales_categories is not UNSET:
+            sets.append("sales_categories = %s")
+            params.append(None if sales_categories is None else json.dumps(list(sales_categories)))
         if not sets:
             return cls.get(role_id)
         params.append(role_id)
@@ -125,7 +134,8 @@ class PosRole:
 class PosEmployee:
     SELECT = """
         SELECT e.id, e.name, e.role_id, r.name AS role_name, r.permissions AS role_permissions,
-               e.pin_hash, e.pin_set_at, e.active, e.loyverse_merchant_id, e.scope, e.created_at, e.updated_at
+               e.pin_hash, e.pin_set_at, e.active, e.loyverse_merchant_id, e.scope, e.created_at, e.updated_at,
+               r.sales_categories AS role_categories
         FROM pos_employees e
         JOIN pos_roles r ON r.id = e.role_id
     """
@@ -134,6 +144,7 @@ class PosEmployee:
     def _rows(cls, rows):
         for row in rows:
             row["permissions"] = _json(row.pop("role_permissions")) or []
+            row["categories"] = _json(row.pop("role_categories"))  # None = every category
             row["has_pin"] = row["pin_hash"] is not None
         return rows
 

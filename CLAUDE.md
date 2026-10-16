@@ -359,3 +359,9 @@ policy-passing PIN once (run it with stdout to a private file when the PIN must 
 The re-entry cut-off (`POS_REENTRY_CUTOFF`, 18:00 on prod) applies to the live account only;
 training terminals get `POS_REENTRY_CUTOFF_TRAINING` (default 23:59) in their roster policy and
 in the server-side checks (`ItemKinds.for_request()` / `scoped(live)`), so training can run after hours.
+**Sales-screen categories per role** (migration 012, 2026-10-16): `pos_roles.sales_categories` (JSON
+list of names, NULL = all) travels to the terminals as each employee's `categories` in the roster;
+the bridge trims the category dropdown to it (Public always offered, Groups scan-only, and the
+All items / Favourites / Discounts entries dropped for everyone). Prod: Manager and Owner all,
+Payment Marshal = Public, Online Tickets, Gazeebos; Ticket Marshal = Public, Online Tickets.
+`pos-staff roles set-categories <role> --category ... | --all-categories`.

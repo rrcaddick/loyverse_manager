@@ -43,6 +43,9 @@
                                                     group ticket) and how far each got
     pos-staff conversions show <conversion id>      one conversion in full
     pos-staff roles grant Manager bridge.convert_group   add one permission to an existing role
+    pos-staff roles set-categories "Ticket Marshal" --category Public --category "Online Tickets"
+                                                    which sales-screen categories the role may
+                                                    pick (Public always; --all-categories = every one)
     pos-staff disputes reply RD-7K3M9P --text "..." [--by Ray]   e-mails the customer (when an
                                                     address was given) and records the answer
     pos-staff accounts                              the Loyverse accounts the terminals report
@@ -94,6 +97,15 @@ def cmd_roles(args, svc):
         for r in PosRole.all():
             print(f"{r['id']:>3}  {r['name']:<16} {r['description']}")
             print(f"      {', '.join(r['permissions'])}")
+            cats = r.get("sales_categories")
+            print(f"      categories: {'all' if cats is None else ', '.join(cats)}")
+    elif args.action == "set-categories":
+        cats = None if args.all_categories else [c.strip() for c in (args.category or []) if c.strip()]
+        if cats is not None and not cats:
+            sys.exit("give --category <name> (repeatable) or --all-categories")
+        r = svc.update_role(_role_id(args.name), sales_categories=cats)
+        cats = r.get("sales_categories")
+        print(f"role {r['id']} {r['name']}: categories {'all' if cats is None else ', '.join(cats)}")
     elif args.action == "add":
         r = svc.create_role(args.name, args.description or "", args.perm or [])
         print(f"created role {r['id']} {r['name']}")
@@ -387,13 +399,14 @@ def main(argv=None):
     accounts.add_argument("name", nargs="?", help="owner id ('untagged' for rows from builds before the tag; 'auto' for live)")
     accounts.add_argument("--yes", action="store_true")
     roles = sub.add_parser("roles")
-    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename", "grant"])
+    roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename", "grant", "set-categories"])
     roles.add_argument("name", nargs="?")
     roles.add_argument("permission", nargs="?", help="for 'grant': the permission to add")
     roles.add_argument("--description")
     roles.add_argument("--to", help="new name for 'rename'")
     roles.add_argument("--perm", action="append")
-
+    roles.add_argument("--category", action="append", help="for 'set-categories': a sales-screen category name (repeatable)")
+    roles.add_argument("--all-categories", action="store_true", help="for 'set-categories': every category")
     sub.add_parser("permissions")
 
     employees = sub.add_parser("employees")

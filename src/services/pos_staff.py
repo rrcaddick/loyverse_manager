@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 import pymysql
 
 from src.models.pos_staff import (
+    UNSET,
     PosAuthParams,
     PosDevice,
     PosEmployee,
@@ -144,6 +145,13 @@ PAYMENT_MARSHAL_PERMISSIONS = [
     "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
     *GATE_BRIDGE_PERMISSIONS,
 ]
+# Which sales-screen categories each default role may pick from (None / absent = all of them;
+# Public is always offered; Groups is scan-only for everyone). Ray, 2026-10-16.
+DEFAULT_SALES_CATEGORIES = {
+    "Payment Marshal": ["Public", "Online Tickets", "Gazeebos"],
+    "Ticket Marshal": ["Public", "Online Tickets"],
+}
+
 DEFAULT_ROLES = [
     (
         "Manager",
@@ -298,16 +306,19 @@ class PosStaffService:
     def create_role(self, name, description, permissions):
         return PosRole.create(name.strip(), description.strip(), self.validate_permissions(permissions))
 
-    def update_role(self, role_id, name=None, description=None, permissions=None):
+    def update_role(self, role_id, name=None, description=None, permissions=None, sales_categories=UNSET):
         if permissions is not None:
             permissions = self.validate_permissions(permissions)
-        return PosRole.update(role_id, name=name, description=description, permissions=permissions)
+        if sales_categories is not UNSET and sales_categories is not None:
+            sales_categories = [str(c).strip() for c in sales_categories if str(c).strip()]
+        return PosRole.update(role_id, name=name, description=description, permissions=permissions,
+                              sales_categories=sales_categories)
 
     def ensure_default_roles(self):
         if PosRole.all():
             return
         for name, description, permissions in DEFAULT_ROLES:
-            PosRole.create(name, description, permissions)
+            PosRole.create(name, description, permissions, sales_categories=DEFAULT_SALES_CATEGORIES.get(name))
 
     def create_employee(self, name, role_id, pin=None, loyverse_merchant_id=None, scope="live"):
         name = name.strip()
@@ -427,6 +438,7 @@ class PosStaffService:
                     "name": e["name"],
                     "role": e["role_name"],
                     "permissions": e["permissions"],
+                    "categories": e["categories"],
                     "verifier": self.verifier(device["secret_hex"], e["pin_hash"]),
                 }
             )
