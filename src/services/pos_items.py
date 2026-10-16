@@ -126,6 +126,7 @@ class ItemKinds:
             "head_categories": list(self.head_categories),
             "groups_category": self.groups_category,
             "cutoff": self.cutoff,
+            "group_payment_sku": GROUP_PAYMENT_SKU,
         }
 
     # ---- classifying lines --------------------------------------------------------------------

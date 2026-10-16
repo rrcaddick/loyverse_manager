@@ -365,3 +365,12 @@ the bridge trims the category dropdown to it (Public always offered, Groups scan
 All items / Favourites / Discounts entries dropped for everyone). Prod: Manager and Owner all,
 Payment Marshal = Public, Online Tickets, Gazeebos; Ticket Marshal = Public, Online Tickets.
 `pos-staff roles set-categories <role> --category ... | --all-categories`.
+
+**Group payments** (`src/services/pos_group_payments.py`, migration 013, 2026-10-16): a terminal takes
+a group's payment only after scanning the group's ticket (Ray: no manual choice anywhere group-related,
+"not even me as the owner can add a count or payment to a group without scanning a ticket"). Before
+charging it asks `POST /api/pos/groups/status` (heads admitted under the ticket today from the closed
+R0 group sales, heads converted, what was paid already); the closed receipt comes in as a
+`group_payment` audit event whose `paid` stage is mirrored into `pos_group_payments`, keyed by the
+barcode. Permission `bridge.group_payment` (Manager default; granted to Manager and Owner on prod).
+`pos-staff group-payments [--days 7]`. The policy block now carries `group_payment_sku` (10037).
