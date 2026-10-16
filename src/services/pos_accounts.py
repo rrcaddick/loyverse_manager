@@ -55,7 +55,7 @@ class PosAccountService:
             try:
                 from src.clients.loyverse import LoyverseClient
 
-                merchant = LoyverseClient(LOYVERSE_API_KEY).get("merchant") or {}
+                merchant = LoyverseClient(LOYVERSE_API_KEY).get("merchant", {}) or {}
                 email = str(merchant.get("email") or "").strip().lower() or None
             except Exception as e:
                 logger.warning(f"Loyverse merchant lookup failed: {e}")
