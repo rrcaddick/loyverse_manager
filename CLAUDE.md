@@ -381,3 +381,8 @@ re-entry anchors); the terminals refuse a second non-re-entry sale for the plate
 re-entry (lines added to a returning re-entry stay allowed). `check_return` refuses a pass admitted
 within `POS_REENTRY_COOLDOWN_MINUTES` (default 5) of being issued (`"cooldown": true`; a manager's
 PIN overrides at the terminal); the roster policy carries `reentry_cooldown_minutes`.
+
+**Held stock counts a Loyverse ticket once** (2026-10-16 late): a ticket synced to two terminals is
+fed by both, each under its own `ticket_id` (unique key), with the same `sync_id`; `OpenTicket.held_by`
+/ `held_quantity` now count one hold per `sync_id` (newest row wins). Before this the pay point saw
+"4 held in other open tickets" for a ticket's own seats and the stock guard refused Admit and Save.

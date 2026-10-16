@@ -275,15 +275,24 @@ class OpenTicket:
         clause, params = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT ticket_id, receipt_json FROM open_tickets_current WHERE status = 'open'" + clause, params)
+                cursor.execute("SELECT ticket_id, receipt_json FROM open_tickets_current WHERE status = 'open'" + clause
+                               + " ORDER BY last_seen_at DESC, id DESC", params)
                 rows = cursor.fetchall()
+        seen_sync = set()
         for row in rows:
             try:
                 receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}
             except (TypeError, ValueError):
                 continue
-            if exclude_sync_id and int(receipt.get("sync_id") or 0) == int(exclude_sync_id):
+            sync_id = int(receipt.get("sync_id") or 0)
+            if exclude_sync_id and sync_id == int(exclude_sync_id):
                 continue
+            # one Loyverse ticket, fed by every terminal it synced to, is one hold (each terminal
+            # gives it its own ticket_id, so the rows differ; the sync id is the ticket)
+            if sync_id:
+                if sync_id in seen_sync:
+                    continue
+                seen_sync.add(sync_id)
             per_key = {}
             for item in receipt.get("items") or []:
                 if item.get("voided"):
@@ -308,16 +317,23 @@ class OpenTicket:
         """
         held = 0
         clause, params = account_clause()
+        seen_sync = set()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT receipt_json FROM open_tickets_current WHERE status = 'open'" + clause, params)
+                cursor.execute("SELECT receipt_json FROM open_tickets_current WHERE status = 'open'" + clause
+                               + " ORDER BY last_seen_at DESC, id DESC", params)
                 for row in cursor.fetchall():
                     try:
                         receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}
                     except (TypeError, ValueError):
                         continue
-                    if int(receipt.get("sync_id") or 0) == int(exclude_sync_id or 0) and exclude_sync_id:
+                    sync_id = int(receipt.get("sync_id") or 0)
+                    if exclude_sync_id and sync_id == int(exclude_sync_id):
                         continue
+                    if sync_id:
+                        if sync_id in seen_sync:
+                            continue  # the same ticket, reported by another terminal
+                        seen_sync.add(sync_id)
                     for item in receipt.get("items") or []:
                         if item.get("voided"):
                             continue
