@@ -8,7 +8,11 @@
     pos-staff permissions                           list every permission name
 
     pos-staff employees [--all]                     list employees (active only by default)
-    pos-staff employees add "Thandi" --role Cashier --pin 2580
+    pos-staff employees add "Thandi" --role Cashier --pin 2580      a live login (the real account's
+                                                    terminals); --training = a training login
+                                                    (the throwaway account's terminals);
+                                                    --random-pin prints a policy-passing PIN once
+    pos-staff employees set-scope <employee id> --to live|training
     pos-staff employees set-pin <employee id> --pin 4719
     pos-staff employees clear-pin <employee id>
     pos-staff employees deactivate <employee id> | activate <employee id>
@@ -121,10 +125,19 @@ def cmd_employees(args, svc):
     if args.action == "list":
         for e in PosEmployee.all(include_inactive=args.all):
             flags = ("" if e["active"] else " INACTIVE") + ("" if e["has_pin"] else " NO-PIN")
-            print(f"{e['id']:>3}  {e['name']:<24} {e['role_name']:<12}{flags}")
+            print(f"{e['id']:>3}  {e['name']:<24} {e['role_name']:<16} {e['scope']:<9}{flags}")
     elif args.action == "add":
-        e = svc.create_employee(args.name, _role_id(args.role), pin=args.pin)
-        print(f"created employee {e['id']} {e['name']} ({e['role_name']}){'' if e['has_pin'] else ', no PIN yet'}")
+        pin = svc.random_pin() if args.random_pin else args.pin
+        scope = "training" if args.training else "live"
+        e = svc.create_employee(args.name, _role_id(args.role), pin=pin, scope=scope)
+        print(f"created employee {e['id']} {e['name']} ({e['role_name']}, {scope}){'' if e['has_pin'] else ', no PIN yet'}")
+        if args.random_pin:
+            print(f"PIN for {e['name']} (shown once): {pin}")
+    elif args.action == "set-scope":
+        if args.to not in ("live", "training"):
+            sys.exit("--to live|training")
+        e = svc.set_scope(int(args.name), args.to)
+        print(f"{e['name']} is now a {args.to} login")
     elif args.action == "set-pin":
         if not args.pin:
             sys.exit("--pin required")
@@ -386,13 +399,15 @@ def main(argv=None):
     employees = sub.add_parser("employees")
     employees.add_argument(
         "action", nargs="?", default="list",
-        choices=["list", "add", "set-pin", "clear-pin", "deactivate", "activate", "set-role", "rename"],
+        choices=["list", "add", "set-pin", "clear-pin", "deactivate", "activate", "set-role", "rename", "set-scope"],
     )
     employees.add_argument("name", nargs="?", help="employee name (add) or id (other actions)")
     employees.add_argument("--role")
     employees.add_argument("--pin")
+    employees.add_argument("--random-pin", action="store_true", help="make a PIN and print it once")
+    employees.add_argument("--training", action="store_true", help="a training login (default: live)")
     employees.add_argument("--all", action="store_true")
-    employees.add_argument("--to", help="new name for 'rename'")
+    employees.add_argument("--to", help="new name for 'rename'; live|training for 'set-scope'")
 
     devices = sub.add_parser("devices")
     devices.add_argument("action", nargs="?", default="list", choices=["list", "enrol", "revoke", "activate"])

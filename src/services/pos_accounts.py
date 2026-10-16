@@ -83,6 +83,12 @@ class PosAccountService:
         return wanted
 
     @classmethod
+    def is_live_account(cls, account_id):
+        """Whether this account is the live one (false while no account is known to be live)."""
+        live = PosAccount.live_id()
+        return live is not None and account_id == live
+
+    @classmethod
     def owner_facing(cls):
         """Whether the current scope is the owner's data: the live account, or no account is known
         to be live yet (then nothing is held back). A training terminal's request is never owner-facing."""

@@ -219,6 +219,11 @@ class PinInUseError(ValueError):
     """Another employee already has this PIN."""
 
 
+# Who a terminal may log in: the live account's terminals get the live staff, every other
+# terminal (the throwaway training account) the training staff.
+SCOPES = ("live", "training")
+
+
 class DeviceAuthError(Exception):
     """The terminal is unknown, revoked, or presented the wrong secret."""
 
@@ -304,20 +309,41 @@ class PosStaffService:
         for name, description, permissions in DEFAULT_ROLES:
             PosRole.create(name, description, permissions)
 
-    def create_employee(self, name, role_id, pin=None, loyverse_merchant_id=None):
+    def create_employee(self, name, role_id, pin=None, loyverse_merchant_id=None, scope="live"):
         name = name.strip()
         if not name:
             raise ValueError("name required")
         if PosRole.get(role_id) is None:
             raise ValueError("unknown role")
+        if scope not in SCOPES:
+            raise ValueError(f"scope must be one of {', '.join(SCOPES)}")
         pin_hash = None
         if pin is not None:
             self.validate_pin(pin)
             pin_hash = self.hash_pin(pin)
         try:
-            return PosEmployee.create(name, role_id, pin_hash=pin_hash, loyverse_merchant_id=loyverse_merchant_id)
+            return PosEmployee.create(name, role_id, pin_hash=pin_hash, loyverse_merchant_id=loyverse_merchant_id, scope=scope)
         except pymysql.err.IntegrityError as e:
             raise PinInUseError("That PIN is already in use") from e
+
+    @staticmethod
+    def set_scope(employee_id, scope):
+        if scope not in SCOPES:
+            raise ValueError(f"scope must be one of {', '.join(SCOPES)}")
+        if PosEmployee.get(employee_id) is None:
+            raise ValueError("unknown employee")
+        return PosEmployee.update(employee_id, scope=scope)
+
+    @classmethod
+    def random_pin(cls):
+        """A PIN that passes the policy, for a login whose PIN must not pass through anyone's hands."""
+        while True:
+            pin = "".join(secrets.choice("0123456789") for _ in range(PIN_MIN_LENGTH))
+            try:
+                cls.validate_pin(pin)
+                return pin
+            except PinPolicyError:
+                continue
 
     def set_pin(self, employee_id, pin):
         self.validate_pin(pin)
@@ -388,8 +414,13 @@ class PosStaffService:
         parameters and the lockout policy. ``version`` changes whenever anything in it does."""
         self.ensure_default_roles()
         params = self.auth_params()
+        # The live account's terminals log in the live staff; any other terminal the training staff.
+        from src.models.pos_accounts import current_account
+        from src.services.pos_accounts import PosAccountService
+
+        scope = "live" if PosAccountService.is_live_account(current_account()) else "training"
         employees = []
-        for e in PosEmployee.roster():
+        for e in PosEmployee.roster(scope):
             employees.append(
                 {
                     "id": e["id"],
@@ -414,6 +445,7 @@ class PosStaffService:
                 "items": ItemKinds.current().policy(),
             },
             "employees": employees,
+            "scope": scope,
         }
         canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
         body["version"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()

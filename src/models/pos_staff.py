@@ -125,7 +125,7 @@ class PosRole:
 class PosEmployee:
     SELECT = """
         SELECT e.id, e.name, e.role_id, r.name AS role_name, r.permissions AS role_permissions,
-               e.pin_hash, e.pin_set_at, e.active, e.loyverse_merchant_id, e.created_at, e.updated_at
+               e.pin_hash, e.pin_set_at, e.active, e.loyverse_merchant_id, e.scope, e.created_at, e.updated_at
         FROM pos_employees e
         JOIN pos_roles r ON r.id = e.role_id
     """
@@ -163,13 +163,13 @@ class PosEmployee:
         return cls._rows([row])[0] if row else None
 
     @classmethod
-    def create(cls, name, role_id, pin_hash=None, loyverse_merchant_id=None):
+    def create(cls, name, role_id, pin_hash=None, loyverse_merchant_id=None, scope="live"):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO pos_employees (name, role_id, pin_hash, pin_set_at, loyverse_merchant_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO pos_employees (name, role_id, pin_hash, pin_set_at, loyverse_merchant_id, scope)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         name,
@@ -177,6 +177,7 @@ class PosEmployee:
                         pin_hash,
                         datetime.now() if pin_hash else None,
                         loyverse_merchant_id,
+                        scope,
                     ),
                 )
                 employee_id = cursor.lastrowid
@@ -184,8 +185,11 @@ class PosEmployee:
         return cls.get(employee_id)
 
     @classmethod
-    def update(cls, employee_id, name=None, role_id=None, active=None, loyverse_merchant_id=None):
+    def update(cls, employee_id, name=None, role_id=None, active=None, loyverse_merchant_id=None, scope=None):
         sets, params = [], []
+        if scope is not None:
+            sets.append("scope = %s")
+            params.append(scope)
         if name is not None:
             sets.append("name = %s")
             params.append(name)
@@ -221,12 +225,14 @@ class PosEmployee:
         return updated == 1
 
     @classmethod
-    def roster(cls):
-        """Active employees that can log in, with their role's permissions."""
+    def roster(cls, scope=None):
+        """Active employees that can log in (of one scope: 'live' or 'training'), with their role's permissions."""
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    f"{cls.SELECT} WHERE e.active = 1 AND e.pin_hash IS NOT NULL ORDER BY e.id"
+                    f"{cls.SELECT} WHERE e.active = 1 AND e.pin_hash IS NOT NULL" + (" AND e.scope = %s" if scope else "")
+                    + " ORDER BY e.id",
+                    (scope,) if scope else (),
                 )
                 rows = cursor.fetchall()
         return cls._rows(rows)

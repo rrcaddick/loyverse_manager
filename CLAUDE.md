@@ -350,3 +350,9 @@ cached ten minutes, re-checked at every registration/roster call; `POS_LIVE_ACCO
 Alerts fire only for the live account. `pos-staff accounts` lists accounts with row counts and
 terminals; `accounts purge <id> --yes` deletes one account's rows; `accounts adopt <id>` tags
 rows written before the tag existed; `--account <id>|all` before any listing changes its scope.
+
+**Live vs training staff** (migration 011, 2026-10-16): `pos_employees.scope` is `live` or
+`training`; a roster request from a terminal on the live account gets the live employees, any
+other terminal the training ones (`roster_for_device`). Everyone from before the migration is
+training; `pos-staff employees add` makes live logins unless `--training`; `--random-pin` prints a
+policy-passing PIN once (run it with stdout to a private file when the PIN must not be seen).
