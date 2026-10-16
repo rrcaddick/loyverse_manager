@@ -429,6 +429,10 @@ class PosStaffService:
         rejected individually so one bad event never blocks the batch."""
         accepted = rejected = 0
         received_at = datetime.now()
+        # A training terminal's events are stored like any other but never alert the owner.
+        from src.services.pos_accounts import PosAccountService
+
+        alerts_wanted = PosAccountService.owner_facing()
         for evt in events if isinstance(events, list) else []:
             try:
                 event_uuid = str(uuid.UUID(str(evt["uuid"])))
@@ -466,7 +470,7 @@ class PosStaffService:
                     PosConversionService().on_event(device["device_id"], employee_id, employee_name, detail or {}, occurred_at)
                 except Exception as e:  # the audit row is kept; the stage can be replayed from it
                     logger.error(f"mirroring conversion event {event_uuid} failed: {e}")
-            if inserted:
+            if inserted and alerts_wanted:
                 try:
                     ReductionAlerts.default().consider(
                         device["device_id"], employee_id, employee_name, event, detail or {}, occurred_at

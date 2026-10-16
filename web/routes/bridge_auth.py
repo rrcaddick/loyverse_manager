@@ -11,6 +11,11 @@ from functools import wraps
 from flask import jsonify, request
 
 from config.settings import BRIDGE_TOKEN
+from src.models.pos_accounts import bind_request
+
+# The Loyverse account the terminal is signed into (its owner id); every row the request
+# writes is tagged with it and every row it reads is filtered by it.
+ACCOUNT_HEADER = "X-Loyverse-Account"
 
 
 def _presented_token() -> str:
@@ -31,6 +36,7 @@ def require_bridge_token(view):
     def wrapper(*args, **kwargs):
         if not bridge_token_ok():
             return jsonify({"error": "invalid bridge token"}), 401
+        bind_request(request.headers.get(ACCOUNT_HEADER, ""))
         return view(*args, **kwargs)
 
     return wrapper

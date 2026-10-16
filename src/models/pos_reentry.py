@@ -7,9 +7,8 @@ open-ticket feed; this module only reads them.  Everything about what a row *mea
 
 import json
 
+from src.models.pos_accounts import account_clause
 from src.repositories.mysql import get_db_connection
-
-
 def _json(value):
     if value is None or isinstance(value, dict):
         return value
@@ -25,6 +24,7 @@ class PosReentryData:
     @classmethod
     def closed_receipts(cls, start, end):
         """Closed rows in [start, end) that carry a receipt, with the ticket's vehicle source."""
+        clause, scope = account_clause("h")
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -34,9 +34,8 @@ class PosReentryData:
                     LEFT JOIN open_tickets_current c ON c.ticket_id = h.ticket_id
                     WHERE h.event_type = 'closed' AND h.receipt_json IS NOT NULL
                       AND h.observed_at >= %s AND h.observed_at < %s
-                    ORDER BY h.observed_at, h.id
-                    """,
-                    (start, end),
+                    """ + clause + " ORDER BY h.observed_at, h.id",
+                    (start, end, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:
@@ -45,6 +44,7 @@ class PosReentryData:
 
     @classmethod
     def open_tickets(cls):
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -52,7 +52,8 @@ class PosReentryData:
                     SELECT ticket_id, receipt_json, plate, vehicle_source, opened_at, last_modified_at
                     FROM open_tickets_current
                     WHERE status = 'open'
-                    """
+                    """ + clause,
+                    scope,
                 )
                 rows = cursor.fetchall()
         for row in rows:
@@ -61,6 +62,7 @@ class PosReentryData:
 
     @classmethod
     def history(cls, since, until):
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -68,9 +70,8 @@ class PosReentryData:
                     SELECT ticket_id, event_type, observed_at, receipt_json
                     FROM open_tickets_history
                     WHERE observed_at BETWEEN %s AND %s
-                    ORDER BY ticket_id, observed_at, id
-                    """,
-                    (since, until),
+                    """ + clause + " ORDER BY ticket_id, observed_at, id",
+                    (since, until, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:

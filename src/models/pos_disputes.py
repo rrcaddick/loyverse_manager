@@ -6,9 +6,8 @@ What a dispute means, how it is resolved and answered lives in ``src/services/po
 
 import json
 
+from src.models.pos_accounts import account_clause, account_value
 from src.repositories.mysql import get_db_connection
-
-
 def _json(value):
     if value is None or isinstance(value, dict):
         return value
@@ -23,7 +22,7 @@ class PosRefundDispute:
         "dispute_number", "event_uuid", "device_id", "employee_id", "employee_name", "logged_at",
         "trigger_kind", "refusal", "receipt_id", "printed_no", "order_number", "plate", "sale_at",
         "register", "sold_by", "amount_cents", "payment_summary", "transaction_code",
-        "customer_name", "customer_email", "customer_mobile", "reason", "detail",
+        "customer_name", "customer_email", "customer_mobile", "reason", "detail", "account_id",
     )
 
     @classmethod
@@ -35,6 +34,7 @@ class PosRefundDispute:
     @classmethod
     def create(cls, values):
         """Insert one dispute; a repeat of the same event (outbox retry) is ignored. Returns True when inserted."""
+        values = {**values, "account_id": values.get("account_id") or account_value()}
         cols = [c for c in cls.COLUMNS if c in values]
         params = [json.dumps(values[c]) if c == "detail" and values[c] is not None else values[c] for c in cols]
         with get_db_connection() as conn:
@@ -51,7 +51,8 @@ class PosRefundDispute:
     def get(cls, dispute_number):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM pos_refund_disputes WHERE dispute_number = %s", (dispute_number,))
+                clause, scope = account_clause()
+                cursor.execute("SELECT * FROM pos_refund_disputes WHERE dispute_number = %s" + clause, (dispute_number, *scope))
                 return cls._row(cursor.fetchone())
 
     @classmethod
@@ -63,6 +64,10 @@ class PosRefundDispute:
         if since is not None:
             where.append("logged_at >= %s")
             params.append(since)
+        scoped, scope = account_clause()
+        if scoped:
+            where.append(scoped[len(" AND "):])
+            params.extend(scope)
         clause = f"WHERE {' AND '.join(where)}" if where else ""
         params.append(int(limit))
         with get_db_connection() as conn:
@@ -88,6 +93,7 @@ class PosRefundDispute:
         """Everything the terminals reported about this plate's ticket in [start, end): reductions,
         voids, re-entries, the sale and any refund. The event detail names the ticket as `name`,
         `ticket` or `plate` depending on the event."""
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -98,9 +104,8 @@ class PosRefundDispute:
                       AND (JSON_UNQUOTE(JSON_EXTRACT(detail, '$.name')) = %s
                            OR JSON_UNQUOTE(JSON_EXTRACT(detail, '$.ticket')) = %s
                            OR JSON_UNQUOTE(JSON_EXTRACT(detail, '$.plate')) = %s)
-                    ORDER BY occurred_at, id
-                    """,
-                    (start, end, plate, plate, plate),
+                    """ + clause + " ORDER BY occurred_at, id",
+                    (start, end, plate, plate, plate, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:

@@ -8,9 +8,8 @@ No hashing or policy lives here; see ``src/services/pos_staff.py``.
 import json
 from datetime import datetime
 
+from src.models.pos_accounts import account_clause, account_value
 from src.repositories.mysql import get_db_connection
-
-
 def _json(value):
     if value is None:
         return None
@@ -279,6 +278,14 @@ class PosDevice:
         return updated == 1
 
     @classmethod
+    def set_account(cls, device_id, account_id):
+        """The Loyverse account the terminal last reported being signed into."""
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE pos_devices SET account_id = %s WHERE device_id = %s", (account_id, device_id))
+            conn.commit()
+
+    @classmethod
     def touch(cls, device_id, roster_version=None):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
@@ -304,8 +311,8 @@ class PosEmployeeEvent:
                 cursor.execute(
                     """
                     INSERT IGNORE INTO pos_employee_events
-                    (event_uuid, device_id, employee_id, employee_name, event, detail, occurred_at, received_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (event_uuid, device_id, employee_id, employee_name, event, detail, occurred_at, received_at, account_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         event_uuid,
@@ -316,6 +323,7 @@ class PosEmployeeEvent:
                         json.dumps(detail) if detail is not None else None,
                         occurred_at,
                         received_at,
+                        account_value(),
                     ),
                 )
                 inserted = cursor.rowcount
@@ -329,17 +337,18 @@ class PosEmployeeEvent:
         if not events:
             return []
         placeholders = ", ".join(["%s"] * len(events))
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
                     SELECT id, device_id, employee_id, employee_name, event, detail, occurred_at, received_at
                     FROM pos_employee_events
-                    WHERE received_at > %s AND event IN ({placeholders})
+                    WHERE received_at > %s AND event IN ({placeholders}){clause}
                     ORDER BY received_at, id
                     LIMIT %s
                     """,
-                    (received_after, *events, int(limit)),
+                    (received_after, *events, *scope, int(limit)),
                 )
                 rows = cursor.fetchall()
         for row in rows:
@@ -352,15 +361,16 @@ class PosEmployeeEvent:
         if not events:
             return []
         placeholders = ", ".join(["%s"] * len(events))
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
                     SELECT * FROM pos_employee_events
-                    WHERE occurred_at >= %s AND event IN ({placeholders})
+                    WHERE occurred_at >= %s AND event IN ({placeholders}){clause}
                     ORDER BY occurred_at, id
                     """,
-                    (since, *events),
+                    (since, *events, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:
@@ -382,6 +392,10 @@ class PosEmployeeEvent:
         if since is not None:
             where.append("occurred_at >= %s")
             params.append(since)
+        scoped, scope = account_clause()
+        if scoped:
+            where.append(scoped[len(" AND "):])
+            params.extend(scope)
         clause = f"WHERE {' AND '.join(where)}" if where else ""
         params.append(int(limit))
         with get_db_connection() as conn:
@@ -401,6 +415,7 @@ class PosReductionReport:
 
     @classmethod
     def ticket_versions(cls, since, until):
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -408,9 +423,8 @@ class PosReductionReport:
                     SELECT ticket_id, event_type, receipt_json, observed_at
                     FROM open_tickets_history
                     WHERE observed_at BETWEEN %s AND %s AND receipt_json IS NOT NULL
-                    ORDER BY ticket_id, observed_at, id
-                    """,
-                    (since, until),
+                    """ + clause + " ORDER BY ticket_id, observed_at, id",
+                    (since, until, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:
@@ -419,6 +433,7 @@ class PosReductionReport:
 
     @classmethod
     def staff_events(cls, since, until):
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -426,9 +441,8 @@ class PosReductionReport:
                     SELECT * FROM pos_employee_events
                     WHERE occurred_at BETWEEN %s AND %s
                       AND event IN ('sale', 'ticket_reduced', 'ticket_replaced')
-                    ORDER BY occurred_at, id
-                    """,
-                    (since, until),
+                    """ + clause + " ORDER BY occurred_at, id",
+                    (since, until, *scope),
                 )
                 rows = cursor.fetchall()
         for row in rows:

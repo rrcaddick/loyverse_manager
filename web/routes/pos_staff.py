@@ -10,8 +10,13 @@ POST /api/pos/roster
     -> {"version", "generated_at", "auth": {...}, "policy": {...}, "employees": [...]}
        or {"version": "<same>", "unchanged": true} when known_version still matches
 
+Every call carries ``X-Loyverse-Account: <owner id>`` (the Loyverse account the terminal is
+signed into); rows are stored and read per account (src/models/pos_accounts.py). The roster and
+registration calls also carry ``"account": {"id", "business_name", "email"}``.
+
 POST /api/pos/devices/register
-    {"device_id": "redmi-a3-gate", "device_secret": "<hex the terminal made>", "model": "Xiaomi 23129RAA4G"}
+    {"device_id": "redmi-a3-gate", "device_secret": "<hex the terminal made>", "model": "Xiaomi 23129RAA4G",
+     "account": {"id": "123456", "business_name": "The Farmyard Park", "email": "..."}}
     -> {"status": "ok", "device_id": ...}   (403 for a revoked device)
 
 POST /api/pos/events
@@ -47,6 +52,7 @@ POST /api/pos/conversions/record   the conversion, recorded BEFORE the refund ru
 
 from flask import Blueprint, jsonify, request
 
+from src.services.pos_accounts import PosAccountService
 from src.services.pos_conversions import ConversionRefused, PosConversionService
 from src.services.pos_reentry import ReentryService
 from src.services.pos_staff import DeviceAuthError, PosStaffService
@@ -70,6 +76,7 @@ def roster():
     device, error = _device_or_403(service, payload)
     if error:
         return error
+    PosAccountService.seen(payload.get("account"), device["device_id"])
     body = service.roster_for_device(device)
     known = payload.get("known_version")
     if isinstance(known, str) and known == body["version"]:
@@ -137,6 +144,7 @@ def register_device():
         )
     except DeviceAuthError:
         return jsonify({"error": "device not authorised"}), 403
+    PosAccountService.seen(payload.get("account"), device["device_id"])
     return jsonify({"status": "ok", "device_id": device["device_id"]})
 
 

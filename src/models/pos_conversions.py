@@ -7,9 +7,8 @@ group. What a conversion means, how it is validated and how its stage moves live
 
 import json
 
+from src.models.pos_accounts import account_clause, account_value
 from src.repositories.mysql import get_db_connection
-
-
 def _json(value):
     if value is None or isinstance(value, dict):
         return value
@@ -26,7 +25,7 @@ class PosGroupConversion:
         "group_name", "group_item_id", "heads", "amount_cents", "payment_summary",
         "person", "surname", "names", "id_number", "id_source", "id_manual",
         "stage", "refund_receipt_no", "refunded_at", "group_ticket_sync_id", "group_receipt_no", "admitted_at", "error",
-        "detail",
+        "detail", "account_id",
     )
     UPDATABLE = (
         "stage", "refund_receipt_no", "refunded_at", "group_ticket_sync_id", "group_receipt_no", "admitted_at", "error", "heads",
@@ -41,6 +40,7 @@ class PosGroupConversion:
     @classmethod
     def create(cls, values):
         """Insert one conversion; a repeat of the same conversion_id is ignored. Returns True when inserted."""
+        values = {**values, "account_id": values.get("account_id") or account_value()}
         cols = [c for c in cls.COLUMNS if c in values]
         params = [json.dumps(values[c]) if c == "detail" and values[c] is not None else values[c] for c in cols]
         with get_db_connection() as conn:
@@ -57,7 +57,8 @@ class PosGroupConversion:
     def get(cls, conversion_id):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM pos_group_conversions WHERE conversion_id = %s", (conversion_id,))
+                clause, scope = account_clause()
+                cursor.execute("SELECT * FROM pos_group_conversions WHERE conversion_id = %s" + clause, (conversion_id, *scope))
                 return cls._row(cursor.fetchone())
 
     @classmethod
@@ -65,9 +66,10 @@ class PosGroupConversion:
         """Every conversion ever recorded for the receipt, newest first."""
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                clause, scope = account_clause()
                 cursor.execute(
-                    "SELECT * FROM pos_group_conversions WHERE receipt_id = %s ORDER BY recorded_at DESC, id DESC",
-                    (receipt_id,),
+                    "SELECT * FROM pos_group_conversions WHERE receipt_id = %s" + clause + " ORDER BY recorded_at DESC, id DESC",
+                    (receipt_id, *scope),
                 )
                 return [cls._row(r) for r in cursor.fetchall()]
 
@@ -98,6 +100,10 @@ class PosGroupConversion:
         if group_name:
             where.append("group_name = %s")
             params.append(group_name)
+        scoped, scope = account_clause()
+        if scoped:
+            where.append(scoped[len(" AND "):])
+            params.extend(scope)
         sql = "SELECT * FROM pos_group_conversions"
         if where:
             sql += " WHERE " + " AND ".join(where)
@@ -111,15 +117,16 @@ class PosGroupConversion:
     @classmethod
     def heads_for_group(cls, group_name, start, end, stages):
         """Converted heads the group is invoiced for in [start, end)."""
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     f"""
                     SELECT COALESCE(SUM(heads), 0) AS heads FROM pos_group_conversions
                     WHERE group_name = %s AND recorded_at >= %s AND recorded_at < %s
-                      AND stage IN ({', '.join(['%s'] * len(stages))})
+                      AND stage IN ({', '.join(['%s'] * len(stages))}){clause}
                     """,
-                    [group_name, start, end, *stages],
+                    [group_name, start, end, *stages, *scope],
                 )
                 row = cursor.fetchone()
         return int(row["heads"] or 0) if row else 0

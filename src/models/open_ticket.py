@@ -1,8 +1,7 @@
 import json
 
+from src.models.pos_accounts import account_clause, account_value
 from src.repositories.mysql import get_db_connection
-
-
 class OpenTicket:
     def __init__(
         self,
@@ -26,9 +25,8 @@ class OpenTicket:
     def get_open_ticket_ids(cls):
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT ticket_id FROM open_tickets_current WHERE status = 'open'"
-                )
+                clause, params = account_clause()
+                cursor.execute("SELECT ticket_id FROM open_tickets_current WHERE status = 'open'" + clause, params)
                 return {row["ticket_id"] for row in cursor.fetchall()}
 
     @staticmethod
@@ -50,7 +48,7 @@ class OpenTicket:
     def upsert_open(cls, ticket_id, semantic_hash, receipt_json, observed_at):
         receipt_json_str = json.dumps(receipt_json)
         plate, make, model, colour, source = cls.vehicle_columns(receipt_json)
-
+        account = account_value()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -73,11 +71,11 @@ class OpenTicket:
                         SET status = 'open', closed_at = NULL, semantic_hash = %s,
                             receipt_json = %s, last_modified_at = %s, last_seen_at = %s,
                             plate = %s, vehicle_make = %s, vehicle_model = %s,
-                            vehicle_colour = %s, vehicle_source = %s
+                            vehicle_colour = %s, vehicle_source = %s, account_id = %s
                         WHERE ticket_id = %s
                         """,
                         (semantic_hash, receipt_json_str, observed_at, observed_at,
-                         plate, make, model, colour, source, ticket_id),
+                         plate, make, model, colour, source, account, ticket_id),
                     )
                     event_type = "reopened"
                 elif row is None:
@@ -85,8 +83,8 @@ class OpenTicket:
                         """
                         INSERT INTO open_tickets_current
                         (ticket_id, semantic_hash, status, receipt_json, opened_at, last_modified_at, last_seen_at,
-                         plate, vehicle_make, vehicle_model, vehicle_colour, vehicle_source)
-                        VALUES (%s, %s, 'open', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         plate, vehicle_make, vehicle_model, vehicle_colour, vehicle_source, account_id)
+                        VALUES (%s, %s, 'open', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             ticket_id,
@@ -100,6 +98,7 @@ class OpenTicket:
                             model,
                             colour,
                             source,
+                            account,
                         ),
                     )
                     event_type = "created"
@@ -116,7 +115,8 @@ class OpenTicket:
                             vehicle_make = %s,
                             vehicle_model = %s,
                             vehicle_colour = %s,
-                            vehicle_source = %s
+                            vehicle_source = %s,
+                            account_id = %s
                         WHERE ticket_id = %s
                         """,
                         (
@@ -129,6 +129,7 @@ class OpenTicket:
                             model,
                             colour,
                             source,
+                            account,
                             ticket_id,
                         ),
                     )
@@ -144,8 +145,8 @@ class OpenTicket:
                 cursor.execute(
                     """
                     INSERT INTO open_tickets_history
-                    (ticket_id, semantic_hash, event_type, receipt_json, observed_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    (ticket_id, semantic_hash, event_type, receipt_json, observed_at, account_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         ticket_id,
@@ -153,6 +154,7 @@ class OpenTicket:
                         event_type,
                         receipt_json_str,
                         observed_at,
+                        account,
                     ),
                 )
 
@@ -171,14 +173,16 @@ class OpenTicket:
         ``HEARTBEAT_GRACE_SECONDS``. Explicit voided/closed events end tickets at once.
         """
         grace = cls.HEARTBEAT_GRACE_SECONDS if grace_seconds is None else grace_seconds
+        # Only this terminal's account: a training terminal's heartbeat must never close live tickets.
+        clause, scope = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 if heartbeat_ids:
                     placeholders = ", ".join(["%s"] * len(heartbeat_ids))
                     cursor.execute(
                         f"UPDATE open_tickets_current SET last_seen_at = %s "
-                        f"WHERE status = 'open' AND ticket_id IN ({placeholders})",
-                        (observed_at, *heartbeat_ids),
+                        f"WHERE status = 'open' AND ticket_id IN ({placeholders})" + clause,
+                        (observed_at, *heartbeat_ids, *scope),
                     )
                 cursor.execute(
                     """
@@ -186,8 +190,8 @@ class OpenTicket:
                     WHERE status = 'open'
                       AND COALESCE(last_seen_at, last_modified_at) < %s - INTERVAL %s SECOND
                       AND last_modified_at < %s - INTERVAL %s SECOND
-                    """,
-                    (observed_at, grace, observed_at, grace),
+                    """ + clause,
+                    (observed_at, grace, observed_at, grace, *scope),
                 )
                 to_close = [row["ticket_id"] for row in cursor.fetchall()]
                 for ticket_id in to_close:
@@ -203,8 +207,8 @@ class OpenTicket:
                     cursor.execute(
                         """
                         INSERT INTO open_tickets_history
-                        (ticket_id, semantic_hash, event_type, observed_at)
-                        SELECT ticket_id, semantic_hash, 'closed', %s
+                        (ticket_id, semantic_hash, event_type, observed_at, account_id)
+                        SELECT ticket_id, semantic_hash, 'closed', %s, account_id
                         FROM open_tickets_current
                         WHERE ticket_id = %s
                         """,
@@ -238,8 +242,8 @@ class OpenTicket:
                 cursor.execute(
                     """
                     INSERT INTO open_tickets_history
-                    (ticket_id, semantic_hash, event_type, receipt_json, observed_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    (ticket_id, semantic_hash, event_type, receipt_json, observed_at, account_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         ticket_id,
@@ -247,6 +251,7 @@ class OpenTicket:
                         status,
                         json.dumps(receipt_json) if receipt_json is not None else None,
                         observed_at,
+                        account_value(),
                     ),
                 )
                 conn.commit()
@@ -267,11 +272,10 @@ class OpenTicket:
         held = {k: [] for k in wanted}
         if not wanted:
             return held
+        clause, params = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT ticket_id, receipt_json FROM open_tickets_current WHERE status = 'open'"
-                )
+                cursor.execute("SELECT ticket_id, receipt_json FROM open_tickets_current WHERE status = 'open'" + clause, params)
                 rows = cursor.fetchall()
         for row in rows:
             try:
@@ -303,11 +307,10 @@ class OpenTicket:
         ``items[]`` carry ``product_id``, ``quantity`` and ``voided``.
         """
         held = 0
+        clause, params = account_clause()
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT receipt_json FROM open_tickets_current WHERE status = 'open'"
-                )
+                cursor.execute("SELECT receipt_json FROM open_tickets_current WHERE status = 'open'" + clause, params)
                 for row in cursor.fetchall():
                     try:
                         receipt = json.loads(row["receipt_json"]) if row["receipt_json"] else {}

@@ -41,15 +41,28 @@
     pos-staff roles grant Manager bridge.convert_group   add one permission to an existing role
     pos-staff disputes reply RD-7K3M9P --text "..." [--by Ray]   e-mails the customer (when an
                                                     address was given) and records the answer
-
+    pos-staff accounts                              the Loyverse accounts the terminals report
+                                                    (owner id, name, e-mail, which one is live,
+                                                    rows per table, terminals on each)
+    pos-staff accounts purge <owner id> --yes       delete every row that account's terminals
+                                                    wrote (tickets, events, disputes, conversions);
+                                                    "untagged" = rows from builds before the tag
+    pos-staff accounts adopt <owner id>             tag those untagged rows as this account's
+    pos-staff accounts live [<owner id>|auto]       pin the live account, or go back to matching
+                                                    the API token's merchant e-mail
+Every listing shows the live account's rows; --account <owner id> (before the command) shows
+another account's, --account all every account's.
 PINs are entered on the command line only here; they are hashed before they touch the DB.
 """
 
 import argparse
+import contextlib
 import json
+import os
 import sys
-
+from src.models.pos_accounts import PosAccount, scope
 from src.models.pos_staff import PosDevice, PosEmployee, PosEmployeeEvent, PosRole
+from src.services.pos_accounts import PosAccountService
 from src.services.pos_staff import (
     PERMISSIONS,
     DeviceAuthError,
@@ -147,6 +160,47 @@ def cmd_devices(args, svc):
         if not PosDevice.set_active(args.name, args.action == "activate"):
             sys.exit("unknown device")
         print(args.action + "d")
+
+
+def cmd_accounts(args, svc):
+    if args.action == "list":
+        PosAccountService.refresh_live()
+        rows = PosAccountService.summary()
+        if not rows:
+            print("no terminal has reported an account yet")
+            return
+        print(f"{'owner id':<12} {'live':<5} {'business name':<28} {'e-mail':<32} tickets history events disputes conv  terminals")
+        for r in rows:
+            c = r.get("counts", {})
+            name = r["account_id"] or "(untagged)"
+            print(f"{name:<12} {'LIVE' if r.get('live') else '':<5} {(r.get('business_name') or '')[:28]:<28} "
+                  f"{(r.get('email') or '')[:32]:<32} {c.get('open_tickets_current', 0):>7} {c.get('open_tickets_history', 0):>7} "
+                  f"{c.get('pos_employee_events', 0):>6} {c.get('pos_refund_disputes', 0):>8} {c.get('pos_group_conversions', 0):>4}  "
+                  f"{', '.join(c.get('devices', []))}")
+    elif args.action == "purge":
+        target = "" if (args.name or "").lower() == "untagged" else args.name
+        if target is None:
+            sys.exit("which account? pos-staff accounts purge <owner id>|untagged --yes")
+        if target and target == PosAccount.live_id():
+            sys.exit("that is the live account; pin another one live first (pos-staff accounts live <id>) if you mean it")
+        if not args.yes:
+            sys.exit("this deletes every row that account's terminals wrote; add --yes")
+        for table, n in PosAccountService.purge(target).items():
+            print(f"{table:<24} {n} deleted")
+    elif args.action == "adopt":
+        if not args.name:
+            sys.exit("which account? pos-staff accounts adopt <owner id>")
+        for table, n in PosAccountService.adopt_untagged(args.name).items():
+            print(f"{table:<24} {n} tagged")
+    elif args.action == "live":
+        if not args.name or args.name == "auto":
+            if os.getenv("POS_LIVE_ACCOUNT"):
+                sys.exit("POS_LIVE_ACCOUNT is set in the environment; unset it to go back to matching the token")
+            PosAccount.set_live(None)
+            print("live account:", PosAccountService.refresh_live() or "unknown (no account's e-mail matches the API token's merchant)")
+        else:
+            PosAccount.set_live(args.name)
+            print("live account pinned to", args.name, "(until the next 'accounts live auto'; POS_LIVE_ACCOUNT in the environment overrides)")
 
 
 def cmd_events(args, svc):
@@ -312,8 +366,13 @@ def cmd_items(args, svc):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--account", help="owner id whose rows to show (default: the live account's; 'all' = every account's)")
     sub = parser.add_subparsers(dest="group", required=True)
 
+    accounts = sub.add_parser("accounts")
+    accounts.add_argument("action", nargs="?", default="list", choices=["list", "purge", "adopt", "live"])
+    accounts.add_argument("name", nargs="?", help="owner id ('untagged' for rows from builds before the tag; 'auto' for live)")
+    accounts.add_argument("--yes", action="store_true")
     roles = sub.add_parser("roles")
     roles.add_argument("action", nargs="?", default="list", choices=["list", "add", "set-perms", "rename", "grant"])
     roles.add_argument("name", nargs="?")
@@ -370,8 +429,15 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     svc = PosStaffService()
+    chosen = None if args.account == "all" else args.account
+    with scope(chosen) if args.account else contextlib.nullcontext():
+        _run(args, svc)
+
+
+def _run(args, svc):
     try:
         {
+            "accounts": cmd_accounts,
             "roles": cmd_roles,
             "permissions": cmd_permissions,
             "employees": cmd_employees,

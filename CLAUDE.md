@@ -338,3 +338,15 @@ Pre-existing; don't "fix" them as a side effect of unrelated work, but be aware:
   not when a query string is appended (`inventory?variant_ids=…`).
 - Class name `NoticifationService` and the README filename `REAMDE.md` are both
   misspelled; renaming either is a deliberate change, not a drive-by.
+
+**Which Loyverse account a row came from** (`src/models/pos_accounts.py`, `src/services/pos_accounts.py`,
+migration 010, built 2026-10-16): every terminal request carries `X-Loyverse-Account: <owner id>`
+(the Loyverse account the terminal is signed into); the bridge auth binds it to the request and
+the models stamp it on every row they write (`account_value()`) and filter every read by it
+(`account_clause()`), so a training terminal on the throwaway account only ever sees and touches
+its own rows. Outside a terminal request the scope is the *live* account: the one in
+`pos_accounts` whose e-mail matches the merchant behind `LOYVERSE_API_KEY` (`GET /merchant`,
+cached ten minutes, re-checked at every registration/roster call; `POS_LIVE_ACCOUNT` pins it).
+Alerts fire only for the live account. `pos-staff accounts` lists accounts with row counts and
+terminals; `accounts purge <id> --yes` deletes one account's rows; `accounts adopt <id>` tags
+rows written before the tag existed; `--account <id>|all` before any listing changes its scope.
