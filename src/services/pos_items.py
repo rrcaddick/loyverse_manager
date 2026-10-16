@@ -22,7 +22,7 @@ import threading
 import time
 
 from config.constants import CATEGORIES
-from config.settings import LOYVERSE_API_KEY, POS_REENTRY_CUTOFF, POS_REENTRY_CUTOFF_TRAINING
+from config.settings import LOYVERSE_API_KEY, POS_REENTRY_COOLDOWN_MINUTES, POS_REENTRY_CUTOFF, POS_REENTRY_CUTOFF_TRAINING
 from src.utils.logging import setup_logger
 
 logger = setup_logger("pos_items")
@@ -52,7 +52,8 @@ class ItemKinds:
     _cached_at = 0.0
 
     def __init__(self, head_skus=HEAD_SKUS, reentry_sku=REENTRY_SKU, head_categories=None, cutoff=REENTRY_CUTOFF,
-                 group_payment_sku=GROUP_PAYMENT_SKU):
+                 group_payment_sku=GROUP_PAYMENT_SKU, reentry_cooldown_minutes=POS_REENTRY_COOLDOWN_MINUTES):
+        self.reentry_cooldown_minutes = int(reentry_cooldown_minutes)
         self.head_skus = tuple(str(s) for s in head_skus)
         self.reentry_sku = str(reentry_sku)
         self.group_payment_sku = str(group_payment_sku)
@@ -127,6 +128,7 @@ class ItemKinds:
             "groups_category": self.groups_category,
             "cutoff": self.cutoff,
             "group_payment_sku": GROUP_PAYMENT_SKU,
+            "reentry_cooldown_minutes": self.reentry_cooldown_minutes,
         }
 
     # ---- classifying lines --------------------------------------------------------------------

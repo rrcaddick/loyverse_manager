@@ -374,3 +374,10 @@ R0 group sales, heads converted, what was paid already); the closed receipt come
 `group_payment` audit event whose `paid` stage is mirrored into `pos_group_payments`, keyed by the
 barcode. Permission `bridge.group_payment` (Manager default; granted to Manager and Owner on prod).
 `pos-staff group-payments [--days 7]`. The policy block now carries `group_payment_sku` (10037).
+
+**One paid entry per car per day + re-entry cool-down** (2026-10-16 evening, Ray): `POST /api/pos/plates/status`
+(`ReentryService.plate_status`) answers whether a plate already has a live paid entry today (the
+re-entry anchors); the terminals refuse a second non-re-entry sale for the plate and point at
+re-entry (lines added to a returning re-entry stay allowed). `check_return` refuses a pass admitted
+within `POS_REENTRY_COOLDOWN_MINUTES` (default 5) of being issued (`"cooldown": true`; a manager's
+PIN overrides at the terminal); the roster policy carries `reentry_cooldown_minutes`.

@@ -34,6 +34,9 @@ POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/po
     {"device_id", "device_secret", "plate": "CJ90587", "typed": false, "heads": 3}
     -> {"allowed", "reason", "requires_manager", "anchor_heads", "anchors", "anchor_scanned", "flags"}
 
+POST /api/pos/plates/status      has this car already entered today? (one paid entry a day; then re-entries only)
+    {"device_id", "device_secret", "plate": "CJ90587"}
+    -> {"plate", "entered", "entries": [{"receipt_id", "heads", "closed_at", "time"}], "open_passes"}
 POST /api/pos/reentry/status     is this open pass still good to admit?
     {"device_id", "device_secret", "plate": "CJ90587", "sync_id": 1791889697637449}
     -> {"valid", "reason", "heads", "heads_cap", "over_cap", "flags"}
@@ -137,6 +140,16 @@ def reentry_status():
         return error
     verdict = ReentryService().check_return(payload.get("plate"), payload.get("sync_id"))
     return jsonify(verdict)
+
+
+@pos_staff_bp.route("/pos/plates/status", methods=["POST"])
+@require_bridge_token
+def plates_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    return jsonify({"status": "ok", **ReentryService().plate_status(payload.get("plate"))})
 
 
 @pos_staff_bp.route("/pos/devices/register", methods=["POST"])

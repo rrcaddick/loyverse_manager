@@ -194,6 +194,11 @@ class ReentryService:
         issued = pass_.get("opened_at")
         if issued and issued.date() != now.date():
             return {"valid": False, "reason": f"This re-entry was issued on {issued:%a %d %b}; it is no longer valid.", "heads_cap": 0}
+        cooldown = timedelta(minutes=self.kinds.reentry_cooldown_minutes)
+        if issued and cooldown and now < issued + cooldown:
+            # issued and admitted in one breath is not a re-entry; a manager's PIN overrides at the terminal
+            return {"valid": False, "cooldown": True, "heads_cap": 0,
+                    "reason": f"This re-entry was issued at {issued:%H:%M}; it can be admitted from {issued + cooldown:%H:%M}."}
         if now >= self.cutoff_for(now.date()):
             return {"valid": False, "reason": f"Re-entries are not valid after {self.kinds.cutoff}.", "heads_cap": 0}
         anchors = self.anchors(plate_n, now.date())
@@ -210,6 +215,23 @@ class ReentryService:
             "over_cap": bool(anchors) and pass_["heads"] > cap,
             "flags": flags,
         }
+
+    def plate_status(self, plate, now=None):
+        """Has this plate already entered today?  A sale that is not a re-entry pass may only be made
+        once a day for a car; after that it is re-entries only.  ``entries`` are today's live paid
+        entries (refunded ones left out), ``open_passes`` the re-entry passes still open."""
+        now = now or self._now()
+        plate_n = normalise_plate(plate)
+        if not plate_n:
+            return {"plate": "", "entered": False, "entries": [], "open_passes": 0}
+        live = self._live(self.anchors(plate_n, now.date()))
+        entries = [
+            {"receipt_id": a["receipt_id"], "heads": a["heads"],
+             "closed_at": int(a["closed_at"].timestamp() * 1000) if a.get("closed_at") else None,
+             "time": a["closed_at"].strftime("%H:%M") if a.get("closed_at") else ""}
+            for a in live
+        ]
+        return {"plate": plate_n, "entered": bool(entries), "entries": entries, "open_passes": len(self.open_passes(plate_n))}
 
     @staticmethod
     def _refuse(reason, flags):
