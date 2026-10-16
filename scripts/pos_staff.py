@@ -42,6 +42,8 @@
     pos-staff conversions [--days 7] [--all]        group conversions (public sale moved onto a
                                                     group ticket) and how far each got
     pos-staff conversions show <conversion id>      one conversion in full
+    pos-staff group-payments [--days 7]             what each group paid at the terminals, by the
+                                                    ticket that was scanned (never a pick by hand)
     pos-staff roles grant Manager bridge.convert_group   add one permission to an existing role
     pos-staff roles set-categories "Ticket Marshal" --category Public --category "Online Tickets"
                                                     which sales-screen categories the role may
@@ -300,6 +302,20 @@ def cmd_groups(args, svc):
         )
 
 
+def cmd_group_payments(args, svc):
+    from datetime import datetime, timedelta
+
+    from src.services.pos_group_payments import PosGroupPaymentService
+
+    rows = PosGroupPaymentService.list(since=datetime.now() - timedelta(days=args.days))
+    if not rows:
+        print("no group payments")
+        return
+    for r in reversed(rows):
+        print(f"{r['paid_at']:%Y-%m-%d %H:%M}  {(r['group_name'] or '')[:28]:<28} {r['barcode']:<14} R{(r['amount_cents'] or 0) / 100:>9.2f}  "
+              f"{(r['payment_summary'] or ''):<18} {(r['printed_no'] or ''):<9} {(r['employee_name'] or '-'):<14} {r['device_id']}")
+
+
 def cmd_conversions(args, svc):
     from datetime import datetime, timedelta
 
@@ -440,6 +456,8 @@ def main(argv=None):
     sub.add_parser("items")
     groups = sub.add_parser("groups")
     groups.add_argument("--days", type=int, default=1)
+    group_payments = sub.add_parser("group-payments")
+    group_payments.add_argument("--days", type=int, default=7)
     conversions = sub.add_parser("conversions")
     conversions.add_argument("action", nargs="?", default="list", choices=["list", "show"])
     conversions.add_argument("number", nargs="?", help="conversion id (uuid)")
@@ -475,6 +493,7 @@ def _run(args, svc):
             "reentries": cmd_reentries,
             "disputes": cmd_disputes,
             "conversions": cmd_conversions,
+            "group-payments": cmd_group_payments,
             "groups": cmd_groups,
             "items": cmd_items,
         }[args.group](args, svc)

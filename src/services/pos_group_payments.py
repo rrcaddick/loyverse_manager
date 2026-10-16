@@ -64,7 +64,7 @@ class PosGroupPaymentService:
                 if sku != barcode and not (name and str(line.get("name") or "").strip().lower() == name.lower()
                                           and str(line.get("category") or "").strip().lower() == self.kinds.groups_category.lower()):
                     continue
-                heads += ItemKinds.heads(ItemKinds.quantity(line))
+                heads += int(round(ItemKinds.quantity(line)))
         converted = 0
         if name:
             try:

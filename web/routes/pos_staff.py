@@ -38,6 +38,10 @@ POST /api/pos/reentry/status     is this open pass still good to admit?
     {"device_id", "device_secret", "plate": "CJ90587", "sync_id": 1791889697637449}
     -> {"valid", "reason", "heads", "heads_cap", "over_cap", "flags"}
 
+POST /api/pos/groups/status        a group's day before its payment is taken (src/services/pos_group_payments.py)
+    {"device_id", "device_secret", "barcode": "2001873757556", "group": "The Ark Educare Centre"}
+    -> {"barcode", "group_name", "visit_date", "heads_today", "heads_converted", "paid_today_cents", "payments": [...]}
+    The payment itself arrives as a "group_payment" audit event (stage "paid") and is mirrored into pos_group_payments.
 POST /api/pos/conversions/lookup   today's paid sales a group conversion may take (src/services/pos_conversions.py)
     {"device_id", "device_secret", "plate": "CJ90587"}  or  {..., "open_sync_id": 1791889697637449}  (the slip QR)
     -> {"receipts": [{"receipt_id", "printed_no", "plate", "closed_at", "heads", "amount", "payment_summary", ...}],
@@ -54,6 +58,7 @@ from flask import Blueprint, jsonify, request
 
 from src.services.pos_accounts import PosAccountService
 from src.services.pos_conversions import ConversionRefused, PosConversionService
+from src.services.pos_group_payments import PosGroupPaymentService
 from src.services.pos_reentry import ReentryService
 from src.services.pos_staff import DeviceAuthError, PosStaffService
 from web.routes.bridge_auth import require_bridge_token
@@ -146,6 +151,19 @@ def register_device():
         return jsonify({"error": "device not authorised"}), 403
     PosAccountService.seen(payload.get("account"), device["device_id"])
     return jsonify({"status": "ok", "device_id": device["device_id"]})
+
+
+@pos_staff_bp.route("/pos/groups/status", methods=["POST"])
+@require_bridge_token
+def groups_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    barcode = str(payload.get("barcode") or "").strip()
+    if not barcode:
+        return jsonify({"error": "barcode required"}), 400
+    return jsonify({"status": "ok", **PosGroupPaymentService().status(barcode, payload.get("group"))})
 
 
 @pos_staff_bp.route("/pos/conversions/lookup", methods=["POST"])

@@ -132,6 +132,8 @@ BRIDGE_PERMISSIONS = [
     # Convert to group in the terminal's drawer: move a public sale onto a group ticket, refund
     # outside the window on the strength of the record (src/services/pos_conversions.py)
     "bridge.convert_group",
+    # take a group's payment: only after scanning the group's ticket (never a pick from a list)
+    "bridge.group_payment",
 ]
 
 PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
@@ -169,6 +171,7 @@ DEFAULT_ROLES = [
             "bridge.void_ticket",  # delete a whole open ticket
             "bridge.approve_reentry",  # re-entry for more heads than were paid for
             "bridge.convert_group",  # move a public sale onto a group ticket later in the day
+            "bridge.group_payment",  # take a group's payment against its scanned ticket
         ],
     ),
     (
@@ -213,6 +216,7 @@ EVENT_NAMES = {
     "refund_receipt",
     # a person entered under a group ticket: who (licence / smart ID / ID book / typed), which group, which plate
     "group_entry",
+    "group_payment",
     "group_conversion",
     "ticket_opened",
     "roster_refreshed",
@@ -507,6 +511,13 @@ class PosStaffService:
                     )
                 except Exception as e:  # the audit row is kept; the mirror can be rebuilt from it
                     logger.error(f"mirroring dispute {event_uuid} failed: {e}")
+            if inserted and event == "group_payment":
+                try:
+                    from src.services.pos_group_payments import PosGroupPaymentService
+
+                    PosGroupPaymentService.on_event(device["device_id"], employee_id, employee_name, event_uuid, detail or {}, occurred_at)
+                except Exception as e:  # the audit row is kept; the payment can be replayed from it
+                    logger.error(f"mirroring group payment {event_uuid} failed: {e}")
             if inserted and event == "group_conversion":
                 try:
                     from src.services.pos_conversions import PosConversionService
