@@ -22,6 +22,7 @@ ACCOUNT_TABLES = (
     "pos_employee_events",
     "pos_refund_disputes",
     "pos_group_conversions",
+    "pos_group_payments",
 )
 
 _REQUEST_KEY = "pos_account"
