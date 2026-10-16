@@ -129,3 +129,6 @@ POS_ALERT_WHATSAPP = os.getenv("POS_ALERT_WHATSAPP", "").strip()
 # Time of day after which a re-entry pass is dead (HH:MM, local). 18:00 is the park's rule;
 # override only for a test, and put it back.
 POS_REENTRY_CUTOFF = os.getenv("POS_REENTRY_CUTOFF", "18:00").strip() or "18:00"
+# The cut-off a training terminal (not on the live account) works to; the default is no cut-off
+# to speak of, so training can happen after hours.
+POS_REENTRY_CUTOFF_TRAINING = os.getenv("POS_REENTRY_CUTOFF_TRAINING", "23:59").strip() or "23:59"

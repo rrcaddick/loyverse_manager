@@ -356,3 +356,6 @@ rows written before the tag existed; `--account <id>|all` before any listing cha
 other terminal the training ones (`roster_for_device`). Everyone from before the migration is
 training; `pos-staff employees add` makes live logins unless `--training`; `--random-pin` prints a
 policy-passing PIN once (run it with stdout to a private file when the PIN must not be seen).
+The re-entry cut-off (`POS_REENTRY_CUTOFF`, 18:00 on prod) applies to the live account only;
+training terminals get `POS_REENTRY_CUTOFF_TRAINING` (default 23:59) in their roster policy and
+in the server-side checks (`ItemKinds.for_request()` / `scoped(live)`), so training can run after hours.

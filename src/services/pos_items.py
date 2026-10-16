@@ -22,7 +22,7 @@ import threading
 import time
 
 from config.constants import CATEGORIES
-from config.settings import LOYVERSE_API_KEY, POS_REENTRY_CUTOFF
+from config.settings import LOYVERSE_API_KEY, POS_REENTRY_CUTOFF, POS_REENTRY_CUTOFF_TRAINING
 from src.utils.logging import setup_logger
 
 logger = setup_logger("pos_items")
@@ -34,6 +34,8 @@ HEAD_SKUS = (VISITOR_SKU,)
 # CATEGORIES keys whose items count as heads, with the names to assume when the account cannot be asked.
 HEAD_CATEGORY_KEYS = {"online_ticket": "Online Tickets", "groups": "Groups"}
 REENTRY_CUTOFF = POS_REENTRY_CUTOFF if re.fullmatch(r"[0-2]?\d:[0-5]\d", POS_REENTRY_CUTOFF) else "18:00"  # a pass is dead at this time on its day
+# Training terminals (any terminal not on the live account) get this cut-off instead: none to speak of.
+TRAINING_CUTOFF = POS_REENTRY_CUTOFF_TRAINING if re.fullmatch(r"[0-2]?\d:[0-5]\d", POS_REENTRY_CUTOFF_TRAINING) else "23:59"
 THOUSANDTHS = 1000
 NAMES_TTL_SECONDS = 15 * 60
 
@@ -97,6 +99,24 @@ class ItemKinds:
                 name = default
             names.append(name)
         return names
+
+    def scoped(self, live):
+        """This mapping with the cut-off for a live terminal (the real one) or a training terminal."""
+        if live or self.cutoff == TRAINING_CUTOFF:
+            return self
+        import copy
+
+        other = copy.copy(self)
+        other.cutoff = TRAINING_CUTOFF
+        return other
+
+    @classmethod
+    def for_request(cls):
+        """The mapping for the terminal behind the current request (or the live account outside one)."""
+        from src.models.pos_accounts import current_account
+        from src.services.pos_accounts import PosAccountService
+
+        return cls.current().scoped(PosAccountService.is_live_account(current_account()))
 
     def policy(self):
         """The block the terminals receive in the roster."""

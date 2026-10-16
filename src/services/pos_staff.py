@@ -442,7 +442,7 @@ class PosStaffService:
                 "lockout_seconds": LOCKOUT_SECONDS,
                 # What the Loyverse items mean, so every terminal and this back office agree
                 # (re-entry line, which lines count as heads, the re-entry cut-off time).
-                "items": ItemKinds.current().policy(),
+                "items": ItemKinds.current().scoped(scope == "live").policy(),
             },
             "employees": employees,
             "scope": scope,

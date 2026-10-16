@@ -50,7 +50,7 @@ class ReentryService:
     """``check_issue`` / ``check_return`` are what the terminals call; ``report`` is for the owner."""
 
     def __init__(self, kinds=None, data=None, refunds=None, now=None):
-        self.kinds = kinds or ItemKinds.current()
+        self.kinds = kinds or ItemKinds.for_request()
         self.data = data or PosReentryData
         self._refunded_receipt_ids = refunds or self._refunds_from_audit
         self._now = now or datetime.now
