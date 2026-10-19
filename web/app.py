@@ -8,6 +8,7 @@ from web.routes.auth import auth_bp, register_auth_guard
 from web.routes.groups import groups_bp
 from web.routes.open_tickets import open_tickets_bp
 from web.routes.pos_staff import pos_staff_bp
+from web.routes.shop import shop_bp
 from web.routes.stock import stock_bp
 
 
@@ -34,6 +35,7 @@ def create_app(config_class=Config):
     app.register_blueprint(open_tickets_bp)
     app.register_blueprint(stock_bp, url_prefix="/api")
     app.register_blueprint(pos_staff_bp, url_prefix="/api")
+    app.register_blueprint(shop_bp)
 
     app.register_blueprint(scripts_routes.bp)
 

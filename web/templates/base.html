@@ -63,6 +63,15 @@
               </li>
               <li class="nav-item">
                 <a
+                  href="{{ url_for('shop.till') }}"
+                  class="nav-link {{ 'active' if request.endpoint == 'shop.till' else '' }}"
+                >
+                  <i class="nav-icon fas fa-cash-register"></i>
+                  <p>Shop till</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a
                   href="{{ url_for('scripts.manage_scripts') }}"
                   class="nav-link {{ 'active' if request.endpoint == 'scripts.manage_scripts' else '' }}"
                 >

@@ -386,3 +386,9 @@ PIN overrides at the terminal); the roster policy carries `reentry_cooldown_minu
 fed by both, each under its own `ticket_id` (unique key), with the same `sync_id`; `OpenTicket.held_by`
 / `held_quantity` now count one hold per `sync_id` (newest row wins). Before this the pay point saw
 "4 held in other open tickets" for a ticket's own seats and the stock guard refused Admit and Save.
+
+**Shop till feed** (2026-10-19): the Aronium module on the office laptop posts every saved document to
+`POST /api/shop/sales` with header `X-Shop-Token` = `SHOP_FEED_TOKEN` (.env on prod; the token is in
+`/home/ray/private/shop-feed-token-20261019.txt` on Ray's PC). Rows land in `shop_sales` (migration 014,
+`src/models/shop_sales.py`, upsert on till_id + document uid); `/shop/till` shows the day live (10 s poll,
+`/shop/till/data`). A body with `"probe": true` only checks the token (the module's "Test back office").

@@ -132,6 +132,8 @@ POS_REENTRY_CUTOFF = os.getenv("POS_REENTRY_CUTOFF", "18:00").strip() or "18:00"
 # The cut-off a training terminal (not on the live account) works to; the default is no cut-off
 # to speak of, so training can happen after hours.
 POS_REENTRY_CUTOFF_TRAINING = os.getenv("POS_REENTRY_CUTOFF_TRAINING", "23:59").strip() or "23:59"
+# The shop till (Aronium) posts its sales with this token (X-Shop-Token); empty = feed refused.
+SHOP_FEED_TOKEN = os.getenv("SHOP_FEED_TOKEN", "").strip()
 # A re-entry pass cannot be admitted this soon after it was issued (a manager's PIN overrides at the terminal).
 try:
     POS_REENTRY_COOLDOWN_MINUTES = max(0, int(os.getenv("POS_REENTRY_COOLDOWN_MINUTES", "5")))

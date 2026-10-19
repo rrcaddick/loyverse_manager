@@ -53,6 +53,7 @@ PUBLIC_ENDPOINTS = {
     "pos_staff.reentry_check",
     "pos_staff.reentry_status",
     "pos_staff.plates_status",
+    "shop.shop_sales",
     "pos_staff.groups_status",
     "pos_staff.conversions_lookup",
     "pos_staff.conversions_record",
