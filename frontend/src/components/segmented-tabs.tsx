@@ -99,8 +99,8 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
               <span
                 className={cn(
                   "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-                  // Counts are always the accent; on the active (primary) tab they invert.
-                  active ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground",
+                  // Counts are always the highlight (accent); on the primary-filled active tab the form that reads on it.
+                  active ? "bg-highlight-on-primary text-highlight-on-primary-foreground" : "bg-highlight text-highlight-foreground",
                 )}
               >
                 {formatNumber(count)}

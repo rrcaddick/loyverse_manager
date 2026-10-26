@@ -473,7 +473,7 @@ export function Composer({
                 <Button type="button" variant="ghost" size="sm" disabled={!documents.length} title={documents.length ? undefined : "No documents on this booking yet"}>
                   <Paperclip data-icon="inline-start" />
                   Attach document
-                  {docIds.length ? <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground tabular">{docIds.length}</span> : null}
+                  {docIds.length ? <span className="rounded-full bg-highlight px-1.5 text-xs text-highlight-foreground tabular">{docIds.length}</span> : null}
                   <ChevronDown data-icon="inline-end" className="text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>

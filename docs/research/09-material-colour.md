@@ -34,6 +34,32 @@ than Material's tone-90 pastels: fill 82 with text 20 in light, fill 32 with
 text 92 in dark; solids 38 / 42 with white text. The calendar heat ramp is
 amber 92 → 57 (light) and 20 → 43 (dark), ink text throughout.
 
+## The highlight (accent) role
+
+"Accent" is not a tone of the primary. Material's name for it is the tertiary
+role, a hue away from the primary; its default tertiary is deliberately
+quiet, so the app defines it explicitly at chroma 60 on a hue that stays
+clear of the four meaning colours. It carries count badges and notification
+dots only. Two forms, chosen by the surface under the badge: on a light
+surface a deep fill (tone 45) with white text; on a dark surface (the
+sidebar, the primary-filled tab, every dark-mode surface) a light fill
+(tone 72) with dark text.
+
+| Theme | Highlight hue |
+| --- | --- |
+| Graphite | raspberry 352 |
+| Fynbos | teal 190 |
+| Indigo | magenta 340 |
+| Lagoon | magenta 350 |
+| Cocoa | teal 200 |
+| High contrast | inverse neutral |
+
+Tokens: `--highlight`, `--highlight-on-dark`, `--highlight-on-primary`, each
+with a `-foreground`; `--highlight-soft` / `--on-highlight-soft` for tinted
+uses. The table head is the primary fill; the active tab, chip and sidebar
+item are the primary fill; the secondary accent (selected row, primary
+container) is a quiet tint of the primary hue at chroma 36.
+
 ## Themes
 
 | Theme | Seed | Scheme |

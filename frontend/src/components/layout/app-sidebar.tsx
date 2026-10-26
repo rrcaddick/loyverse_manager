@@ -43,7 +43,7 @@ function CountBadge({ count, tone = "primary" }: { count: number; tone?: "primar
       aria-hidden="true"
       className={cn(
         "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-        tone === "primary" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-primary/70 text-sidebar-primary-foreground",
+        tone === "primary" ? "bg-highlight-on-dark text-highlight-on-dark-foreground" : "bg-highlight-on-dark/70 text-highlight-on-dark-foreground",
       )}
     >
       {formatNumber(count)}
@@ -106,7 +106,7 @@ export function AppSidebar() {
             <span
               aria-hidden="true"
               className={cn(
-                "ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-xs font-semibold text-sidebar-primary-foreground tabular ring-2 ring-sidebar",
+                "ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-highlight-on-dark px-1.5 text-xs font-semibold text-highlight-on-dark-foreground tabular ring-2 ring-sidebar",
                 "group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:right-1 group-data-[collapsible=icon]:h-2.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-2.5 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:text-[0px]",
               )}
             >

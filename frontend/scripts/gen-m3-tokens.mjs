@@ -44,14 +44,17 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(here, "../src/styles/tokens.css");
 
+// accentHue: the highlight role (Material's tertiary, at full strength) for
+// count badges and notification dots. A hue away from the primary and clear
+// of the four meaning colours (green 145, amber 72, red 25, blue 250).
 const THEMES = [
-  // Graphite is the ink-and-paper theme: its "vivid" accent is ink, not a forced hue.
-  { id: "graphite", seed: "#605b53", scheme: SchemeNeutral, contrast: 0.0, isDefault: true, ink: true },
-  { id: "fynbos", seed: "#8a3fa6", scheme: SchemeTonalSpot, contrast: 0.0 },
-  { id: "indigo", seed: "#4f55d9", scheme: SchemeTonalSpot, contrast: 0.0 },
-  { id: "lagoon", seed: "#15808f", scheme: SchemeTonalSpot, contrast: 0.0 },
-  { id: "cocoa", seed: "#7d5536", scheme: SchemeTonalSpot, contrast: 0.0 },
-  { id: "contrast", seed: "#303030", scheme: SchemeMonochrome, contrast: 1.0, highContrast: true },
+  // Graphite is the ink-and-paper theme: its primary is ink, its highlight raspberry.
+  { id: "graphite", seed: "#605b53", scheme: SchemeNeutral, contrast: 0.0, isDefault: true, ink: true, accentHue: 352 },
+  { id: "fynbos", seed: "#8a3fa6", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 190 },
+  { id: "indigo", seed: "#4f55d9", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 340 },
+  { id: "lagoon", seed: "#15808f", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 350 },
+  { id: "cocoa", seed: "#7d5536", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 200 },
+  { id: "contrast", seed: "#303030", scheme: SchemeMonochrome, contrast: 1.0, highContrast: true, accentHue: 352 },
 ];
 
 const ROLES = [
@@ -155,6 +158,17 @@ function tokens(theme, isDark) {
   // Selected is tinted so it differs from hover by hue as well as by tone.
   const selected = ink ? N(L ? 80 : 38) : PS(L ? 86 : 40);
   const secondaryContainer = NV(L ? 84 : 34);
+  // Highlight (accent): badges and dots. Solid, strong, its own hue.
+  const AC = (tn) => hexFromArgb(TonalPalette.fromHueAndChroma(theme.accentHue, hc ? 0 : 60).tone(tn));
+  // Two badge forms, chosen by the surface under them, not by the mode:
+  // on a light surface a deep fill with white text; on a dark surface a light
+  // fill with dark text. --highlight follows the mode's default surface.
+  const badgeLight = { bg: hc ? N(15) : AC(45), fg: hc ? N(100) : "#ffffff" };
+  const badgeDark = { bg: hc ? N(95) : AC(72), fg: hc ? N(5) : AC(12) };
+  const highlight = L ? badgeLight.bg : badgeDark.bg;
+  const highlightFg = L ? badgeLight.fg : badgeDark.fg;
+  const primaryIsLight = ink && !L;
+  const onPrimaryBadge = primaryIsLight ? badgeLight : badgeDark;
   const onSecondaryContainer = NV(L ? 15 : 95);
 
   // Elevation at desktop scale (owner, 26 Oct): Material's phone-scale
@@ -219,6 +233,14 @@ function tokens(theme, isDark) {
     // Table head: the primary fill with its on-colour (owner, 26 Oct).
     "table-head": primary,
     "table-head-foreground": onPrimary,
+    highlight: highlight,
+    "highlight-foreground": highlightFg,
+    "highlight-on-dark": badgeDark.bg,
+    "highlight-on-dark-foreground": badgeDark.fg,
+    "highlight-on-primary": onPrimaryBadge.bg,
+    "highlight-on-primary-foreground": onPrimaryBadge.fg,
+    "highlight-soft": hc ? N(L ? 90 : 25) : AC(L ? 90 : 30),
+    "on-highlight-soft": hc ? N(L ? 10 : 95) : AC(L ? 15 : 92),
     "primary-hover": primaryHover,
     "primary-soft": primaryContainer,
     "primary-container": primaryContainer,

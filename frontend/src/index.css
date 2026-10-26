@@ -117,6 +117,14 @@
   --color-table-rule: var(--table-rule);
   --color-table-head: var(--table-head);
   --color-table-head-foreground: var(--table-head-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-highlight-on-dark: var(--highlight-on-dark);
+  --color-highlight-on-dark-foreground: var(--highlight-on-dark-foreground);
+  --color-highlight-on-primary: var(--highlight-on-primary);
+  --color-highlight-on-primary-foreground: var(--highlight-on-primary-foreground);
+  --color-highlight-soft: var(--highlight-soft);
+  --color-on-highlight-soft: var(--on-highlight-soft);
   --color-ring: var(--ring);
   --color-selection-ring: var(--selection-ring);
   --color-selection-row: var(--selection-row);
