@@ -93,12 +93,12 @@ function oklabL([r, g, b]) {
 // Ladder D minimums (calibration sheet, 26 Oct): roles seen together sit ≥ 10 tones apart.
 const GAPS = [
   ["canvas ↔ card", "background", "card", 0.08],
-  ["card ↔ zebra row", "card", "surface-nested", 0.035],
+  ["card ↔ zebra row", "card", "surface-nested", 0.08],
   ["zebra ↔ table head", "surface-nested", "surface-high", 0.04],
   ["canvas ↔ table head", "background", "surface-high", 0.08],
   ["canvas ↔ sidebar", "background", "sidebar", 0.10],
   ["card ↔ hover", "card", "surface-hover", 0.08],
-  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.06],
+  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.08],
   ["canvas ↔ control", "background", "control", 0.06],
   ["card ↔ selected row", "card", "selection-row", 0.05],
   // A selected row is tinted: it may differ from its neighbours by hue instead of tone.

@@ -123,7 +123,9 @@ function tokens(theme, isDark) {
   //   dark   sidebar primary 20       · canvas 8  · card 22 · zebra 27 · table head 32
   const canvas = N(L ? 90 : 8);
   const card = N(L ? 100 : 22);
-  const nested = N(L ? 94 : 27);
+  // Zebra rows twice the earlier step from the card (light 100 → 88, dark 22 → 32):
+  // subtle striping reads as none at desktop scale (owner, 26 Oct).
+  const nested = N(L ? 88 : 32);
   // Owner, 26 Oct: table head as dark as the hovered row; both twice the
   // earlier step from the card (light 100 → 70, dark 22 → 46).
   const head = N(L ? 70 : 46);
@@ -185,7 +187,7 @@ function tokens(theme, isDark) {
     card: card,
     "surface-nested": nested,
     "surface-lowest": N(L ? 100 : 18),
-    "surface-low": N(L ? 94 : 27),
+    "surface-low": N(L ? 88 : 32),
     "surface-container": N(L ? 90 : 22),
     "surface-high": head,
     "surface-highest": highest,
