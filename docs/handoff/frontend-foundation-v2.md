@@ -1,3 +1,5 @@
+> **Colour superseded (26 Oct 2026):** tokens are now generated on Material 3 roles by `frontend/scripts/gen-m3-tokens.mjs`; see `docs/research/09-material-colour.md`. The token *names* below still hold; the lightness tiers and the 'one accent' philosophy do not.
+
 # Frontend foundation v2 — handoff
 
 Owner: foundation agent. Scope: `frontend/src/styles`, `components`, `layouts`,

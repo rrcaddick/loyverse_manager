@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "data" / "screenshots" / "r1"
+OUT = ROOT / "data" / "screenshots" / "r1b"
 EMAIL = os.environ.get("FY_SHOT_EMAIL", "shot-r1@example.com")
 PASSWORD = os.environ.get("FY_SHOT_PASSWORD", "shot-r1-password-1")
-THEMES = [("Graphite", "Light", "graphite-light"), ("Fynbos", "Dark", "fynbos-dark")]
+THEMES = [("Graphite", "Light", "graphite-light"), ("Fynbos", "Dark", "fynbos-dark"), ("Lagoon", "Light", "lagoon-light"), ("Indigo", "Dark", "indigo-dark")]
 
 
 def login(page, base: str) -> None:
@@ -68,6 +68,11 @@ def main() -> int:
             shot(page, f"bookings-all-{slug}")
             goto(page, f"{args.base}/bookings?tab=pending")
             shot(page, f"bookings-pending-{slug}")
+            rows = page.locator("table tbody tr")
+            if rows.count() >= 4:
+                rows.nth(3).hover()
+                page.wait_for_timeout(250)
+                shot(page, f"bookings-pending-hover-{slug}")
             goto(page, f"{args.base}/bookings?tab=confirmed&range=month")
             shot(page, f"bookings-confirmed-month-{slug}")
             goto(page, f"{args.base}/work?view=reply")

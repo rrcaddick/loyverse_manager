@@ -53,9 +53,11 @@ export interface StatusMeta {
 export const BOOKING_STATUS_META: Record<BookingStatus, StatusMeta> = {
   // A status is where the booking stands; what last happened is the latest
   // action beside it. "Proforma sent" is therefore Pending here.
+  // Amber means "the move is ours" and lives on the Last action pill, so
+  // Pending is the quiet tinted neutral and Request is blue (new, unread).
   requested: { label: "Request", tone: "blue" },
-  enquiry: { label: "Pending", tone: "amber" },
-  proforma_sent: { label: "Pending", tone: "amber" },
+  enquiry: { label: "Pending", tone: "neutral" },
+  proforma_sent: { label: "Pending", tone: "neutral" },
   confirmed: { label: "Confirmed", tone: "green" },
   completed: { label: "Completed", tone: "green-muted", icon: Check },
   cancelled: { label: "Cancelled", tone: "red" },

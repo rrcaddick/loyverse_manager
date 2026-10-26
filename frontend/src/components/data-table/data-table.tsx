@@ -173,7 +173,7 @@ export function DataTable<TData, TValue = unknown>({
         style={maxHeight ? ({ "--table-max-h": maxHeight } as React.CSSProperties) : undefined}
       >
         <Table className="[&_td]:align-middle">
-          <TableHeader className={cn("bg-nested", stickyHeader && "sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--border)]")}>
+          <TableHeader className={cn("bg-surface-high", stickyHeader && "sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--border)]")}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
@@ -231,9 +231,9 @@ export function DataTable<TData, TValue = unknown>({
                         : undefined
                     }
                     className={cn(
-                      striped && "even:bg-nested/55",
+                      striped && "even:bg-nested",
                       interactive &&
-                        "cursor-pointer outline-none hover:bg-nested focus-visible:bg-nested focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset",
+                        "cursor-pointer outline-none hover:bg-surface-hover even:hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset",
                       active && "bg-selection-row even:bg-selection-row",
                       rowClassName?.(row.original),
                     )}

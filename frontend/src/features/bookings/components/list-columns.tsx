@@ -82,7 +82,7 @@ const people: Col = {
 
 const paid: Col = {
   id: "paid_total",
-  header: "Paid",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Paid" align="right" />,
   enableSorting: false,
   cell: ({ row }) => {
     const b = row.original;
@@ -98,7 +98,7 @@ const paid: Col = {
 
 const balance: Col = {
   id: "balance_due",
-  header: "Balance",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Balance" align="right" />,
   enableSorting: false,
   cell: ({ row }) => {
     const b = row.original;
@@ -116,23 +116,25 @@ const status: Col = {
   meta: { className: cn(CELL, "w-28") },
 };
 
+/** Amber: the customer acted last, the move is ours. Green: we acted last. */
 const latestAction: Col = {
   id: "latest_action",
-  header: "Latest action",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Last action" />,
   enableSorting: false,
   cell: ({ row }) => {
     const a = row.original.latest_action;
     if (!a) return <span className="text-muted-foreground">—</span>;
+    const tone = a.who === "customer" ? "amber" : a.who === "us" ? "green" : "neutral";
     return (
-      <div className="grid whitespace-nowrap">
-        <span className={cn("text-body leading-5", a.who === "customer" ? "font-medium text-blue-text" : "text-foreground")}>{a.label}</span>
+      <div className="grid justify-items-start gap-0.5 whitespace-nowrap">
+        <StatusPill tone={tone} label={a.label} dot={false} />
         <span className="text-sm leading-4 tabular text-muted-foreground">
           {formatDate(a.at)} · {relativeTo(a.at.slice(0, 10))}
         </span>
       </div>
     );
   },
-  meta: { className: cn(CELL, "min-w-36") },
+  meta: { className: cn(CELL, "min-w-40") },
 };
 
 const depositDueBy: Col = {
@@ -157,7 +159,7 @@ const depositDueBy: Col = {
 
 const arrived: Col = {
   id: "arrived",
-  header: "Arrived",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Arrived" align="right" />,
   enableSorting: false,
   cell: ({ row }) => (row.original.arrived_count === null ? <span className="text-muted-foreground">—</span> : <span className="text-body text-green-text">{formatNumber(row.original.arrived_count)}</span>),
   meta: { align: "right", numeric: true, className: cn(CELL, "w-20") },
@@ -165,7 +167,7 @@ const arrived: Col = {
 
 const reason: Col = {
   id: "reason",
-  header: "Reason",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Reason" />,
   enableSorting: false,
   cell: ({ row }) => <span className={cn("line-clamp-2 text-sm", row.original.status_reason ? "text-foreground" : "text-muted-foreground")}>{row.original.status_reason ?? "—"}</span>,
   meta: { className: cn(CELL, "max-w-[18rem]") },

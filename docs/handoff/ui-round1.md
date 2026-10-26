@@ -47,3 +47,22 @@ colour, capacity bar, larger counts, dots); the booking record with tabs
 (Overview, Conversation, Payments, Documents, Activity, Contacts) and the
 request review banner; the Enquiries page; Settings for day kinds, capacity
 and inbound; the document templates in the owner's Excel layout.
+
+## Addendum, same day: the palette rebuilt on Material 3
+
+The owner could not see hover, elevation or a theme change on the first cut,
+and measurement agreed (surfaces 2–4 % apart at near-zero chroma, hover a
+surface swap, 7 % shadows, themes changing only the accent). The colour
+foundation was regenerated on Material 3 roles: `frontend/scripts/
+gen-m3-tokens.mjs` writes `tokens.css` from one seed per theme with Google's
+colour utilities; mapping and reasons in `docs/research/09-material-colour.md`.
+`scripts/check-palette.mjs` proves the separation (240 checks) and
+`check-contrast.mjs` the text pairs (636), both at zero failures.
+
+Also fixed: the table header style split (the shadcn primitives merged
+classes with the default merger, which dropped the type-role utilities;
+they now use the app's `cn`), the Last action column (pill: amber when the
+customer acted last, green when we did; labels Customer reply / Response
+sent / Proforma sent …), and Pending status is the tinted neutral so amber
+means one thing. Screenshots in `data/screenshots/r1b/` (Graphite light,
+Fynbos dark, Lagoon light, Indigo dark, hover states, 1920).

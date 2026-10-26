@@ -1252,7 +1252,7 @@ EMAIL_ACTION_LABELS = {
     "acknowledgement": "Request acknowledged",
     "bounce_back": "Form link sent",
     "convert_enquiry": "Form link sent",
-    "reply": "We replied",
+    "reply": "Response sent",
 }
 STATUS_ACTION_LABELS = {
     "requested": "Request received",
@@ -1320,8 +1320,8 @@ def _action_label(r: dict) -> tuple[str | None, str]:
     kind = r.get("kind") or ""
     if src == "email":
         if r.get("direction") == "inbound":
-            return "Customer wrote", "customer"
-        return EMAIL_ACTION_LABELS.get(kind, "We wrote"), "us"
+            return "Customer reply", "customer"
+        return EMAIL_ACTION_LABELS.get(kind, "Response sent"), "us"
     if src == "payment":
         return ("Cash received" if kind == "cash" else "Payment received"), "customer"
     if kind == "status_changed":

@@ -247,9 +247,10 @@ README's `poppler-utils` requirement is stale; PDF→JPEG uses PyMuPDF.
 - **Style:** Python ≥3.10, 4-space indent, double quotes, 88-col, trailing commas —
   consistent with Ruff/Black defaults. Type hints are used in newer modules but are not
   applied uniformly; match the file you're editing.
-- **Frontend** conventions live in `docs/handoff/frontend-foundation-v2.md`: semantic
-  colour tokens and six themes in `frontend/src/styles/tokens.css` (colour is meaning,
-  the accent is interaction), type roles (`text-display`, `text-title`, ...), shadcn
+- **Frontend** conventions live in `docs/handoff/frontend-foundation-v2.md`. Colour is
+  Material 3 roles: `frontend/src/styles/tokens.css` is **generated** by
+  `frontend/scripts/gen-m3-tokens.mjs` (one seed per theme; see `docs/research/09-material-colour.md`),
+  never hand-edited; `scripts/check-palette.mjs` and `check-contrast.mjs` must pass. Type roles (`text-display`, `text-title`, ...), shadcn
   components, TanStack Query keys, zod forms. One primary list per screen, counts in
   rails, one filled verb per row, 15 px body, nothing below 12 px. No external CDNs
   except the Turnstile script on the public form.
