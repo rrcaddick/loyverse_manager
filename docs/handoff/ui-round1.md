@@ -1,0 +1,49 @@
+# UI round one (26 Oct 2026): the sign-off screen
+
+Scope agreed with the owner: fix separation and contrast first, make Work a
+sidebar accordion, and rebuild the Bookings list as the pattern every other
+screen will follow. Research: `docs/research/08-contrast-elevation-tables.md`.
+
+## What changed
+
+- **Tokens** (`frontend/src/styles/tokens.css`, `index.css`): canvas a step
+  darker than cards, borders darker (L 0.82 light / 18 % dark), secondary
+  text at L 0.42, a two-layer card shadow (`--shadow-card`), the 1600 px page
+  cap removed so lists use the width they are given.
+- **Card** gets the shadow and a border; **DataTable** gets zebra rows
+  (`striped`, default on), a nested-surface sticky header and a stronger hover.
+- **Sidebar** (`lib/nav.ts`, `components/layout/app-sidebar.tsx`): Today,
+  Work ▾ (Requests, Enquiries, Reply, Verify payments, Assign mail, Confirm
+  money, Send tickets, Reminders, Holds lapsing, Arrivals, Stale), Calendar,
+  Bookings, Enquiries; Settings and Users at the bottom. Mail, Bank, Gate and
+  System are no longer in the nav (routes still answer). Counts come from
+  `/work/counts` per view and `/enquiries/counts`.
+- **Work** page lost its own rail; the sidebar is the only menu. Three new
+  views: enquiries, allocate (assign mail), pops (verify payments).
+- **Statuses** (`status-pill.tsx`): Request · Pending (enquiry and
+  proforma_sent) · Confirmed · Completed · Lapsed · Cancelled · Declined · No
+  show. What last happened is the **latest action**, not the status.
+- **Bookings list**: buckets Requests · Pending · Confirmed · Lapsed · Past ·
+  All as filters over one column set — Ref (primary cell) · Group / contact ·
+  Visit · People · Paid (of total) · Balance · Status · Latest action — plus
+  one contextual column (Pending: Deposit due by; Past: Arrived; Lapsed:
+  Reason). Ranges: Upcoming, This week, This month, Next month, Past, All
+  dates. Page sizes 25 / 50 / 100 / All (500). State in the URL (`?tab=
+  &range=&q=&sort=&page=&size=`).
+- **API**: `GET /bookings` items carry `latest_action {label, at, who}` from
+  `booking_service.latest_actions` (emails either way, payments, status
+  changes, WhatsApp ticket; creation and import stamps only when nothing else
+  happened); `page_size` up to 500; bucket `requests`.
+
+## Screenshots
+
+`data/screenshots/r1/`: bookings-all / pending / confirmed-month in Graphite
+light and Fynbos dark at 1440×900, bookings-all at 1920, work-reply.
+
+## Not in this round (next, after sign-off)
+
+Today as the dashboard; the Calendar changes (day kinds with priority and
+colour, capacity bar, larger counts, dots); the booking record with tabs
+(Overview, Conversation, Payments, Documents, Activity, Contacts) and the
+request review banner; the Enquiries page; Settings for day kinds, capacity
+and inbound; the document templates in the owner's Excel layout.

@@ -38,7 +38,7 @@ const ref: Col = {
       {row.original.reference}
     </Link>
   ),
-  meta: { className: cn(CELL, "w-24 whitespace-nowrap") },
+  meta: { className: cn(CELL, "w-20 whitespace-nowrap") },
 };
 
 const group: Col = {
@@ -53,7 +53,7 @@ const group: Col = {
       </span>
     </div>
   ),
-  meta: { className: cn(CELL, "min-w-56 max-w-[28rem]") },
+  meta: { className: cn(CELL, "min-w-44 max-w-[26rem]") },
 };
 
 const visit: Col = {
@@ -77,7 +77,7 @@ const people: Col = {
   accessorKey: "people_booked",
   header: ({ column }) => <DataTableColumnHeader column={column} title="People" align="right" />,
   cell: ({ row }) => <span className="text-body">{formatNumber(row.original.people_booked)}</span>,
-  meta: { align: "right", numeric: true, className: cn(CELL, "w-20") },
+  meta: { align: "right", numeric: true, className: cn(CELL, "w-16") },
 };
 
 const paid: Col = {
@@ -113,7 +113,7 @@ const status: Col = {
   accessorKey: "status",
   header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
   cell: ({ row }) => <StatusPill status={row.original.status} />,
-  meta: { className: cn(CELL, "w-32") },
+  meta: { className: cn(CELL, "w-28") },
 };
 
 const latestAction: Col = {
@@ -132,7 +132,7 @@ const latestAction: Col = {
       </div>
     );
   },
-  meta: { className: cn(CELL, "min-w-44") },
+  meta: { className: cn(CELL, "min-w-36") },
 };
 
 const depositDueBy: Col = {

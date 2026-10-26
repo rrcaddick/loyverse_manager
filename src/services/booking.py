@@ -1281,18 +1281,20 @@ def latest_actions(booking_ids: list[int] | tuple[int, ...]) -> dict[int, dict]:
         SELECT booking_id, 'email' AS src, direction, kind, sent_at AS at, from_name AS name
         FROM email_messages
         WHERE booking_id IN ({marks}) AND sent_at IS NOT NULL AND is_auto_generated = 0
-          AND (direction = 'inbound' OR send_status = 'sent')
+          AND (direction = 'inbound' OR send_status IS NULL OR send_status = 'sent')
         UNION ALL
         SELECT booking_id, 'payment', NULL, kind, CAST(paid_on AS DATETIME), NULL
         FROM payments WHERE booking_id IN ({marks})
         UNION ALL
-        SELECT booking_id, 'event', NULL, kind, created_at, JSON_UNQUOTE(JSON_EXTRACT(data, '$.to'))
+        SELECT booking_id, 'event', CASE WHEN summary LIKE 'Imported%%' THEN 'import' ELSE NULL END, kind, created_at,
+               JSON_UNQUOTE(JSON_EXTRACT(data, '$.to'))
         FROM booking_events
         WHERE booking_id IN ({marks}) AND kind IN ('status_changed', 'created', 'ticket_sent', 'whatsapp_sent', 'arrivals_recorded')
         """,
         (*ids, *ids, *ids),
     )
     best: dict[int, dict] = {}
+    created: dict[int, dict] = {}
     for r in rows:
         bid = int(r["booking_id"])
         at = r.get("at")
@@ -1301,9 +1303,15 @@ def latest_actions(booking_ids: list[int] | tuple[int, ...]) -> dict[int, dict]:
         label, who = _action_label(r)
         if label is None:
             continue
-        current = best.get(bid)
+        # Creation only counts when nothing else ever happened: an imported
+        # booking's "Added" must not outrank the mail it was imported with.
+        imported = r["src"] == "event" and (r.get("kind") == "created" or r.get("direction") == "import")
+        target = created if imported else best
+        current = target.get(bid)
         if current is None or at > current["at"]:
-            best[bid] = {"label": label, "at": at, "who": who}
+            target[bid] = {"label": label, "at": at, "who": who}
+    for bid, row in created.items():
+        best.setdefault(bid, row)
     return best
 
 
@@ -1313,7 +1321,7 @@ def _action_label(r: dict) -> tuple[str | None, str]:
     if src == "email":
         if r.get("direction") == "inbound":
             return "Customer wrote", "customer"
-        return EMAIL_ACTION_LABELS.get(kind, "Email sent"), "us"
+        return EMAIL_ACTION_LABELS.get(kind, "We wrote"), "us"
     if src == "payment":
         return ("Cash received" if kind == "cash" else "Payment received"), "customer"
     if kind == "status_changed":
