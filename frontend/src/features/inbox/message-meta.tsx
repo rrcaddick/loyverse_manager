@@ -57,7 +57,7 @@ export function SenderAvatar({ name, outbound, className }: { name: string; outb
       aria-hidden="true"
       className={cn(
         "flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold",
-        outbound ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
+        outbound ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary-text",
         className,
       )}
     >

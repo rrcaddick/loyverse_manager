@@ -119,7 +119,7 @@ function MonthPicker({ month, title, onPick }: { month: string; title: string; o
                 className={cn(
                   "h-9 rounded-md text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
                   selected && "bg-primary text-primary-foreground hover:bg-primary-hover",
-                  key === current && !selected && "font-semibold text-primary",
+                  key === current && !selected && "font-semibold text-primary-text",
                 )}
               >
                 {name.slice(0, 3)}

@@ -181,7 +181,7 @@ function Figure({ label, value, unit, tone = "default" }: { label: string; value
         className={cn(
           "text-lg leading-7 font-semibold tabular",
           tone === "muted" && "text-muted-foreground",
-          tone === "accent" && "text-primary",
+          tone === "accent" && "text-primary-text",
           tone === "warn" && "text-status-amber-fg",
           tone === "ok" && "text-success",
         )}

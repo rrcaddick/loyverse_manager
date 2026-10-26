@@ -116,7 +116,7 @@ function ArrivalsForm({ booking, initial, onClose }: { booking: ArrivalsSubject;
           ) : null}
         </div>
         <NumberField control={form.control} name="count" label="People arrived" integer min={0} required className="sm:max-w-xs" suffix="people" />
-        <p className={cn("text-xs text-muted-foreground", source === "loyverse" && "text-primary")}>
+        <p className={cn("text-xs text-muted-foreground", source === "loyverse" && "text-primary-text")}>
           {source === "loyverse" ? "Will be recorded as counted by Loyverse." : "Will be recorded as a manual count."}
           {booking.arrived_count !== null ? (
             <>

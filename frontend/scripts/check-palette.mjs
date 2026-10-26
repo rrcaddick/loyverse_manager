@@ -80,13 +80,15 @@ function oklabL([r, g, b]) {
 }
 
 // ---- what must hold
+// Ladder D minimums (calibration sheet, 26 Oct): roles seen together sit ≥ 10 tones apart.
 const GAPS = [
-  ["canvas ↔ card", "background", "card", 0.03],
-  ["card ↔ zebra row", "card", "surface-nested", 0.02],
-  ["zebra ↔ table head", "surface-nested", "surface-high", 0.015],
-  ["canvas ↔ sidebar", "background", "sidebar", 0.025],
-  ["card ↔ hover", "card", "surface-hover", 0.035],
-  ["card ↔ selected row", "card", "selection-row", 0.03],
+  ["canvas ↔ card", "background", "card", 0.08],
+  ["card ↔ zebra row", "card", "surface-nested", 0.035],
+  ["zebra ↔ table head", "surface-nested", "surface-high", 0.04],
+  ["canvas ↔ table head", "background", "surface-high", 0.08],
+  ["canvas ↔ sidebar", "background", "sidebar", 0.10],
+  ["card ↔ hover", "card", "surface-hover", 0.04],
+  ["card ↔ selected row", "card", "selection-row", 0.05],
 ];
 const TEXT = [
   ["text on card", "foreground", "card", 7],
@@ -96,6 +98,10 @@ const TEXT = [
   ["on primary", "primary-foreground", "primary", 4.5],
   ["active nav text", "sidebar-accent-foreground", "sidebar-accent", 4.5],
   ["sidebar text", "sidebar-foreground", "sidebar", 7],
+  ["sidebar muted text", "sidebar-muted", "sidebar", 4.5],
+  ["active nav (filled)", "sidebar-primary-foreground", "sidebar-primary", 4.5],
+  ["table head text", "muted-foreground", "surface-high", 4.5],
+  ["selected row text", "foreground", "selection-row", 7],
   ["pill neutral", "status-neutral-fg", "status-neutral-bg", 4.5],
   ["pill amber", "status-amber-fg", "status-amber-bg", 4.5],
   ["pill green", "status-green-fg", "status-green-bg", 4.5],

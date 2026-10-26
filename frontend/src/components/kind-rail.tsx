@@ -96,7 +96,7 @@ export function KindRail<V extends string>({ items, value, onChange, className, 
         );
         const inner = (
           <>
-            {item.icon ? <item.icon aria-hidden="true" className={cn("size-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} /> : null}
+            {item.icon ? <item.icon aria-hidden="true" className={cn("size-4 shrink-0", active ? "text-primary-text" : "text-muted-foreground")} /> : null}
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {count !== null ? (
               <span

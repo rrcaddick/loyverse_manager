@@ -47,7 +47,7 @@ export function StepShell({ step, title, intro, backTo, errors = [], message, su
   const body = (
     <>
       {backTo ? (
-        <Link to={backTo} className="inline-flex min-h-11 items-center gap-1.5 self-start text-[1rem] font-medium text-primary underline-offset-4 hover:underline">
+        <Link to={backTo} className="inline-flex min-h-11 items-center gap-1.5 self-start text-[1rem] font-medium text-primary-text underline-offset-4 hover:underline">
           <ArrowLeft aria-hidden="true" className="size-4" />
           Back
         </Link>

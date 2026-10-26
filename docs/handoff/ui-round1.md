@@ -66,3 +66,16 @@ customer acted last, green when we did; labels Customer reply / Response
 sent / Proforma sent …), and Pending status is the tinted neutral so amber
 means one thing. Screenshots in `data/screenshots/r1b/` (Graphite light,
 Fynbos dark, Lagoon light, Indigo dark, hover states, 1920).
+
+## Second addendum: ladder D and deeper colour
+
+The Material default ladder still read as one grey to the owner. A
+calibration sheet (`frontend/scripts/palette-calibration.mjs`, published as
+a private artifact) put four ladders side by side with the real Bookings
+parts and measured gaps; he chose D for both modes and asked for less pastel.
+The generator now emits ladder D (dark navigation column in light mode,
+canvas 90, table head 80, zebra 94, white cards; dark 8 / 22 / 27 / 32 with a
+primary-tinted sidebar), a vivid primary for fills, `--primary-text` for the
+primary used as text, deeper semantic fills, and an ink button for Graphite.
+`check-palette.mjs` minimums were raised to match. Screenshots in
+`data/screenshots/r1c/`.

@@ -101,7 +101,7 @@ function TodayView({ date }: { date: string }) {
               <ChevronRight />
             </Button>
           </div>
-          {relative ? <span className={cn("text-body", isToday ? "font-medium text-primary" : "text-muted-foreground")}>{relative}</span> : null}
+          {relative ? <span className={cn("text-body", isToday ? "font-medium text-primary-text" : "text-muted-foreground")}>{relative}</span> : null}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {!isToday ? (
               <Button variant="outline" onClick={() => navigate("/today")}>

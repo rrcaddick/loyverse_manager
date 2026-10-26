@@ -81,7 +81,7 @@ function DrawerBody({ id }: { id: number }) {
           <MatchStatusBadge status={t.match_status} />
           <span className="text-xs text-muted-foreground">{credit ? "Credit" : "Debit"}</span>
         </div>
-        <SheetTitle className={cn("text-2xl font-semibold tabular", credit ? "text-primary" : "text-foreground")}>
+        <SheetTitle className={cn("text-2xl font-semibold tabular", credit ? "text-primary-text" : "text-foreground")}>
           {credit ? "" : "−"}
           {formatMoney(t.amount)}
         </SheetTitle>

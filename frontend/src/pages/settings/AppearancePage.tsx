@@ -35,7 +35,7 @@ export default function AppearancePage() {
             const selected = appearance.mode === mode.value;
             return (
               <ChoiceCard key={mode.value} selected={selected} onSelect={() => setAppearance({ mode: mode.value })} label={mode.label} description={mode.description}>
-                <Icon aria-hidden="true" className={cn("size-5", selected ? "text-primary" : "text-muted-foreground")} />
+                <Icon aria-hidden="true" className={cn("size-5", selected ? "text-primary-text" : "text-muted-foreground")} />
               </ChoiceCard>
             );
           })}
@@ -77,7 +77,7 @@ function ChoiceCard({ selected, onSelect, label, description, children }: { sele
         <span className="block text-body font-medium text-foreground">{label}</span>
         <span className="block text-sm text-muted-foreground">{description}</span>
       </span>
-      {selected ? <Check aria-hidden="true" className="size-5 shrink-0 text-primary" /> : null}
+      {selected ? <Check aria-hidden="true" className="size-5 shrink-0 text-primary-text" /> : null}
     </button>
   );
 }

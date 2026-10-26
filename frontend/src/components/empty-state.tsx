@@ -41,7 +41,7 @@ export function EmptyState({ icon: Icon, title, description, hint, action, link,
         <span className="text-foreground">{title}</span>
         {description ? <span>{description}</span> : null}
         {link ? (
-          <Link to={link.to} className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline">
+          <Link to={link.to} className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline">
             {link.label}
             <ArrowRight aria-hidden="true" className="size-3.5" />
           </Link>
@@ -66,7 +66,7 @@ export function EmptyState({ icon: Icon, title, description, hint, action, link,
         <EmptyContent className="flex-row flex-wrap justify-center">
           {action}
           {link ? (
-            <Link to={link.to} className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-body font-medium text-primary underline-offset-4 hover:underline">
+            <Link to={link.to} className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-body font-medium text-primary-text underline-offset-4 hover:underline">
               {link.label}
               <ArrowRight aria-hidden="true" className="size-4" />
             </Link>

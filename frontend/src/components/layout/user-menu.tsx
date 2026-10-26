@@ -44,13 +44,13 @@ export function UserMenu() {
               aria-label={`Account menu for ${user.full_name}`}
             >
               <Avatar className="size-8 rounded-lg">
-                <AvatarFallback className="rounded-lg bg-primary-soft text-xs font-semibold text-primary">{initials(user.full_name)}</AvatarFallback>
+                <AvatarFallback className="rounded-lg bg-primary-soft text-xs font-semibold text-primary-text">{initials(user.full_name)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left leading-tight">
                 <span className="truncate text-body font-medium">{user.full_name}</span>
-                <span className="truncate text-xs text-muted-foreground">{roleLabel(user.role)}</span>
+                <span className="truncate text-xs text-sidebar-muted">{roleLabel(user.role)}</span>
               </div>
-              <ChevronsUpDown aria-hidden="true" className="ml-auto size-4 text-muted-foreground" />
+              <ChevronsUpDown aria-hidden="true" className="ml-auto size-4 text-sidebar-muted" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-60" side={isMobile ? "bottom" : "right"} align="end" sideOffset={6}>

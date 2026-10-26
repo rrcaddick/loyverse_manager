@@ -30,7 +30,7 @@ export function SevenDayStrip({ days, className }: { days: StripDay[]; className
               )}
             >
               <span className="text-label text-muted-foreground uppercase">{formatWeekday(day.date).slice(0, 3)}</span>
-              <span className={cn("text-section tabular", isToday && "text-primary")}>{formatDayMonth(day.date)}</span>
+              <span className={cn("text-section tabular", isToday && "text-primary-text")}>{formatDayMonth(day.date)}</span>
               <span className={cn("mt-auto truncate text-xs tabular", day.groups > 0 && !day.is_closed ? "font-medium text-foreground" : "text-muted-foreground")}>{label}</span>
             </Link>
           </li>

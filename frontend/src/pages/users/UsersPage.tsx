@@ -64,7 +64,7 @@ export default function UsersPage() {
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
             <Avatar className="size-8 rounded-lg">
-              <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+              <AvatarFallback className="rounded-lg bg-primary/10 text-xs font-semibold text-primary-text">
                 {initials(row.original.full_name)}
               </AvatarFallback>
             </Avatar>

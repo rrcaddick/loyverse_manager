@@ -20,7 +20,7 @@ const ICON_TONE: Record<SectionTone, string> = {
   amber: "text-amber-solid",
   red: "text-red-solid",
   blue: "text-blue-solid",
-  accent: "text-primary",
+  accent: "text-primary-text",
 };
 
 interface SectionHeaderProps {

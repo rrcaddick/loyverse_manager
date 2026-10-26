@@ -43,7 +43,7 @@ function CountBadge({ count, tone = "primary" }: { count: number; tone?: "primar
       aria-hidden="true"
       className={cn(
         "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-        tone === "primary" ? "bg-primary text-primary-foreground" : "bg-nested text-muted-foreground ring-1 ring-border",
+        tone === "primary" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-accent text-sidebar-foreground ring-1 ring-sidebar-border",
       )}
     >
       {formatNumber(count)}
@@ -85,7 +85,8 @@ export function AppSidebar() {
         tooltip={tooltip}
         className={cn(
           "relative h-10 gap-3 px-3 text-body [&_svg]:size-5",
-          "data-active:before:absolute data-active:before:top-2 data-active:before:bottom-2 data-active:before:left-0 data-active:before:w-[3px] data-active:before:rounded-r-full data-active:before:bg-primary",
+          // The active page is a filled item (ladder D): primary fill, white text.
+          "data-active:bg-sidebar-primary data-active:text-sidebar-primary-foreground data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground",
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0",
         )}
       >
@@ -99,13 +100,13 @@ export function AppSidebar() {
             if (item.children) setWorkOpen(true);
           }}
         >
-          <item.icon aria-hidden="true" className={cn("shrink-0", active ? "text-primary" : "text-sidebar-foreground/80")} />
+          <item.icon aria-hidden="true" className={cn("shrink-0", active ? "text-sidebar-primary-foreground" : "text-sidebar-muted")} />
           <span className="flex-1 truncate group-data-[collapsible=icon]:hidden">{item.title}</span>
           {showCount ? (
             <span
               aria-hidden="true"
               className={cn(
-                "ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular",
+                "ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-xs font-semibold text-sidebar-primary-foreground tabular ring-2 ring-sidebar",
                 "group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:right-1 group-data-[collapsible=icon]:h-2.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-2.5 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:text-[0px]",
               )}
             >
@@ -143,7 +144,7 @@ export function AppSidebar() {
                 const childActive = currentView === child.view;
                 return (
                   <SidebarMenuSubItem key={child.view}>
-                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-8 text-sm", child.muted && "text-muted-foreground")}>
+                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-8 text-sm text-sidebar-muted data-active:font-semibold data-active:text-sidebar-foreground", child.muted && "opacity-80")}>
                       <NavLink to={child.view === "up_next" ? "/work" : `/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
                         <child.icon aria-hidden="true" />
                         <span className="flex-1 truncate">{child.title}</span>
@@ -170,7 +171,7 @@ export function AppSidebar() {
                 <LogoMark className="size-7 shrink-0 text-sidebar-foreground" />
                 <span className="grid leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate text-body font-semibold text-sidebar-foreground">{APP_NAME}</span>
-                  <span className="truncate text-xs text-muted-foreground">{PARK_NAME}</span>
+                  <span className="truncate text-xs text-sidebar-muted">{PARK_NAME}</span>
                 </span>
               </NavLink>
             </SidebarMenuButton>

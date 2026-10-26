@@ -113,7 +113,7 @@ export default function PaymentsPage() {
         meta: { align: "right", className: "w-32" },
         cell: ({ row }) => {
           const credit = row.original.credit_debit === "CREDIT";
-          return <span className={cn("whitespace-nowrap font-medium", credit ? "text-primary" : "text-muted-foreground")}>{credit ? "" : "−"}{formatMoney(row.original.amount)}</span>;
+          return <span className={cn("whitespace-nowrap font-medium", credit ? "text-primary-text" : "text-muted-foreground")}>{credit ? "" : "−"}{formatMoney(row.original.amount)}</span>;
         },
       },
       {

@@ -33,7 +33,7 @@ const ref: Col = {
   cell: ({ row }) => (
     <Link
       to={`/bookings/${row.original.id}`}
-      className="rounded-sm text-body font-semibold tabular text-foreground underline-offset-3 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-selection-ring"
+      className="rounded-sm text-body font-semibold tabular text-foreground underline-offset-3 outline-none hover:text-primary-text hover:underline focus-visible:ring-2 focus-visible:ring-selection-ring"
     >
       {row.original.reference}
     </Link>

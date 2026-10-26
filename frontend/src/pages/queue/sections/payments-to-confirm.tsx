@@ -50,7 +50,7 @@ export function PaymentsToConfirmSection({ section }: { section: Section }) {
               }
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <span className="text-lg font-semibold text-primary tabular">{formatMoney(tx.amount)}</span>
+                <span className="text-lg font-semibold text-primary-text tabular">{formatMoney(tx.amount)}</span>
                 <span className="min-w-0 truncate font-medium text-foreground">{tx.description}</span>
               </div>
               <Facts

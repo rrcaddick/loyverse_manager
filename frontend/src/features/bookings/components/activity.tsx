@@ -156,7 +156,7 @@ function fromEvent(e: BookingEvent): Entry {
           <span>
             {label} <span className="font-mono">{String(e.data?.number ?? "")}</span> issued{e.data?.version ? ` (v${String(e.data.version)})` : ""}
             {id ? (
-              <a href={documentPdfUrl(id)} target="_blank" rel="noopener" className="ml-2 text-primary underline-offset-3 hover:underline">
+              <a href={documentPdfUrl(id)} target="_blank" rel="noopener" className="ml-2 text-primary-text underline-offset-3 hover:underline">
                 PDF
               </a>
             ) : null}
