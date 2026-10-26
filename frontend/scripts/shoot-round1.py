@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "data" / "screenshots" / "r1d"
+OUT = ROOT / "data" / "screenshots" / "m2"
 EMAIL = os.environ.get("FY_SHOT_EMAIL", "shot-r1@example.com")
 PASSWORD = os.environ.get("FY_SHOT_PASSWORD", "shot-r1-password-1")
-THEMES = [("Graphite", "Light", "graphite-light"), ("Fynbos", "Dark", "fynbos-dark"), ("Lagoon", "Light", "lagoon-light"), ("Indigo", "Dark", "indigo-dark")]
+THEMES = [("Indigo", "Pink", "Light", "indigo-pink-light"), ("Cyan", "Indigo", "Dark", "cyan-indigo-dark"), ("Deep Purple", "Amber", "Light", "deep-purple-amber-light"), ("Blue Grey", "Deep Orange", "Dark", "blue-grey-deep-orange-dark")]
 
 
 def login(page, base: str) -> None:
@@ -30,9 +30,12 @@ def login(page, base: str) -> None:
     page.wait_for_load_state("networkidle")
 
 
-def set_appearance(page, base: str, theme: str, mode: str, text_size: str = "Default") -> None:
+def set_appearance(page, base: str, primary: str, accent: str, mode: str, text_size: str = "Default") -> None:
     page.goto(f"{base}/settings/appearance", wait_until="networkidle")
-    page.click(f'button[role=radio][aria-label^="{theme}"]')
+    page.locator('[role=radiogroup][aria-label="1. Primary colour"] button[role=radio]', has_text=primary).first.click()
+    page.wait_for_timeout(200)
+    page.locator('[role=radiogroup][aria-label="2. Accent colour"] button[role=radio]', has_text=accent).first.click()
+    page.wait_for_timeout(200)
     page.locator("[role=radiogroup][aria-label=Mode] button[role=radio]", has_text=mode).first.click()
     sizes = page.locator('[role=radiogroup][aria-label="Text size"] button[role=radio]', has_text=text_size)
     if sizes.count():
@@ -62,8 +65,9 @@ def main() -> int:
         browser = p.chromium.launch(executable_path="/usr/bin/google-chrome")
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         login(page, args.base)
-        for theme, mode, slug in THEMES:
-            set_appearance(page, args.base, theme, mode)
+        for primary, accent, mode, slug in THEMES:
+            set_appearance(page, args.base, primary, accent, mode)
+            shot(page, f"appearance-{slug}")
             goto(page, f"{args.base}/bookings?tab=all")
             shot(page, f"bookings-all-{slug}")
             goto(page, f"{args.base}/bookings?tab=pending")
@@ -77,10 +81,12 @@ def main() -> int:
             shot(page, f"bookings-confirmed-month-{slug}")
             goto(page, f"{args.base}/work?view=reply")
             shot(page, f"work-reply-{slug}")
-        set_appearance(page, args.base, "Graphite", "Light")
+        set_appearance(page, args.base, "Indigo", "Pink", "Light")
         page.set_viewport_size({"width": 1920, "height": 1000})
         goto(page, f"{args.base}/bookings?tab=all&size=100")
-        shot(page, "bookings-all-1920-graphite-light")
+        shot(page, "bookings-all-1920-indigo-pink-light")
+        goto(page, f"{args.base}/today")
+        shot(page, "today-1920-indigo-pink-light")
         browser.close()
     return 0
 

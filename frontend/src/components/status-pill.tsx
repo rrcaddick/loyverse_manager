@@ -20,17 +20,17 @@ import { cn } from "@/lib/utils";
 import type { BookingStatus } from "@/types/api";
 
 export const statusPillVariants = cva(
-  "inline-flex h-[1.375rem] shrink-0 items-center gap-1.5 rounded-md px-2 text-[0.8125rem] leading-none font-medium whitespace-nowrap ring-1 ring-pill-ring ring-inset [&>svg]:size-3.5 [&>svg]:shrink-0",
+  "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[0.8125rem] leading-none font-medium whitespace-nowrap [&>svg]:size-3.5 [&>svg]:shrink-0",
   {
     variants: {
       tone: {
-        neutral: "bg-status-neutral-bg text-status-neutral-fg",
-        amber: "bg-status-amber-bg text-status-amber-fg",
-        green: "bg-status-green-bg text-status-green-fg",
-        "green-muted": "bg-status-green-muted-bg text-status-green-muted-fg",
-        red: "bg-status-red-bg text-status-red-fg ring-transparent",
-        "red-muted": "bg-status-red-muted-bg text-status-red-muted-fg",
-        blue: "bg-status-blue-bg text-status-blue-fg",
+        neutral: "bg-status-neutral-bg text-status-neutral-fg [&>[data-dot]]:bg-status-neutral-dot",
+        amber: "bg-status-amber-bg text-status-amber-fg [&>[data-dot]]:bg-status-amber-dot",
+        green: "bg-status-green-bg text-status-green-fg [&>[data-dot]]:bg-status-green-dot",
+        "green-muted": "bg-status-green-muted-bg text-status-green-muted-fg [&>[data-dot]]:bg-status-green-muted-dot",
+        red: "bg-status-red-bg text-status-red-fg [&>[data-dot]]:bg-status-red-dot",
+        "red-muted": "bg-status-red-muted-bg text-status-red-muted-fg [&>[data-dot]]:bg-status-red-muted-dot",
+        blue: "bg-status-blue-bg text-status-blue-fg [&>[data-dot]]:bg-status-blue-dot",
       },
       size: {
         default: "",
@@ -85,7 +85,7 @@ export function StatusPill({ status, tone, size, label, icon, dot, className, ..
   const showDot = dot ?? !Icon;
   return (
     <span className={cn(statusPillVariants({ tone: resolvedTone, size }), className)} {...props}>
-      {Icon ? <Icon aria-hidden="true" /> : showDot ? <span aria-hidden="true" className="size-1.5 rounded-full bg-current" /> : null}
+      {Icon ? <Icon aria-hidden="true" /> : showDot ? <span data-dot aria-hidden="true" className="size-2 rounded-full bg-current" /> : null}
       {text}
     </span>
   );

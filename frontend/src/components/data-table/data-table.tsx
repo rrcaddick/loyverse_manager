@@ -83,7 +83,7 @@ export interface DataTableProps<TData, TValue = unknown> {
   compact?: boolean;
   /** Alias for `compact` (first build). */
   dense?: boolean;
-  /** Zebra rows (research/08): every second row on the nested surface. Default true. */
+  /** Zebra rows. Material data tables do not stripe; default false. */
   striped?: boolean;
   className?: string;
 }
@@ -116,7 +116,7 @@ export function DataTable<TData, TValue = unknown>({
   maxHeight,
   compact,
   dense = false,
-  striped = true,
+  striped = false,
   className,
 }: DataTableProps<TData, TValue>) {
   const isCompact = compact ?? dense;
@@ -184,7 +184,7 @@ export function DataTable<TData, TValue = unknown>({
                       colSpan={header.colSpan}
                       style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                       className={cn(
-                        "h-thead text-label text-table-head-foreground uppercase",
+                        "h-thead text-xs font-medium text-table-head-foreground",
                         meta?.align === "right" && "text-right",
                         meta?.align === "center" && "text-center",
                         meta?.className,

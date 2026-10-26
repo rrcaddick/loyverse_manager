@@ -91,3 +91,15 @@ strip, chips and outline/secondary buttons sit on a raised control surface
 chip use the primary container. `check-palette.mjs` gained zebra↔hover,
 hover↔selected (tint-aware), canvas↔control and control text pairs
 (396 checks). Screenshots in `data/screenshots/r1d/`.
+
+## Fourth addendum: Material Design 2
+
+The colour confusion was a systems mismatch: the owner meant Material 2
+(named swatches, materialpalette.com), I had built Material 3. The whole
+colour layer was redone on Material 2 (`docs/research/10-material-2.md`):
+primary + accent swatch pairs chosen in Settings › Appearance, 500/700/100
+and A200 roles, Grey 50 canvas with white 1 dp cards, 12 % dividers,
+#212121 / #757575 text, a primary 500 app bar, a white 16 dp drawer with a
+primary-tint active item, Material tabs and chips, the dp shadows, and the
+2018 dark theme with white overlays per dp. All earlier manual adjustments
+were removed for this first pass at the owner's request.

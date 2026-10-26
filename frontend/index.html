@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en-ZA" data-theme="graphite" data-text-size="large">
+<html lang="en-ZA" data-theme="indigo_pink" data-text-size="large">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -9,32 +9,32 @@
     <meta name="robots" content="noindex" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <title>Farmyard Bookings</title>
-    <script>
-      // Apply the stored appearance (theme, light/dark, text size) before the
-      // first paint so there is no flash. Mirrors src/lib/appearance.ts; the
-      // server copy of the preference is synced once the session loads.
-      (function () {
+    <script type="module">
+      // Apply the stored appearance before React mounts: the Material 2 tokens
+      // for the user's swatch pair, the mode class and the text size. Mirrors
+      // src/lib/appearance.ts; tokens.css already holds the Indigo + Pink defaults.
+      import { pairFromSlug, slugFromPair, tokensFor } from "/src/styles/m2.mjs";
+      try {
+        const root = document.documentElement;
+        let stored = null;
         try {
-          var root = document.documentElement;
-          var stored = null;
-          try {
-            stored = JSON.parse(localStorage.getItem("fy.appearance") || "null");
-          } catch (e) {}
-          if (!stored || typeof stored !== "object") {
-            var legacy = localStorage.getItem("fy.theme");
-            stored = { mode: legacy === "light" || legacy === "dark" ? legacy : "system" };
-          }
-          var themes = { graphite: 1, fynbos: 1, indigo: 1, lagoon: 1, cocoa: 1, contrast: 1 };
-          var theme = themes[stored.theme] ? stored.theme : "graphite";
-          var mode = stored.mode === "light" || stored.mode === "dark" ? stored.mode : "system";
-          var size = stored.text_size === "default" || stored.text_size === "xlarge" ? stored.text_size : "large";
-          var dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-          root.setAttribute("data-theme", theme);
-          root.setAttribute("data-text-size", size);
-          root.classList.toggle("dark", dark);
-          root.style.colorScheme = dark ? "dark" : "light";
+          stored = JSON.parse(localStorage.getItem("fy.appearance") || "null");
         } catch (e) {}
-      })();
+        if (!stored || typeof stored !== "object") {
+          const legacy = localStorage.getItem("fy.theme");
+          stored = { mode: legacy === "light" || legacy === "dark" ? legacy : "system" };
+        }
+        const pair = pairFromSlug(stored.theme);
+        const mode = stored.mode === "light" || stored.mode === "dark" ? stored.mode : "system";
+        const size = stored.text_size === "default" || stored.text_size === "xlarge" ? stored.text_size : "large";
+        const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        const tokens = tokensFor(pair, dark ? "dark" : "light");
+        for (const k in tokens) root.style.setProperty("--" + k, tokens[k]);
+        root.setAttribute("data-theme", slugFromPair(pair));
+        root.setAttribute("data-text-size", size);
+        root.classList.toggle("dark", dark);
+        root.style.colorScheme = dark ? "dark" : "light";
+      } catch (e) {}
     </script>
   </head>
   <body>

@@ -123,6 +123,17 @@
   --color-highlight-on-dark-foreground: var(--highlight-on-dark-foreground);
   --color-highlight-on-primary: var(--highlight-on-primary);
   --color-highlight-on-primary-foreground: var(--highlight-on-primary-foreground);
+  --color-app-bar: var(--app-bar);
+  --color-app-bar-foreground: var(--app-bar-foreground);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-status-neutral-dot: var(--status-neutral-dot);
+  --color-status-amber-dot: var(--status-amber-dot);
+  --color-status-green-dot: var(--status-green-dot);
+  --color-status-green-muted-dot: var(--status-green-muted-dot);
+  --color-status-red-dot: var(--status-red-dot);
+  --color-status-red-muted-dot: var(--status-red-muted-dot);
+  --color-status-blue-dot: var(--status-blue-dot);
   --color-highlight-soft: var(--highlight-soft);
   --color-on-highlight-soft: var(--on-highlight-soft);
   --color-ring: var(--ring);
@@ -233,12 +244,13 @@
   --radius-4xl: calc(var(--radius) * 3);
 
   /* ---- elevation: one overlay shadow; everything else is a 1 px border. */
-  /* Material elevation: level 1 cards, level 2 raised, level 3 overlays. */
-  --shadow-xs: var(--shadow-card);
-  --shadow-sm: var(--shadow-card);
-  --shadow-md: var(--shadow-raised);
-  --shadow-lg: var(--shadow-overlay);
-  --shadow-xl: var(--shadow-overlay);
+  /* Material 2 elevation in dp: 1 cards, 2 raised buttons, 4 app bar, 8 menus, 16 drawer, 24 dialogs. */
+  --shadow-xs: var(--shadow-1dp);
+  --shadow-sm: var(--shadow-2dp);
+  --shadow-md: var(--shadow-4dp);
+  --shadow-lg: var(--shadow-8dp);
+  --shadow-xl: var(--shadow-16dp);
+  --shadow-2xl: var(--shadow-24dp);
 }
 
 @layer base {

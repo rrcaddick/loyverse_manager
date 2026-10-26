@@ -1,48 +1,33 @@
 /**
- * Appearance runtime: theme (six curated), mode (light / dark / system) and
- * text size (default / large / xlarge).
+ * Appearance runtime: a Material 2 swatch pair (primary + accent, like
+ * materialpalette.com), mode (light / dark / system) and text size.
  *
- *   const { appearance, resolvedMode, setAppearance, themes } = useAppearance();
- *   setAppearance({ theme: "fynbos" });
+ *   const { appearance, pair, resolvedMode, setAppearance, setPair } = useAppearance();
+ *   setPair({ primary: "indigo", accent: "pink" });
  *
- * - The current value lives in a module store and in localStorage
- *   ("fy.appearance") so index.html can apply it before the first paint.
- * - Applying means setting `data-theme`, `data-text-size` and `.dark` on
- *   <html>; tokens.css does the rest. A system watcher re-applies when the
- *   OS switches while mode is "system".
- * - The server copy (users.preferences) is reconciled by
- *   `useAppearanceServerSync` in src/lib/appearance-sync.tsx: server wins
- *   when the session loads, local changes are PUT back.
+ * - `theme` is the pair as a slug ("indigo_pink"); legacy ids (graphite, …)
+ *   map to a pair. It is what the server stores in users.preferences.
+ * - Applying computes every token for the pair and mode (src/styles/m2.mjs)
+ *   and sets them inline on <html>; tokens.css holds the Indigo + Pink
+ *   defaults for the first paint.
+ * - The server copy is reconciled by `useAppearanceServerSync`.
  */
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
-export const THEME_IDS = ["graphite", "fynbos", "indigo", "lagoon", "cocoa", "contrast"] as const;
-export type ThemeId = (typeof THEME_IDS)[number];
+import { DEFAULT_PAIR, SWATCHES, cssVars, normalisePair, pairFromSlug, slugFromPair, swatch, tokensFor, type Pair } from "@/styles/m2.mjs";
+
 export type Mode = "light" | "dark" | "system";
 export type TextSize = "default" | "large" | "xlarge";
 export type ResolvedMode = "light" | "dark";
+export type { Pair };
 
 export interface Appearance {
-  theme: ThemeId;
+  /** Swatch pair slug, e.g. "indigo_pink". */
+  theme: string;
   mode: Mode;
   text_size: TextSize;
 }
-
-export interface ThemeMeta {
-  id: ThemeId;
-  name: string;
-  description: string;
-}
-
-export const THEMES: ThemeMeta[] = [
-  { id: "graphite", name: "Graphite", description: "Ink buttons on warm paper. All colour is meaning." },
-  { id: "fynbos", name: "Fynbos", description: "Heather purple on lilac greys." },
-  { id: "indigo", name: "Indigo", description: "Classic blue admin on slate greys." },
-  { id: "lagoon", name: "Lagoon", description: "Teal on clean neutral greys." },
-  { id: "cocoa", name: "Cocoa", description: "Farm brown on cream. The warmest." },
-  { id: "contrast", name: "High contrast", description: "Pure black and white, strong borders, outlined pills." },
-];
 
 export const MODES: { value: Mode; label: string; description: string }[] = [
   { value: "light", label: "Light", description: "Always light." },
@@ -56,15 +41,25 @@ export const TEXT_SIZES: { value: TextSize; label: string; px: number; descripti
   { value: "xlarge", label: "Extra large", px: 18, description: "Body text 17 px." },
 ];
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: "graphite", mode: "system", text_size: "large" };
+export const DEFAULT_APPEARANCE: Appearance = { theme: slugFromPair(DEFAULT_PAIR), mode: "system", text_size: "large" };
 
 const STORAGE_KEY = "fy.appearance";
 const LEGACY_KEY = "fy.theme";
 
+export function pairOf(value: Appearance | string): Pair {
+  return pairFromSlug(typeof value === "string" ? value : value.theme);
+}
+
+/** "Indigo · Pink" */
+export function pairName(pair: Pair): string {
+  const p = normalisePair(pair);
+  return `${swatch(p.primary)?.name ?? p.primary} · ${swatch(p.accent)?.name ?? p.accent}`;
+}
+
 /** Coerce anything (server JSON, storage, user input) into a full Appearance. */
 export function normaliseAppearance(input: unknown, base: Appearance = DEFAULT_APPEARANCE): Appearance {
   const obj = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-  const theme = THEME_IDS.includes(obj.theme as ThemeId) ? (obj.theme as ThemeId) : base.theme;
+  const theme = typeof obj.theme === "string" && obj.theme ? slugFromPair(pairFromSlug(obj.theme)) : base.theme;
   const mode = obj.mode === "light" || obj.mode === "dark" || obj.mode === "system" ? (obj.mode as Mode) : base.mode;
   const text_size =
     obj.text_size === "default" || obj.text_size === "large" || obj.text_size === "xlarge" ? (obj.text_size as TextSize) : base.text_size;
@@ -105,11 +100,19 @@ export function resolveMode(mode: Mode): ResolvedMode {
   return mode === "system" ? systemMode() : mode;
 }
 
-/** Write the appearance onto <html>. Safe to call before React mounts. */
+/** Inline style variables for a pair and mode (previews use these on their own root). */
+export function styleVarsFor(pair: Pair, mode: ResolvedMode): Record<string, string> {
+  return cssVars(tokensFor(pair, mode));
+}
+
+/** Write the appearance onto <html>: every token inline, plus the mode class. */
 export function applyAppearance(value: Appearance): ResolvedMode {
   const root = document.documentElement;
   const resolved = resolveMode(value.mode);
-  root.setAttribute("data-theme", value.theme);
+  const pair = pairOf(value);
+  const tokens = tokensFor(pair, resolved);
+  for (const [k, v] of Object.entries(tokens)) root.style.setProperty(`--${k}`, v);
+  root.setAttribute("data-theme", slugFromPair(pair));
   root.setAttribute("data-text-size", value.text_size);
   root.classList.toggle("dark", resolved === "dark");
   root.style.colorScheme = resolved;
@@ -148,7 +151,6 @@ function start() {
     emit("storage");
   });
 
-  // Another tab changed the preference.
   window.addEventListener("storage", (event) => {
     if (event.key !== STORAGE_KEY) return;
     const next = readStored();
@@ -163,11 +165,6 @@ export function getAppearance(): Appearance {
   return snapshot.appearance;
 }
 
-/**
- * Update the appearance. `source` says who asked: "user" changes are
- * persisted locally and pushed to the server by the sync hook; "server"
- * changes are persisted locally only.
- */
 export function setAppearance(patch: Partial<Appearance>, source: ChangeSource = "user"): Appearance {
   start();
   const next = normaliseAppearance({ ...snapshot.appearance, ...patch }, snapshot.appearance);
@@ -201,15 +198,21 @@ const serverSnapshot: Snapshot = { appearance: DEFAULT_APPEARANCE, resolvedMode:
 export function useAppearance() {
   const current = useSyncExternalStore(subscribe, getSnapshot, () => serverSnapshot);
   const set = useCallback((patch: Partial<Appearance>) => setAppearance(patch, "user"), []);
+  const setPair = useCallback((patch: Partial<Pair>) => {
+    const next = normalisePair({ ...pairOf(getAppearance()), ...patch });
+    setAppearance({ theme: slugFromPair(next) }, "user");
+  }, []);
   return useMemo(
     () => ({
       appearance: current.appearance,
+      pair: pairOf(current.appearance),
       resolvedMode: current.resolvedMode,
       setAppearance: set,
-      themes: THEMES,
+      setPair,
+      swatches: SWATCHES,
       modes: MODES,
       textSizes: TEXT_SIZES,
     }),
-    [current, set],
+    [current, set, setPair],
   );
 }

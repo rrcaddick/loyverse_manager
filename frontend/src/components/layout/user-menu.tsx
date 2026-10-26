@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { useAppearance } from "@/lib/appearance";
+import { pairName, useAppearance } from "@/lib/appearance";
 import { roleLabel, useAuth } from "@/lib/auth";
 import { initials } from "@/lib/format";
 import { useShell } from "@/layouts/shell-context";
@@ -22,11 +22,11 @@ export function UserMenu() {
   const { user, logout, isLoggingOut } = useAuth();
   const { isMobile } = useSidebar();
   const { openHelp } = useShell();
-  const { appearance, themes } = useAppearance();
+  const { pair } = useAppearance();
   const navigate = useNavigate();
   if (!user) return null;
 
-  const themeName = themes.find((t) => t.id === appearance.theme)?.name ?? "Graphite";
+  const themeName = pairName(pair);
 
   async function handleLogout() {
     await logout();

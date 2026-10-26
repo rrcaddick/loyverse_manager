@@ -44,9 +44,9 @@ export function AppHeader() {
   const { isAdmin } = useAuth();
   const { openHelp } = useShell();
   return (
-    <header className="sticky top-0 z-20 flex h-header shrink-0 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-6">
-      <SidebarTrigger className="-ml-1.5 size-9" aria-label="Toggle navigation" />
-      <Separator orientation="vertical" className="mr-1 h-5!" />
+    <header className="sticky top-0 z-20 flex h-header shrink-0 items-center gap-2 bg-app-bar px-4 text-app-bar-foreground shadow-md sm:px-6 [&_[data-slot=breadcrumb-link]]:text-app-bar-foreground/80 [&_[data-slot=breadcrumb-page]]:text-app-bar-foreground [&_[data-slot=breadcrumb-separator]]:text-app-bar-foreground/70 [&_a:hover]:text-app-bar-foreground">
+      <SidebarTrigger className="-ml-1.5 size-9 text-app-bar-foreground hover:bg-white/15 hover:text-app-bar-foreground" aria-label="Toggle navigation" />
+      <Separator orientation="vertical" className="mr-1 h-5! bg-app-bar-foreground/30" />
       <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList className="flex-nowrap text-body">
           {crumbs.map((crumb, index) => {
@@ -73,7 +73,7 @@ export function AppHeader() {
       {isAdmin ? <GlobalSearch /> : null}
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts" onClick={openHelp}>
+          <Button variant="ghost" size="icon" className="text-app-bar-foreground hover:bg-white/15 hover:text-app-bar-foreground" aria-label="Keyboard shortcuts" onClick={openHelp}>
             <CircleHelp className="size-5" />
           </Button>
         </TooltipTrigger>
@@ -105,13 +105,13 @@ function GlobalSearch() {
 
   return (
     <>
-      <Button variant="ghost" size="icon" className="sm:hidden" aria-label="Search bookings" onClick={() => navigate("/bookings")}>
+      <Button variant="ghost" size="icon" className="text-app-bar-foreground hover:bg-white/15 hover:text-app-bar-foreground sm:hidden" aria-label="Search bookings" onClick={() => navigate("/bookings")}>
         <Search className="size-5" />
       </Button>
       <form role="search" onSubmit={onSubmit} className="hidden w-72 sm:block">
-        <InputGroup className="h-9 bg-card/60">
+        <InputGroup className="h-9 border-transparent bg-white/15 text-app-bar-foreground focus-within:bg-white/25 [&_input]:text-app-bar-foreground [&_input::placeholder]:text-app-bar-foreground/70 [&_kbd]:border-app-bar-foreground/40 [&_kbd]:bg-transparent [&_kbd]:text-app-bar-foreground/80">
           <InputGroupAddon>
-            <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+            <Search aria-hidden="true" className="size-4 text-app-bar-foreground/80" />
           </InputGroupAddon>
           <InputGroupInput
             ref={inputRef}

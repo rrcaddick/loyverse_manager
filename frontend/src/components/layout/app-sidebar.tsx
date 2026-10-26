@@ -84,8 +84,8 @@ export function AppSidebar() {
         isActive={active}
         tooltip={tooltip}
         className={cn(
-          "relative h-10 gap-3 px-3 text-body [&_svg]:size-5",
-          // The active page is a filled item (ladder D): primary fill, white text.
+          "relative h-10 gap-3 rounded-r-full px-3 text-body [&_svg]:size-5",
+          // Material drawer: the active item is a primary 12 % tint with primary text.
           "data-active:bg-sidebar-primary data-active:text-sidebar-primary-foreground data-active:hover:bg-sidebar-primary data-active:hover:text-sidebar-primary-foreground",
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0",
         )}
@@ -162,7 +162,7 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon" aria-label="Main">
+    <Sidebar collapsible="icon" aria-label="Main" className="[&_[data-slot=sidebar-inner]]:shadow-xl">
       <SidebarHeader className="h-header justify-center border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>

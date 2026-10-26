@@ -277,7 +277,7 @@ function pairsFor(mode) {
     pairs.push([`${hue} text on ${hue} soft`, `--${hue}-text`, `--${hue}-soft|--card`, 4.5]);
     pairs.push([`${hue} text on card`, `--${hue}-text`, "--card", 4.5]);
     pairs.push([`${hue} text on canvas`, `--${hue}-text`, "--background", 4.5]);
-    pairs.push([`white on ${hue} solid`, "--on-solid", `--${hue}-solid`, 4.5]);
+    pairs.push([`text on ${hue} solid`, `--${hue}-on-solid`, `--${hue}-solid`, 4.5]);
     // Icons and dots: solids in light, the text tints in dark (solids are fills there).
     pairs.push([`${hue} icon on card`, mode === "dark" ? `--${hue}-text` : `--${hue}-solid`, "--card", 3, "icons/dots (3:1)"]);
   }

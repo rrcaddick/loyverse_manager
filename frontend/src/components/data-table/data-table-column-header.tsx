@@ -22,7 +22,7 @@ export function DataTableColumnHeader<TData, TValue>({ column, title, align = "l
       onClick={column.getToggleSortingHandler()}
       aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
       className={cn(
-        "-mx-1.5 inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-label uppercase outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60",
+        "-mx-1.5 inline-flex h-7 items-center gap-1 rounded px-1.5 text-xs font-medium outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50",
         align === "right" && "flex-row-reverse",
         sorted ? "text-table-head-foreground" : "text-table-head-foreground/85",
         className,

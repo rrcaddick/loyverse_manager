@@ -60,7 +60,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
       aria-label={aria["aria-label"]}
       className={cn(
         "flex max-w-full items-center overflow-x-auto no-scrollbar",
-        line ? "gap-1 border-b border-border" : "w-fit gap-0.5 rounded-lg bg-control p-[3px] shadow-xs ring-1 ring-control-border",
+        "gap-0 border-b border-border",
         className,
       )}
     >
@@ -82,15 +82,12 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
             onClick={() => onChange(item.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "relative inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap outline-none transition-colors",
-              size === "sm" ? "h-8 px-2.5 text-sm" : "h-9 px-3 text-body",
+              "relative inline-flex shrink-0 items-center gap-1.5 font-medium tracking-[0.04em] uppercase whitespace-nowrap outline-none transition-colors",
+              size === "sm" ? "h-10 px-3 text-xs" : "h-12 px-4 text-sm",
               "disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-selection-ring",
-              line
-                ? cn(
-                    "-mb-px rounded-t-md border-b-2 border-transparent",
-                    active ? "border-primary text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )
-                : cn("rounded-md", active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-control-hover hover:text-foreground"),
+              "-mb-px border-b-2 border-transparent hover:bg-state-hover",
+              active ? "border-primary text-primary-text" : "text-muted-foreground hover:text-foreground",
+              line && "",
             )}
           >
             {item.icon ? <item.icon aria-hidden="true" className="size-4" /> : null}

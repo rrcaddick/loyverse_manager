@@ -1,30 +1,57 @@
 /**
- * Settings › Personal › Appearance (docs/research/07 §c).
+ * Settings › Personal › Appearance: the Material palette picker.
  *
- * Six 160×100 theme tiles, each rendered in its own theme (the tile carries
- * data-theme, so tokens.css recomputes every token inside it), Mode and
- * Text size. Applied immediately — the change is its own preview — and
- * persisted per user (see src/lib/appearance-sync.tsx).
+ * Choose two colours, as on materialpalette.com: a primary (its 500 shade for
+ * the app bar, buttons and active states; 700 dark and 100 light variants)
+ * and an accent from a different swatch (A200, for badges and dots). The
+ * preview and the palette summary update as you pick; the choice applies
+ * at once and is saved per user. Then Mode and Text size.
  */
 
 import { Check, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 
 import { Section } from "@/components/section";
-import { useAppearance, type Mode, type TextSize, type ThemeMeta } from "@/lib/appearance";
+import { Button } from "@/components/ui/button";
+import { pairName, styleVarsFor, useAppearance, type Mode, type TextSize } from "@/lib/appearance";
 import { cn } from "@/lib/utils";
+import { DEFAULT_PAIR, canBeAccent, onColor, paletteSummary, type Swatch } from "@/styles/m2.mjs";
 
 const MODE_ICON: Record<Mode, LucideIcon> = { light: Sun, dark: Moon, system: Monitor };
 
 export default function AppearancePage() {
-  const { appearance, resolvedMode, setAppearance, themes, modes, textSizes } = useAppearance();
+  const { appearance, pair, resolvedMode, setAppearance, setPair, swatches, modes, textSizes } = useAppearance();
+  const summary = paletteSummary(pair);
 
   return (
     <>
-      <Section title="Theme" description="Colour means the same thing in every theme: green is done, amber is waiting, red is wrong. A theme only changes the accent and the paper.">
-        <div role="radiogroup" aria-label="Theme" className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-5">
-          {themes.map((theme) => (
-            <ThemeTile key={theme.id} theme={theme} dark={resolvedMode === "dark"} selected={appearance.theme === theme.id} onSelect={() => setAppearance({ theme: theme.id })} />
-          ))}
+      <Section
+        title="Colours"
+        description={`Pick a primary colour and an accent, as in the Material palette. Now: ${pairName(pair)}.`}
+        actions={
+          pair.primary !== DEFAULT_PAIR.primary || pair.accent !== DEFAULT_PAIR.accent ? (
+            <Button variant="ghost" size="sm" onClick={() => setPair(DEFAULT_PAIR)}>
+              Reset to Indigo + Pink
+            </Button>
+          ) : null
+        }
+      >
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid gap-6">
+            <SwatchGrid label="1. Primary colour" swatches={swatches} value={pair.primary} shade="500" onPick={(id) => setPair({ primary: id })} disabled={(s) => s.id === pair.accent} />
+            <SwatchGrid label="2. Accent colour" swatches={swatches.filter((s) => canBeAccent(s.id))} value={pair.accent} shade="A200" onPick={(id) => setPair({ accent: id })} disabled={(s) => s.id === pair.primary} />
+          </div>
+
+          <div className="grid content-start gap-4">
+            <PalettePreview pair={pair} dark={resolvedMode === "dark"} />
+            <dl className="grid grid-cols-2 overflow-hidden rounded shadow-xs">
+              {summary.map((cell) => (
+                <div key={cell.label} className="flex h-16 flex-col justify-between p-2" style={{ background: cell.hex, color: cell.on }}>
+                  <dd className="font-mono text-xs uppercase">{cell.hex}</dd>
+                  <dt className="text-[10px] font-medium uppercase tracking-wide opacity-90">{cell.label}</dt>
+                </div>
+              ))}
+            </dl>
+          </div>
         </div>
       </Section>
 
@@ -60,6 +87,70 @@ export default function AppearancePage() {
   );
 }
 
+function SwatchGrid({ label, swatches, value, shade, onPick, disabled }: { label: string; swatches: Swatch[]; value: string; shade: string; onPick: (id: string) => void; disabled: (s: Swatch) => boolean }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="grid gap-2">
+      <div className="text-sm font-medium text-muted-foreground">{label}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+        {swatches.map((s) => {
+          const hex = s.s[shade] ?? s.s["500"] ?? "#000000";
+          const selected = s.id === value;
+          const off = disabled(s);
+          return (
+            <button
+              key={s.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={`${s.name}${off ? " (already used)" : ""}`}
+              disabled={off}
+              onClick={() => onPick(s.id)}
+              className={cn(
+                "relative flex h-20 flex-col justify-between rounded p-2 text-left text-xs font-medium uppercase tracking-wide outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                selected ? "shadow-md ring-2 ring-foreground/70" : "shadow-xs hover:shadow-sm",
+                off && "cursor-not-allowed opacity-40",
+              )}
+              style={{ background: hex, color: onColor(hex) }}
+            >
+              <span>{s.name}</span>
+              {selected ? <Check aria-hidden="true" className="absolute right-2 bottom-2 size-5" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** materialpalette.com's preview card, drawn with the real tokens of the pair. */
+function PalettePreview({ pair, dark }: { pair: { primary: string; accent: string }; dark: boolean }) {
+  const vars = styleVarsFor(pair, dark ? "dark" : "light");
+  return (
+    <div style={vars as React.CSSProperties} className="overflow-hidden rounded bg-background shadow-md">
+      <div className="h-2 bg-primary-dark" />
+      <div className="relative bg-app-bar px-5 pt-10 pb-6 text-app-bar-foreground shadow-md">
+        <div className="text-2xl font-normal">Palette preview</div>
+        <div className="text-sm opacity-80">{pairName(pair)}</div>
+        <span className="absolute -bottom-6 right-5 flex size-12 items-center justify-center rounded-full bg-highlight text-highlight-foreground shadow-lg" aria-hidden="true">
+          ★
+        </span>
+      </div>
+      <div className="bg-card px-5 pt-8 pb-5 text-foreground">
+        <div className="text-sm">Group bookings for the park</div>
+        <div className="mt-1 text-sm text-primary-text underline underline-offset-2">Open the booking</div>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="inline-flex h-6 items-center rounded-full bg-status-green-bg px-2.5 text-xs font-medium text-status-green-fg">Confirmed</span>
+          <span className="inline-flex h-6 items-center rounded-full bg-status-amber-bg px-2.5 text-xs font-medium text-status-amber-fg">Customer reply</span>
+          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-highlight px-1.5 text-xs font-semibold text-highlight-foreground">43</span>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <span className="inline-flex h-9 items-center rounded bg-primary px-4 text-sm font-medium tracking-wide text-primary-foreground uppercase shadow-sm">New booking</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChoiceCard({ selected, onSelect, label, description, children }: { selected: boolean; onSelect: () => void; label: string; description: string; children: React.ReactNode }) {
   return (
     <button
@@ -68,67 +159,16 @@ function ChoiceCard({ selected, onSelect, label, description, children }: { sele
       aria-checked={selected}
       onClick={onSelect}
       className={cn(
-        "flex min-h-row-queue items-center gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 outline-none transition-colors hover:bg-nested focus-visible:ring-2 focus-visible:ring-selection-ring",
-        selected ? "ring-2 ring-primary" : "ring-border",
+        "flex min-h-row-queue items-center gap-3 rounded bg-card px-4 py-3 text-left shadow-xs outline-none transition-colors hover:bg-nested focus-visible:ring-2 focus-visible:ring-selection-ring",
+        selected && "ring-2 ring-primary",
       )}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-nested">{children}</span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded bg-nested">{children}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium text-foreground">{label}</span>
         <span className="block text-sm text-muted-foreground">{description}</span>
       </span>
       {selected ? <Check aria-hidden="true" className="size-5 shrink-0 text-primary-text" /> : null}
-    </button>
-  );
-}
-
-/** A 160×100 preview rendered in the theme it represents. */
-function ThemeTile({ theme, dark, selected, onSelect }: { theme: ThemeMeta; dark: boolean; selected: boolean; onSelect: () => void }) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      aria-label={`${theme.name}: ${theme.description}`}
-      onClick={onSelect}
-      className="group flex w-full flex-col items-start gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-    >
-      <span
-        data-theme={theme.id}
-        className={cn(
-          "relative block h-[100px] w-[160px] overflow-hidden rounded-lg bg-background text-foreground ring-1 ring-border",
-          dark && "dark",
-          selected && "ring-2 ring-primary",
-        )}
-      >
-        {/* sidebar strip */}
-        <span className="absolute inset-y-0 left-0 w-11 border-r border-sidebar-border bg-sidebar">
-          <span className="absolute top-2.5 left-2 h-1.5 w-5 rounded-sm bg-sidebar-foreground/60" />
-          <span className="absolute top-6 left-1 right-1 h-4 rounded-sm bg-sidebar-accent">
-            <span className="absolute top-1 bottom-1 left-0 w-[2px] rounded-r bg-primary" />
-            <span className="absolute top-[5px] left-2.5 h-1.5 w-5 rounded-sm bg-foreground/70" />
-          </span>
-          <span className="absolute top-12 left-2 h-1.5 w-6 rounded-sm bg-sidebar-foreground/40" />
-          <span className="absolute top-[62px] left-2 h-1.5 w-4 rounded-sm bg-sidebar-foreground/40" />
-        </span>
-        {/* card */}
-        <span className="absolute top-3 right-3 bottom-3 left-[54px] rounded-md bg-card p-2 ring-1 ring-border">
-          <span className="block h-2 w-14 rounded-sm bg-foreground/80" />
-          <span className="mt-1.5 block h-1.5 w-20 rounded-sm bg-muted-foreground/50" />
-          <span className="mt-2.5 flex gap-1">
-            <span className="inline-flex h-[11px] items-center rounded-[3px] bg-status-green-bg px-1 text-[6px] leading-none font-semibold text-status-green-fg ring-1 ring-pill-ring ring-inset">Paid</span>
-            <span className="inline-flex h-[11px] items-center rounded-[3px] bg-status-amber-bg px-1 text-[6px] leading-none font-semibold text-status-amber-fg ring-1 ring-pill-ring ring-inset">Waiting</span>
-          </span>
-          <span className="absolute right-2 bottom-2 inline-flex h-5 items-center rounded-[4px] bg-primary px-2 text-[7px] leading-none font-semibold text-primary-foreground">Send</span>
-        </span>
-        {selected ? (
-          <span className="absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Check aria-hidden="true" className="size-3" />
-          </span>
-        ) : null}
-      </span>
-      <span className={cn("text-body font-medium", selected ? "text-foreground" : "text-foreground")}>{theme.name}</span>
-      <span className="-mt-1.5 text-sm text-muted-foreground">{theme.description}</span>
     </button>
   );
 }

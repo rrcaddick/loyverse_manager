@@ -135,7 +135,7 @@ export default function BookingsPage() {
           </>
         )
       ) : (
-        <section className={cn("overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
+        <section className={cn("overflow-hidden rounded bg-card shadow-xs transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
           <DataTable
             key={state.tab}
             columns={columns}
@@ -257,7 +257,7 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
             size="sm"
             variant="ghost"
             aria-pressed={state.range === o.value}
-            className={cn(state.range === o.value && "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover hover:text-primary-foreground")}
+            className={cn("rounded-full normal-case tracking-normal", state.range === o.value ? "bg-primary-container text-on-primary-container hover:bg-primary-container" : "bg-secondary text-secondary-foreground hover:bg-secondary")}
             onClick={() => onChange({ range: o.value as RangePreset })}
           >
             {o.label}
