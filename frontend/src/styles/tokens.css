@@ -47,7 +47,10 @@
   --sidebar: #373431;
   --border: #afaaa6;
   --border-strong: #7a7673;
-  --input: #7a7673;
+  --input: #94908c;
+  --control: #ffffff;
+  --control-hover: #f8f3ee;
+  --control-border: #94908c;
   --foreground: #1d1b19;
   --muted-foreground: #494643;
   --faint-foreground: #7a7673;
@@ -68,10 +71,10 @@
   --on-tertiary-container: #52452a;
   --ring: #3b3424;
   --selection-ring: #3b3424;
-  --selection-row: #dcd6d2;
+  --selection-row: #cbc6c1;
   --state-hover: color-mix(in srgb, #1d1b19 8%, transparent);
   --state-focus: color-mix(in srgb, #1d1b19 12%, transparent);
-  --surface-hover: color-mix(in srgb, #1d1b19 8%, #ffffff);
+  --surface-hover: #d9d3cf;
   --direction-in: #005d96;
   --direction-out: #6d6a66;
   --card-foreground: #1d1b19;
@@ -138,9 +141,9 @@
   --paper-50: #e7e1dd;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -178,7 +181,10 @@
   --sidebar: #3f3623;
   --border: #6d6a66;
   --border-strong: #94908c;
-  --input: #94908c;
+  --input: #87837f;
+  --control: #494643;
+  --control-hover: #55524f;
+  --control-border: #87837f;
   --foreground: #f5f0eb;
   --muted-foreground: #cbc6c1;
   --faint-foreground: #94908c;
@@ -199,10 +205,10 @@
   --on-tertiary-container: #f4e0bb;
   --ring: #e8dbc5;
   --selection-ring: #e8dbc5;
-  --selection-row: #52504c;
+  --selection-row: #6b6864;
   --state-hover: color-mix(in srgb, #f5f0eb 8%, transparent);
   --state-focus: color-mix(in srgb, #f5f0eb 12%, transparent);
-  --surface-hover: color-mix(in srgb, #f5f0eb 8%, #373431);
+  --surface-hover: #55524f;
   --direction-in: #0067a5;
   --direction-out: #6d6a66;
   --card-foreground: #f5f0eb;
@@ -269,9 +275,9 @@
   --paper-50: #191715;
   --paper-0: #373431;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 
@@ -310,7 +316,10 @@
   --sidebar: #383339;
   --border: #b3a8b2;
   --border-strong: #7d747d;
-  --input: #7d747d;
+  --input: #988e97;
+  --control: #ffffff;
+  --control-hover: #fbf1f8;
+  --control-border: #988e97;
   --foreground: #1f1a1f;
   --muted-foreground: #4c444d;
   --faint-foreground: #7d747d;
@@ -331,10 +340,10 @@
   --on-tertiary-container: #663b38;
   --ring: #8800b4;
   --selection-ring: #8800b4;
-  --selection-row: #f9d8ff;
+  --selection-row: #f5c8ff;
   --state-hover: color-mix(in srgb, #1f1a1f 8%, transparent);
   --state-focus: color-mix(in srgb, #1f1a1f 12%, transparent);
-  --surface-hover: color-mix(in srgb, #1f1a1f 8%, #ffffff);
+  --surface-hover: #dbd2d9;
   --direction-in: #005d96;
   --direction-out: #716871;
   --card-foreground: #1f1a1f;
@@ -401,9 +410,9 @@
   --paper-50: #eae0e7;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -440,7 +449,10 @@
   --sidebar: #4c2859;
   --border: #716871;
   --border-strong: #988e97;
-  --input: #988e97;
+  --input: #8a818a;
+  --control: #4b454b;
+  --control-hover: #575057;
+  --control-border: #8a818a;
   --foreground: #f8eef5;
   --muted-foreground: #cfc3cd;
   --faint-foreground: #988e97;
@@ -461,10 +473,10 @@
   --on-tertiary-container: #ffdad7;
   --ring: #a520d5;
   --selection-ring: #a520d5;
-  --selection-row: #7d00a6;
+  --selection-row: #8400af;
   --state-hover: color-mix(in srgb, #f8eef5 8%, transparent);
   --state-focus: color-mix(in srgb, #f8eef5 12%, transparent);
-  --surface-hover: color-mix(in srgb, #f8eef5 8%, #383339);
+  --surface-hover: #575057;
   --direction-in: #0067a5;
   --direction-out: #716871;
   --card-foreground: #f8eef5;
@@ -531,9 +543,9 @@
   --paper-50: #1b161b;
   --paper-0: #383339;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 
@@ -572,7 +584,10 @@
   --sidebar: #35343a;
   --border: #acaab4;
   --border-strong: #777680;
-  --input: #777680;
+  --input: #918f9a;
+  --control: #ffffff;
+  --control-hover: #f5f2fa;
+  --control-border: #918f9a;
   --foreground: #1b1b21;
   --muted-foreground: #46464f;
   --faint-foreground: #777680;
@@ -593,10 +608,10 @@
   --on-tertiary-container: #5f3c52;
   --ring: #2524f9;
   --selection-ring: #2524f9;
-  --selection-row: #e1e0ff;
+  --selection-row: #d3d4ff;
   --state-hover: color-mix(in srgb, #1b1b21 8%, transparent);
   --state-focus: color-mix(in srgb, #1b1b21 12%, transparent);
-  --surface-hover: color-mix(in srgb, #1b1b21 8%, #ffffff);
+  --surface-hover: #d6d3db;
   --direction-in: #005d96;
   --direction-out: #6b6a73;
   --card-foreground: #1b1b21;
@@ -663,9 +678,9 @@
   --paper-50: #e4e1e9;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -702,7 +717,10 @@
   --sidebar: #2e3167;
   --border: #6b6a73;
   --border-strong: #918f9a;
-  --input: #918f9a;
+  --input: #84838d;
+  --control: #47464c;
+  --control-hover: #535258;
+  --control-border: #84838d;
   --foreground: #f3eff7;
   --muted-foreground: #c7c5d0;
   --faint-foreground: #918f9a;
@@ -723,10 +741,10 @@
   --on-tertiary-container: #ffd8ed;
   --ring: #474dff;
   --selection-ring: #474dff;
-  --selection-row: #1812f3;
+  --selection-row: #211ff7;
   --state-hover: color-mix(in srgb, #f3eff7 8%, transparent);
   --state-focus: color-mix(in srgb, #f3eff7 12%, transparent);
-  --surface-hover: color-mix(in srgb, #f3eff7 8%, #35343a);
+  --surface-hover: #535258;
   --direction-in: #0067a5;
   --direction-out: #6b6a73;
   --card-foreground: #f3eff7;
@@ -793,9 +811,9 @@
   --paper-50: #17171d;
   --paper-0: #35343a;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 
@@ -834,7 +852,10 @@
   --sidebar: #303637;
   --border: #a3adaf;
   --border-strong: #6f797b;
-  --input: #6f797b;
+  --input: #899294;
+  --control: #ffffff;
+  --control-hover: #eff5f6;
+  --control-border: #899294;
   --foreground: #171d1e;
   --muted-foreground: #3f484a;
   --faint-foreground: #6f797b;
@@ -855,10 +876,10 @@
   --on-tertiary-container: #3c4665;
   --ring: #005b67;
   --selection-ring: #005b67;
-  --selection-row: #9defff;
+  --selection-row: #63e9ff;
   --state-hover: color-mix(in srgb, #171d1e 8%, transparent);
   --state-focus: color-mix(in srgb, #171d1e 12%, transparent);
-  --surface-hover: color-mix(in srgb, #171d1e 8%, #ffffff);
+  --surface-hover: #d0d5d7;
   --direction-in: #005d96;
   --direction-out: #636c6e;
   --card-foreground: #171d1e;
@@ -925,9 +946,9 @@
   --paper-50: #dee3e5;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -964,7 +985,10 @@
   --sidebar: #003d46;
   --border: #636c6e;
   --border-strong: #899294;
-  --input: #899294;
+  --input: #7c8587;
+  --control: #424849;
+  --control-hover: #4d5355;
+  --control-border: #7c8587;
   --foreground: #ecf2f3;
   --muted-foreground: #bfc8ca;
   --faint-foreground: #899294;
@@ -985,10 +1009,10 @@
   --on-tertiary-container: #dbe1ff;
   --ring: #007381;
   --selection-ring: #007381;
-  --selection-row: #00545e;
+  --selection-row: #005964;
   --state-hover: color-mix(in srgb, #ecf2f3 8%, transparent);
   --state-focus: color-mix(in srgb, #ecf2f3 12%, transparent);
-  --surface-hover: color-mix(in srgb, #ecf2f3 8%, #303637);
+  --surface-hover: #4d5355;
   --direction-in: #0067a5;
   --direction-out: #636c6e;
   --card-foreground: #ecf2f3;
@@ -1055,9 +1079,9 @@
   --paper-50: #13191a;
   --paper-0: #303637;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 
@@ -1096,7 +1120,10 @@
   --sidebar: #3c332d;
   --border: #baa89c;
   --border-strong: #84746a;
-  --input: #84746a;
+  --input: #9f8d82;
+  --control: #ffffff;
+  --control-hover: #fff1e9;
+  --control-border: #9f8d82;
   --foreground: #221a14;
   --muted-foreground: #51443b;
   --faint-foreground: #84746a;
@@ -1117,10 +1144,10 @@
   --on-tertiary-container: #464a20;
   --ring: #804200;
   --selection-ring: #804200;
-  --selection-row: #ffdcc4;
+  --selection-row: #ffcdaa;
   --state-hover: color-mix(in srgb, #221a14 8%, transparent);
   --state-focus: color-mix(in srgb, #221a14 12%, transparent);
-  --surface-hover: color-mix(in srgb, #221a14 8%, #ffffff);
+  --surface-hover: #e1d1c8;
   --direction-in: #005d96;
   --direction-out: #77685e;
   --card-foreground: #221a14;
@@ -1187,9 +1214,9 @@
   --paper-50: #f0dfd6;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -1226,7 +1253,10 @@
   --sidebar: #582b00;
   --border: #77685e;
   --border-strong: #9f8d82;
-  --input: #9f8d82;
+  --input: #918176;
+  --control: #4f453e;
+  --control-hover: #5b5049;
+  --control-border: #918176;
   --foreground: #feeee4;
   --muted-foreground: #d6c3b7;
   --faint-foreground: #9f8d82;
@@ -1247,10 +1277,10 @@
   --on-tertiary-container: #e3e7af;
   --ring: #a15400;
   --selection-ring: #a15400;
-  --selection-row: #763c00;
+  --selection-row: #7d4000;
   --state-hover: color-mix(in srgb, #feeee4 8%, transparent);
   --state-focus: color-mix(in srgb, #feeee4 12%, transparent);
-  --surface-hover: color-mix(in srgb, #feeee4 8%, #3c332d);
+  --surface-hover: #5b5049;
   --direction-in: #0067a5;
   --direction-out: #77685e;
   --card-foreground: #feeee4;
@@ -1317,9 +1347,9 @@
   --paper-50: #1e1611;
   --paper-0: #3c332d;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 
@@ -1358,7 +1388,10 @@
   --sidebar: #353535;
   --border: #5e5e5e;
   --border-strong: #777777;
-  --input: #777777;
+  --input: #919191;
+  --control: #ffffff;
+  --control-hover: #f3f3f3;
+  --control-border: #919191;
   --foreground: #1b1b1b;
   --muted-foreground: #474747;
   --faint-foreground: #777777;
@@ -1379,10 +1412,10 @@
   --on-tertiary-container: #ffffff;
   --ring: #353535;
   --selection-ring: #353535;
-  --selection-row: #d7d7d7;
+  --selection-row: #c6c6c6;
   --state-hover: color-mix(in srgb, #1b1b1b 8%, transparent);
   --state-focus: color-mix(in srgb, #1b1b1b 12%, transparent);
-  --surface-hover: color-mix(in srgb, #1b1b1b 8%, #ffffff);
+  --surface-hover: #d4d4d4;
   --direction-in: #004a78;
   --direction-out: #6a6a6a;
   --card-foreground: #1b1b1b;
@@ -1449,9 +1482,9 @@
   --paper-50: #e2e2e2;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -1488,7 +1521,10 @@
   --sidebar: #373737;
   --border: #ababab;
   --border-strong: #919191;
-  --input: #919191;
+  --input: #848484;
+  --control: #474747;
+  --control-hover: #525252;
+  --control-border: #848484;
   --foreground: #f1f1f1;
   --muted-foreground: #c6c6c6;
   --faint-foreground: #919191;
@@ -1509,10 +1545,10 @@
   --on-tertiary-container: #000000;
   --ring: #dddddd;
   --selection-ring: #dddddd;
-  --selection-row: #505050;
+  --selection-row: #686868;
   --state-hover: color-mix(in srgb, #f1f1f1 8%, transparent);
   --state-focus: color-mix(in srgb, #f1f1f1 12%, transparent);
-  --surface-hover: color-mix(in srgb, #f1f1f1 8%, #353535);
+  --surface-hover: #525252;
   --direction-in: #0067a5;
   --direction-out: #6a6a6a;
   --card-foreground: #f1f1f1;
@@ -1579,9 +1615,9 @@
   --paper-50: #181818;
   --paper-0: #353535;
   --radius: 0.5rem;
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-  --shadow-overlay: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75);
   color-scheme: dark;
 }
 

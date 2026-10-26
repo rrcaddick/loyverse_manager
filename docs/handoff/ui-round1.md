@@ -79,3 +79,15 @@ primary-tinted sidebar), a vivid primary for fills, `--primary-text` for the
 primary used as text, deeper semantic fills, and an ink button for Graphite.
 `check-palette.mjs` minimums were raised to match. Screenshots in
 `data/screenshots/r1c/`.
+
+## Third addendum: hover and elevation
+
+The owner could not pick out a hovered row (the 8 % layer over the card
+landed on the zebra tone) nor any elevation in either mode. Hover is now a
+fixed tone beyond the zebra row; shadows are desktop-scale in light and a
+lighter fill plus a top highlight edge in dark; inputs, selects, the tab
+strip, chips and outline/secondary buttons sit on a raised control surface
+(`--control`, `--control-border`, `--control-hover`); the active tab and
+chip use the primary container. `check-palette.mjs` gained zebra↔hover,
+hover↔selected (tint-aware), canvas↔control and control text pairs
+(396 checks). Screenshots in `data/screenshots/r1d/`.

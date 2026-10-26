@@ -60,7 +60,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
       aria-label={aria["aria-label"]}
       className={cn(
         "flex max-w-full items-center overflow-x-auto no-scrollbar",
-        line ? "gap-1 border-b border-border" : "w-fit gap-0.5 rounded-lg bg-muted p-[3px]",
+        line ? "gap-1 border-b border-border" : "w-fit gap-0.5 rounded-lg bg-control p-[3px] shadow-xs ring-1 ring-control-border",
         className,
       )}
     >
@@ -90,7 +90,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
                     "-mb-px rounded-t-md border-b-2 border-transparent",
                     active ? "border-primary text-foreground" : "text-muted-foreground hover:text-foreground",
                   )
-                : cn("rounded-md", active ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"),
+                : cn("rounded-md", active ? "bg-primary-container text-on-primary-container shadow-sm ring-1 ring-primary/30" : "text-muted-foreground hover:bg-control-hover hover:text-foreground"),
             )}
           >
             {item.icon ? <item.icon aria-hidden="true" className="size-4" /> : null}

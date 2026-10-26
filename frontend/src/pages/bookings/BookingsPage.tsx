@@ -135,7 +135,7 @@ export default function BookingsPage() {
           </>
         )
       ) : (
-        <section className={cn("overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
+        <section className={cn("overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
           <DataTable
             key={state.tab}
             columns={columns}
@@ -251,7 +251,15 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
 
       <div role="group" aria-label="Date range" className="flex flex-wrap items-center gap-1">
         {RANGE_OPTIONS.map((o) => (
-          <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
+          <Button
+            key={o.value}
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-pressed={state.range === o.value}
+            className={cn(state.range === o.value && "bg-primary-container text-on-primary-container shadow-xs ring-1 ring-primary/30 hover:bg-primary-container hover:text-on-primary-container")}
+            onClick={() => onChange({ range: o.value as RangePreset })}
+          >
             {o.label}
           </Button>
         ))}

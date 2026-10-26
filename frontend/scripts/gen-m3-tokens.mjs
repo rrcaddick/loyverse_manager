@@ -143,16 +143,33 @@ function tokens(theme, isDark) {
   const onPrimary = ink && !L ? N(12) : "#ffffff";
   const primaryContainer = PV(L ? 88 : 30);
   const onPrimaryContainer = PV(L ? 10 : 95);
-  const selected = ink ? N(L ? 86 : 34) : PV(L ? 90 : 32);
+  // Selected is tinted so it differs from hover by hue as well as by tone.
+  const selected = ink ? N(L ? 80 : 44) : PV(L ? 86 : 34);
   const secondaryContainer = NV(L ? 84 : 34);
   const onSecondaryContainer = NV(L ? 15 : 95);
 
+  // Elevation at desktop scale (owner, 26 Oct): Material's phone-scale
+  // shadows vanish on a monitor. Light: large, dark shadows on the grey
+  // canvas. Dark: a black shadow alone has nothing darker to fall onto, so a
+  // raised object is a lighter fill with a 1 px light edge on top, and the
+  // shadow only separates it underneath.
   const shadowLevel = (n) =>
-    ({
-      1: "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15)",
-      2: "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15)",
-      3: "0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15)",
-    })[n];
+    L
+      ? {
+          1: "0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18)",
+          2: "0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24)",
+          3: "0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32)",
+        }[n]
+      : {
+          1: "inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50)",
+          2: "inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60)",
+          3: "inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75)",
+        }[n];
+  // Raised controls (inputs, selects, tab strips, chips): their own surface,
+  // lighter than the canvas in both modes, with a firm border.
+  const control = N(L ? 100 : 30);
+  const controlHover = N(L ? 96 : 35);
+  const controlBorder = NV(L ? 60 : 55);
   const t = {
     ...sem,
     ...grey,
@@ -172,7 +189,10 @@ function tokens(theme, isDark) {
     sidebar: sidebar,
     border: border,
     "border-strong": borderStrong,
-    input: borderStrong,
+    input: controlBorder,
+    control: control,
+    "control-hover": controlHover,
+    "control-border": controlBorder,
     foreground: text,
     "muted-foreground": muted,
     "faint-foreground": faint,
@@ -199,7 +219,9 @@ function tokens(theme, isDark) {
     "selection-row": selected,
     "state-hover": `color-mix(in srgb, ${text} 8%, transparent)`,
     "state-focus": `color-mix(in srgb, ${text} 12%, transparent)`,
-    "surface-hover": `color-mix(in srgb, ${text} 8%, ${card})`,
+    // Hover must read against BOTH row colours (card 100/22, zebra 94/27), so it
+    // is a fixed step beyond the zebra row, not a thin state layer over the card.
+    "surface-hover": N(L ? 85 : 35),
     "direction-in": sem["blue-solid"],
     "direction-out": grey["grey-solid"],
 

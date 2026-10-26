@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "data" / "screenshots" / "r1c"
+OUT = ROOT / "data" / "screenshots" / "r1d"
 EMAIL = os.environ.get("FY_SHOT_EMAIL", "shot-r1@example.com")
 PASSWORD = os.environ.get("FY_SHOT_PASSWORD", "shot-r1-password-1")
 THEMES = [("Graphite", "Light", "graphite-light"), ("Fynbos", "Dark", "fynbos-dark"), ("Lagoon", "Light", "lagoon-light"), ("Indigo", "Dark", "indigo-dark")]
