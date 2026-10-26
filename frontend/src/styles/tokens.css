@@ -76,7 +76,7 @@
   --selection-row: #cbc6c1;
   --state-hover: color-mix(in srgb, #1d1b19 8%, transparent);
   --state-focus: color-mix(in srgb, #1d1b19 12%, transparent);
-  --surface-hover: #afaaa6;
+  --surface-hover: color-mix(in srgb, #3b3424 50%, transparent);
   --table-rule: #615e5a;
   --direction-in: #005d96;
   --direction-out: #6d6a66;
@@ -213,7 +213,7 @@
   --selection-row: #5c5956;
   --state-hover: color-mix(in srgb, #f5f0eb 8%, transparent);
   --state-focus: color-mix(in srgb, #f5f0eb 12%, transparent);
-  --surface-hover: #706c69;
+  --surface-hover: color-mix(in srgb, #e8dbc5 28%, transparent);
   --table-rule: #a9a5a1;
   --direction-in: #0067a5;
   --direction-out: #6d6a66;
@@ -351,7 +351,7 @@
   --selection-row: #f5c8ff;
   --state-hover: color-mix(in srgb, #1f1a1f 8%, transparent);
   --state-focus: color-mix(in srgb, #1f1a1f 12%, transparent);
-  --surface-hover: #b1a9b0;
+  --surface-hover: color-mix(in srgb, #8800b4 50%, transparent);
   --table-rule: #645c64;
   --direction-in: #005d96;
   --direction-out: #716871;
@@ -484,10 +484,10 @@
   --on-tertiary-container: #ffdad7;
   --ring: #a520d5;
   --selection-ring: #a520d5;
-  --selection-row: #684174;
+  --selection-row: #775084;
   --state-hover: color-mix(in srgb, #f8eef5 8%, transparent);
   --state-focus: color-mix(in srgb, #f8eef5 12%, transparent);
-  --surface-hover: #726b71;
+  --surface-hover: color-mix(in srgb, #a520d5 50%, transparent);
   --table-rule: #ada3ac;
   --direction-in: #0067a5;
   --direction-out: #716871;
@@ -625,7 +625,7 @@
   --selection-row: #d3d4ff;
   --state-hover: color-mix(in srgb, #1b1b21 8%, transparent);
   --state-focus: color-mix(in srgb, #1b1b21 12%, transparent);
-  --surface-hover: #acaab1;
+  --surface-hover: color-mix(in srgb, #2524f9 50%, transparent);
   --table-rule: #5e5d67;
   --direction-in: #005d96;
   --direction-out: #6b6a73;
@@ -758,10 +758,10 @@
   --on-tertiary-container: #ffd8ed;
   --ring: #474dff;
   --selection-ring: #474dff;
-  --selection-row: #484b82;
+  --selection-row: #565992;
   --state-hover: color-mix(in srgb, #f3eff7 8%, transparent);
   --state-focus: color-mix(in srgb, #f3eff7 12%, transparent);
-  --surface-hover: #6d6c73;
+  --surface-hover: color-mix(in srgb, #474dff 50%, transparent);
   --table-rule: #a6a5af;
   --direction-in: #0067a5;
   --direction-out: #6b6a73;
@@ -899,7 +899,7 @@
   --selection-row: #93e4f3;
   --state-hover: color-mix(in srgb, #171d1e 8%, transparent);
   --state-focus: color-mix(in srgb, #171d1e 12%, transparent);
-  --surface-hover: #a6acae;
+  --surface-hover: color-mix(in srgb, #005b67 50%, transparent);
   --table-rule: #576062;
   --direction-in: #005d96;
   --direction-out: #636c6e;
@@ -1032,10 +1032,10 @@
   --on-tertiary-container: #dbe1ff;
   --ring: #007381;
   --selection-ring: #007381;
-  --selection-row: #005964;
+  --selection-row: #006875;
   --state-hover: color-mix(in srgb, #ecf2f3 8%, transparent);
   --state-focus: color-mix(in srgb, #ecf2f3 12%, transparent);
-  --surface-hover: #686e6f;
+  --surface-hover: color-mix(in srgb, #007381 50%, transparent);
   --table-rule: #9ea7aa;
   --direction-in: #0067a5;
   --direction-out: #636c6e;
@@ -1173,7 +1173,7 @@
   --selection-row: #ffcdaa;
   --state-hover: color-mix(in srgb, #221a14 8%, transparent);
   --state-focus: color-mix(in srgb, #221a14 12%, transparent);
-  --surface-hover: #b7a8a0;
+  --surface-hover: color-mix(in srgb, #804200 50%, transparent);
   --table-rule: #6a5c52;
   --direction-in: #005d96;
   --direction-out: #77685e;
@@ -1306,10 +1306,10 @@
   --on-tertiary-container: #e3e7af;
   --ring: #a15400;
   --selection-ring: #a15400;
-  --selection-row: #784312;
+  --selection-row: #895120;
   --state-hover: color-mix(in srgb, #feeee4 8%, transparent);
   --state-focus: color-mix(in srgb, #feeee4 12%, transparent);
-  --surface-hover: #776b63;
+  --surface-hover: color-mix(in srgb, #a15400 50%, transparent);
   --table-rule: #b4a297;
   --direction-in: #0067a5;
   --direction-out: #77685e;
@@ -1447,7 +1447,7 @@
   --selection-row: #c6c6c6;
   --state-hover: color-mix(in srgb, #1b1b1b 8%, transparent);
   --state-focus: color-mix(in srgb, #1b1b1b 12%, transparent);
-  --surface-hover: #ababab;
+  --surface-hover: color-mix(in srgb, #353535 50%, transparent);
   --table-rule: #5e5e5e;
   --direction-in: #004a78;
   --direction-out: #6a6a6a;
@@ -1583,7 +1583,7 @@
   --selection-row: #595959;
   --state-hover: color-mix(in srgb, #f1f1f1 8%, transparent);
   --state-focus: color-mix(in srgb, #f1f1f1 12%, transparent);
-  --surface-hover: #6d6d6d;
+  --surface-hover: color-mix(in srgb, #dddddd 28%, transparent);
   --table-rule: #a6a6a6;
   --direction-in: #0067a5;
   --direction-out: #6a6a6a;

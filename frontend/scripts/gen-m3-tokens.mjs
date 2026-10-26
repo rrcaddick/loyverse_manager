@@ -153,7 +153,7 @@ function tokens(theme, isDark) {
   const primaryContainer = PS(L ? 88 : 30);
   const onPrimaryContainer = PS(L ? 12 : 94);
   // Selected is tinted so it differs from hover by hue as well as by tone.
-  const selected = ink ? N(L ? 80 : 38) : PS(L ? 86 : 34);
+  const selected = ink ? N(L ? 80 : 38) : PS(L ? 86 : 40);
   const secondaryContainer = NV(L ? 84 : 34);
   const onSecondaryContainer = NV(L ? 15 : 95);
 
@@ -236,7 +236,10 @@ function tokens(theme, isDark) {
     "state-focus": `color-mix(in srgb, ${text} 12%, transparent)`,
     // Hover must read against BOTH row colours (card 100/22, zebra 94/27), so it
     // is a fixed step beyond the zebra row, not a thin state layer over the card.
-    "surface-hover": N(L ? 70 : 46),
+    // Hovered row: the primary at 50 % over the row (owner, 26 Oct).
+    // Ink themes in dark have a near-white primary, so 50 % would wash the row out;
+    // they use a lighter hand.
+    "surface-hover": `color-mix(in srgb, ${primary} ${ink && !L ? 28 : 50}%, transparent)`,
     // Row separators: twice the earlier darkness (light NV70 → 40, dark NV45 → 68).
     "table-rule": NV(L ? 40 : 68),
     "direction-in": sem["blue-solid"],

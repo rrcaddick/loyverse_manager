@@ -97,8 +97,8 @@ const GAPS = [
   ["zebra ↔ table head", "surface-nested", "surface-high", 0.04],
   ["canvas ↔ table head", "background", "surface-high", 0.08],
   ["canvas ↔ sidebar", "background", "sidebar", 0.10],
-  ["card ↔ hover", "card", "surface-hover", 0.08],
-  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.08],
+  ["card ↔ hover", "card", "surface-hover", 0.08, "tint"],
+  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.08, "tint"],
   ["canvas ↔ control", "background", "control", 0.06],
   ["card ↔ selected row", "card", "selection-row", 0.05],
   // A selected row is tinted: it may differ from its neighbours by hue instead of tone.
