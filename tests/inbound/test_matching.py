@@ -83,3 +83,36 @@ def test_choose_cluster_takes_the_newest_season_and_respects_the_floor():
 def test_expandable_addresses_skip_robots_and_us():
     t = mt.ThreadFacts(thrid=1, participants={"teacher@school.org", "no-reply@bank.co.za", "info@school.org", "bookings@farmyardpark.co.za"})
     assert mt.expandable_addresses(t, {"bookings@farmyardpark.co.za"}) == {"teacher@school.org"}
+
+
+def test_clusters_join_on_overlapping_spans():
+    quote = mt.ThreadFacts(thrid=1, first_at=datetime(2026, 4, 7), last_at=datetime(2026, 4, 9))
+    notice = mt.ThreadFacts(thrid=2, first_at=datetime(2026, 4, 15), last_at=datetime(2026, 6, 26))
+    chosen, rejected, note = mt.choose_cluster([quote, notice])
+    assert {t.thrid for t in chosen} == {1, 2} and rejected == [] and note == "one cluster"
+
+
+def test_cc_only_address_is_weaker_than_the_contact():
+    booking = mt.BookingFacts.from_row({"id": 1, "reference": None, "doc_number": None, "group_name": "Harbour of Hope Ministries",
+                                        "contact_name": "Harlane Solomons", "contact_email": "harlane@example.com"})
+    booking.cc_emails.add("jill@example.com")
+    other = mt.ThreadFacts(thrid=1, participants={"jill@example.com"}, subjects={"Quotation: 19 December 2026"}, text="")
+    pts, why = mt.score(other, booking)
+    assert why == ["cc-contact"] and mt.verdict(pts) == "review"
+    own = mt.ThreadFacts(thrid=2, participants={"harlane@example.com"}, subjects={"Wanting to know"}, text="")
+    assert mt.verdict(mt.score(own, booking)[0]) == "attach"
+
+
+def test_short_group_words_are_weak_evidence():
+    booking = mt.BookingFacts.from_row({"id": 1, "reference": None, "doc_number": None, "group_name": "St Mark's Church",
+                                        "contact_name": "Denise Lowton"})
+    t = mt.ThreadFacts(thrid=1, participants={"markfredericks1@gmail.com"}, from_names={"Mark Fredericks"},
+                       subjects={"New Apostolic church Klapmuts Sunday School outing"}, text="")
+    pts, why = mt.score(t, booking)
+    assert pts == 35 and mt.verdict(pts) == "no"
+
+
+def test_park_addresses_are_never_contacts():
+    assert mt.is_park_address("farmyardmanagers@gmail.com")
+    assert mt.is_park_address("info@farmyardpark.co.za")
+    assert not mt.is_park_address("jill@example.com")

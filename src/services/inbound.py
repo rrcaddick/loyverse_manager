@@ -89,8 +89,7 @@ def _own() -> set[str]:
 
 
 def _is_own(address: str | None) -> bool:
-    a = (address or "").lower()
-    return a in _own() or a.endswith("@farmyardpark.co.za")
+    return mt.is_park_address(address, _own())
 
 
 def _now() -> datetime:

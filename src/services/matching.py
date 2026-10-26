@@ -30,6 +30,7 @@ from typing import Iterable
 
 SCORE_REFERENCE = 100
 SCORE_EMAIL = 90
+SCORE_CC_EMAIL = 45  # an address that was only cc'd on the booking's mail
 SCORE_MOBILE = 80
 SCORE_GROUP = 60
 SCORE_GROUP_PARTIAL = 35
@@ -269,6 +270,7 @@ class BookingFacts:
     group_name: str
     contact_name: str
     emails: set[str] = field(default_factory=set)
+    cc_emails: set[str] = field(default_factory=set)  # learned by expansion; weaker evidence
     mobile: str | None = None
     visit_date: date | None = None
     enquiry_date: date | None = None
@@ -339,15 +341,19 @@ def score(thread: ThreadFacts, booking: BookingFacts) -> tuple[int, list[str]]:
     if booking.emails and (thread.participants & booking.emails):
         pts += SCORE_EMAIL
         why.append("email")
+    elif booking.cc_emails and (thread.participants & booking.cc_emails):
+        pts += SCORE_CC_EMAIL
+        why.append("cc-contact")
     if booking.mobile and booking.mobile in thread.mobiles():
         pts += SCORE_MOBILE
         why.append("mobile")
     hay = thread.word_set()
     cover, hits = group_coverage(booking.group_name, hay)
-    if cover >= 0.999:
+    if cover >= 0.999 and any(len(h) >= 5 for h in hits):
         pts += SCORE_GROUP
         why.append("group")
     elif cover >= 0.5 and hits:
+        # Short words (Mark, Hope, Life) are weak on their own.
         pts += SCORE_GROUP_PARTIAL
         why.append("group~" + "+".join(hits))
     first, surname = name_parts(booking.contact_name)
@@ -375,15 +381,24 @@ def verdict(points: int) -> str:
 def cluster_threads(
     threads: Iterable[ThreadFacts], gap_days: int = CLUSTER_GAP_DAYS
 ) -> list[list[ThreadFacts]]:
-    """Group conversations into seasons: sorted by last activity, a silence
-    longer than ``gap_days`` starts a new cluster. Newest cluster last."""
-    ordered = sorted((t for t in threads if t.last_at), key=lambda t: t.last_at)  # type: ignore[arg-type]
+    """Group conversations into seasons. Each conversation spans first_at to
+    last_at; one that starts within ``gap_days`` of the cluster's end joins
+    it, a longer silence starts a new cluster. Newest cluster last."""
+    ordered = sorted(
+        (t for t in threads if t.last_at), key=lambda t: (t.first_at or t.last_at, t.last_at)  # type: ignore[arg-type]
+    )
     clusters: list[list[ThreadFacts]] = []
+    end: datetime | None = None
     for t in ordered:
-        if clusters and (t.last_at - clusters[-1][-1].last_at) <= timedelta(days=gap_days):  # type: ignore[operator]
+        start = t.first_at or t.last_at
+        if clusters and end and (start - end) <= timedelta(days=gap_days):  # type: ignore[operator]
             clusters[-1].append(t)
+            end = max(end, t.last_at)  # type: ignore[type-var]
         else:
             clusters.append([t])
+            end = t.last_at
+    for c in clusters:
+        c.sort(key=lambda t: t.last_at)  # type: ignore[arg-type,return-value]
     return clusters
 
 
@@ -412,12 +427,23 @@ def is_noreply(address: str | None) -> bool:
     return bool(address and NOREPLY_RE.search(address.split("@", 1)[0]))
 
 
+def is_park_address(address: str | None, own: Iterable[str] = ()) -> bool:
+    """Any of the park's own mailboxes: the bookings address, the domain, and
+    the other Gmail boxes that carry the park's name (farmyardmanagers@…)."""
+    a = (address or "").lower()
+    if not a:
+        return False
+    if a in set(own) or a.endswith("@farmyardpark.co.za"):
+        return True
+    return "farmyard" in a.split("@", 1)[0]
+
+
 def expandable_addresses(thread: ThreadFacts, own: set[str]) -> set[str]:
     """Addresses on a matched thread worth searching for (one hop): people,
     not robots, not us, not generic shared mailboxes."""
     out: set[str] = set()
     for a in thread.participants:
-        if a in own or is_noreply(a):
+        if is_park_address(a, own) or is_noreply(a):
             continue
         local = a.split("@", 1)[0]
         if local in STOP_LOCAL_TOKENS:

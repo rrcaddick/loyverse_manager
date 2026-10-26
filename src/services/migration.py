@@ -59,8 +59,7 @@ def own_addresses() -> set[str]:
 
 
 def is_own(address: str | None, own: set[str]) -> bool:
-    a = (address or "").lower()
-    return a in own or a.endswith("@farmyardpark.co.za")
+    return mt.is_park_address(address, own)
 
 
 # ------------------------------------------------------------- shapes ---
@@ -327,7 +326,7 @@ def plan_booking(
         plan.notes.append(f"{len(expand)} addresses on the matched mail, first {MAX_EXPAND_ADDRESSES} searched")
         expand = expand[:MAX_EXPAND_ADDRESSES]
     if expand:
-        bf.emails.update(expand)
+        bf.cc_emails.update(expand)
         plan.learned_emails.update(expand)
         for address in expand:
             new_thrids = []
@@ -355,6 +354,10 @@ def plan_booking(
     plan.rejected_old = [t.thrid for t in rejected]
     plan.cluster_note = note
     window_start = min((t.first_at for t in chosen if t.first_at), default=None)
+    last_chosen = max((t.last_at for t in chosen if t.last_at), default=None)
+    if last_chosen and bf.visit_date and (bf.visit_date - last_chosen.date()).days > 240:
+        months = (bf.visit_date - last_chosen.date()).days // 30
+        plan.notes.append(f"conversation ended {months} months before the visit; may be an earlier visit of the same group")
     plan.review = [
         thrid
         for thrid, tp in plan.threads.items()
@@ -393,10 +396,11 @@ def bank_candidates(row: dict, tolerance_pct: float = 0.02) -> list[dict]:
     since = (row.get("enquiry_date") or (row.get("visit_date") - timedelta(days=120))) - timedelta(days=7)
     credits = query(
         """
-        SELECT id, booking_date, amount, description, end_to_end_id, match_status, booking_id
-        FROM bank_transactions
-        WHERE credit_debit = 'CREDIT' AND booking_date >= %s
-        ORDER BY booking_date
+        SELECT t.id, t.booking_date, t.amount, t.description, t.end_to_end_id, t.match_status,
+               (SELECT p.booking_id FROM payments p WHERE p.bank_transaction_id = t.id LIMIT 1) AS booking_id
+        FROM bank_transactions t
+        WHERE t.credit_debit = 'CREDIT' AND t.booking_date >= %s
+        ORDER BY t.booking_date
         """,
         (since,),
     )

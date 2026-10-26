@@ -69,10 +69,11 @@ def search(
     until = date_to or today
     rows = query(
         """
-        SELECT id, booking_date, value_date, amount, description, end_to_end_id, match_status, booking_id
-        FROM bank_transactions
-        WHERE credit_debit = 'CREDIT' AND booking_date BETWEEN %s AND %s
-        ORDER BY booking_date DESC, id DESC
+        SELECT t.id, t.booking_date, t.value_date, t.amount, t.description, t.end_to_end_id, t.match_status,
+               (SELECT p.booking_id FROM payments p WHERE p.bank_transaction_id = t.id LIMIT 1) AS booking_id
+        FROM bank_transactions t
+        WHERE t.credit_debit = 'CREDIT' AND t.booking_date BETWEEN %s AND %s
+        ORDER BY t.booking_date DESC, t.id DESC
         """,
         (since, until),
     )
