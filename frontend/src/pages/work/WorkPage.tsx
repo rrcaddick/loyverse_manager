@@ -1,18 +1,17 @@
 /**
- * /work — one list of everything that needs a person (spec §4). A rail of
- * kinds on the left with counts (hidden at zero), 56 px WorkRows with one
- * filled verb each, the detail beside the list. `?view=` and `?page=` live
+ * /work — one list of everything that needs a person. The views live in the
+ * sidebar's Work accordion with their counts (no second menu here); 56 px
+ * WorkRows with one filled verb each, the detail beside the list. `?view=` and `?page=` live
  * in the URL. Keys: J/K move, Enter selects, 1 / 2 fire the focused row's
  * verbs, Esc closes the panel.
  */
 
-import { Archive, Bell, DoorOpen, Hourglass, Inbox, Landmark, Mail, Sparkles, Ticket, AlertCircle, RefreshCw, type LucideIcon } from "lucide-react";
+import { Archive, Bell, DoorOpen, Hourglass, Inbox, Landmark, Mail, MessageSquareText, Receipt, Sparkles, Split, Ticket, AlertCircle, RefreshCw, type LucideIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { KindRail, type KindRailItem } from "@/components/kind-rail";
 import { PageHeader } from "@/components/layout/page-header";
 import { SectionHeader } from "@/components/section-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -50,9 +49,26 @@ const VIEWS: Record<WorkView, ViewMeta> = {
     empty: { title: "Nothing to reply to.", hint: "Mail is checked every minute; customer replies land here.", link: { to: "/mail", label: "Open Mail" } },
   },
   new_requests: {
-    label: "New requests",
+    label: "Requests",
     icon: Inbox,
-    empty: { title: "No new requests.", hint: "Requests from the public form and new email enquiries land here until a proforma goes out.", link: { to: "/bookings", label: "Open Bookings" } },
+    empty: { title: "No requests to review.", hint: "Requests from the public form wait here until they are accepted or declined.", link: { to: "/bookings?tab=requests", label: "Open requests" } },
+  },
+  enquiries: {
+    label: "Enquiries",
+    icon: MessageSquareText,
+    tone: "blue",
+    empty: { title: "No enquiries waiting.", hint: "Mail that matches no booking and got no answer becomes an enquiry here.", link: { to: "/enquiries", label: "Open Enquiries" } },
+  },
+  allocate: {
+    label: "Assign mail",
+    icon: Split,
+    empty: { title: "Nothing to assign.", hint: "Mail from people with more than one open booking waits here for a click.", link: { to: "/bookings", label: "Open Bookings" } },
+  },
+  pops: {
+    label: "Verify payments",
+    icon: Receipt,
+    tone: "amber",
+    empty: { title: "No proof of payment to verify.", hint: "Attachments and messages that say a payment was made wait here until matched to a credit.", link: { to: "/bookings?tab=pending", label: "Pending bookings" } },
   },
   confirm_money: {
     label: "Confirm money",
@@ -87,8 +103,6 @@ const VIEWS: Record<WorkView, ViewMeta> = {
     empty: { title: "No stale reminders.", hint: "Reminders more than 30 days overdue move here so the live counts stay honest.", link: { to: "/work", label: "Back to Up next" } },
   },
 };
-
-const RAIL_ORDER: WorkView[] = ["up_next", "reply", "new_requests", "confirm_money", "send_tickets", "reminders", "holds", "arrivals", "stale"];
 
 type ListEntry = { type: "header"; group: string | null; count: number } | { type: "row"; row: WorkRowData };
 
@@ -129,11 +143,6 @@ export default function WorkPage() {
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const grouped = view === "reminders" || view === "stale";
 
-  function setView(next: WorkView) {
-    setParams(next === "up_next" ? {} : { view: next });
-    setSelectedId(null);
-  }
-
   function setPage(next: number) {
     const query: Record<string, string> = {};
     if (view !== "up_next") query.view = view;
@@ -157,16 +166,6 @@ export default function WorkPage() {
   useShortcut("j", () => moveFocus(1));
   useShortcut("k", () => moveFocus(-1));
   useShortcut("escape", () => setSelectedId(null), { enabled: selected !== null });
-
-  const railItems: KindRailItem<WorkView>[] = RAIL_ORDER.map((key) => ({
-    value: key,
-    label: VIEWS[key].label,
-    icon: VIEWS[key].icon,
-    count: c ? c[key] : null,
-    tone: VIEWS[key].tone,
-    muted: VIEWS[key].muted,
-    always: key === "up_next",
-  }));
 
   const meta = VIEWS[view];
   const from = total === 0 ? 0 : (page - 1) * WORK_PAGE_SIZE + 1;
@@ -228,9 +227,7 @@ export default function WorkPage() {
         }
       />
 
-      <div className="grid items-start gap-card-gap lg:grid-cols-[12rem_minmax(0,1fr)] xl:grid-cols-[12rem_minmax(0,1fr)_auto]">
-        <KindRail aria-label="Work views" value={view} onChange={setView} items={railItems} className="lg:sticky lg:top-20" />
-
+      <div className="grid items-start gap-card-gap xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 flex-col gap-3">
           {list.isError ? (
             <Alert variant="destructive">

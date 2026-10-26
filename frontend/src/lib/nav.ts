@@ -1,34 +1,49 @@
 /**
  * Navigation model shared by the sidebar, the keyboard map and the guards
- * (docs/redesign-spec.md §1). One flat list in Linda's words; counts only on
- * Work, Mail and Bank; Settings, Users and System at the bottom.
+ * (owner's UI notes, 26 Oct 2026). One short list in Linda's words; Work is
+ * an accordion whose children are its views with live counts.
  *
- *   Today   /today     admin + manager (the manager's home)
- *   Work    /work      admin          count: GET /work/counts
- *   Calendar /calendar admin + manager
- *   Bookings /bookings admin
- *   Mail    /mail      admin          count: conversations needing a reply
- *   Bank    /bank      admin          count: credits to confirm
- *   Gate    /gate      admin + manager
+ *   Today      /today        admin + manager (the manager's home)
+ *   Work       /work         admin   children: the Work views, counts from GET /work/counts
+ *   Calendar   /calendar     admin + manager
+ *   Bookings   /bookings     admin
+ *   Enquiries  /enquiries    admin   count: open enquiries
+ *   Settings   /settings     admin + manager (Users and System live inside)
  */
 
 import {
-  Activity,
+  AlertCircle,
+  Bell,
   BookOpenText,
   CalendarDays,
   DoorOpen,
+  Hourglass,
+  Inbox,
   Landmark,
   ListChecks,
   Mail,
+  MessageSquareText,
+  Receipt,
   Settings2,
+  Split,
   Sun,
+  Ticket,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
 import type { Role } from "@/types/api";
 
-export type NavCountKey = "work" | "mail" | "bank";
+export type NavCountKey = "work" | "enquiries";
+
+export interface NavChild {
+  title: string;
+  /** Work view key; the link is /work?view=<key>. */
+  view: string;
+  icon: LucideIcon;
+  /** Shown muted and last (stale). */
+  muted?: boolean;
+}
 
 export interface NavItem {
   title: string;
@@ -43,22 +58,36 @@ export interface NavItem {
   count?: NavCountKey;
   /** Second key of the `G <key>` shortcut. */
   key?: string;
+  /** Accordion children (Work). */
+  children?: NavChild[];
 }
+
+/** The Work views in the order Linda works them; counts come from /work/counts. */
+export const WORK_CHILDREN: NavChild[] = [
+  { title: "Requests", view: "new_requests", icon: Inbox },
+  { title: "Enquiries", view: "enquiries", icon: MessageSquareText },
+  { title: "Reply", view: "reply", icon: Mail },
+  { title: "Verify payments", view: "pops", icon: Receipt },
+  { title: "Assign mail", view: "allocate", icon: Split },
+  { title: "Confirm money", view: "confirm_money", icon: Landmark },
+  { title: "Send tickets", view: "send_tickets", icon: Ticket },
+  { title: "Reminders", view: "reminders", icon: Bell },
+  { title: "Holds lapsing", view: "holds", icon: Hourglass },
+  { title: "Arrivals", view: "arrivals", icon: DoorOpen },
+  { title: "Stale", view: "stale", icon: AlertCircle, muted: true },
+];
 
 export const NAV_MAIN: NavItem[] = [
   { title: "Today", to: "/today", icon: Sun, roles: ["admin", "manager"], also: ["/day"], key: "t" },
-  { title: "Work", to: "/work", icon: ListChecks, roles: ["admin"], also: ["/queue"], count: "work", key: "w" },
+  { title: "Work", to: "/work", icon: ListChecks, roles: ["admin"], also: ["/queue"], count: "work", key: "w", children: WORK_CHILDREN },
   { title: "Calendar", to: "/calendar", icon: CalendarDays, roles: ["admin", "manager"], key: "c" },
   { title: "Bookings", to: "/bookings", icon: BookOpenText, roles: ["admin"], key: "b" },
-  { title: "Mail", to: "/mail", icon: Mail, roles: ["admin"], also: ["/inbox"], count: "mail", key: "m" },
-  { title: "Bank", to: "/bank", icon: Landmark, roles: ["admin"], also: ["/payments"], count: "bank" },
-  { title: "Gate", to: "/gate", icon: DoorOpen, roles: ["admin", "manager"] },
+  { title: "Enquiries", to: "/enquiries", icon: MessageSquareText, roles: ["admin"], count: "enquiries", key: "e" },
 ];
 
 export const NAV_BOTTOM: NavItem[] = [
-  { title: "Settings", to: "/settings", icon: Settings2, roles: ["admin", "manager"] },
+  { title: "Settings", to: "/settings", icon: Settings2, roles: ["admin", "manager"], also: ["/system", "/ops"] },
   { title: "Users", to: "/users", icon: Users, roles: ["admin"] },
-  { title: "System", to: "/system", icon: Activity, roles: ["admin"], also: ["/ops"] },
 ];
 
 /** Kept for the first build's callers: one group per list. */
@@ -81,8 +110,8 @@ export function homeFor(_role: Role): string {
 
 /**
  * Paths a manager may open; everything else redirects to homeFor("manager").
- * Managers get Today, Calendar, Gate, the legacy day redirect, and their
- * personal settings (Appearance, Password).
+ * Managers get Today, Calendar, the legacy day redirect, and their personal
+ * settings (Appearance, Password).
  */
 export const MANAGER_PATHS = [
   /^\/$/,

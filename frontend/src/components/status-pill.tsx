@@ -51,13 +51,17 @@ export interface StatusMeta {
 
 /** Booking status → tone (docs/redesign-spec.md §2 status map). */
 export const BOOKING_STATUS_META: Record<BookingStatus, StatusMeta> = {
-  enquiry: { label: "Enquiry", tone: "neutral" },
-  proforma_sent: { label: "Proforma sent", tone: "amber" },
+  // A status is where the booking stands; what last happened is the latest
+  // action beside it. "Proforma sent" is therefore Pending here.
+  requested: { label: "Request", tone: "blue" },
+  enquiry: { label: "Pending", tone: "amber" },
+  proforma_sent: { label: "Pending", tone: "amber" },
   confirmed: { label: "Confirmed", tone: "green" },
   completed: { label: "Completed", tone: "green-muted", icon: Check },
   cancelled: { label: "Cancelled", tone: "red" },
   lapsed: { label: "Lapsed", tone: "red-muted" },
   no_show: { label: "No show", tone: "red-muted" },
+  declined: { label: "Declined", tone: "red-muted" },
 };
 
 export interface StatusPillProps extends Omit<React.ComponentProps<"span">, "children">, VariantProps<typeof statusPillVariants> {

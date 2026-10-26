@@ -1,78 +1,73 @@
 /**
- * Live counts for the sidebar badges: Work, Mail and Bank. A badge is a
- * promise that a person must act and that the number can reach zero, so each
- * count is one of:
+ * Live counts for the sidebar: the Work total and each Work view (for the
+ * accordion), and open enquiries. A badge is a promise that a person must
+ * act and that the number can reach zero.
  *
- *   work  GET /work/counts                      sum of the kind counts (minus "stale")
- *   mail  GET /inbox/conversations?view=needs_reply&page_size=1  → total
- *   bank  GET /payments/summary                 counts.suggested (credits to confirm)
+ *   work       GET /work/counts        counts.total and the per-view counts
+ *   enquiries  GET /enquiries/counts   waiting (open + replied)
  *
- * Any endpoint that is not deployed yet (404) or fails yields `null`, and a
- * null count renders no badge. Keys are namespaced ["work","counts"],
- * ["mail","counts"], ["bank","counts"] so a page agent invalidating its own
- * prefix (["work"], ["mail"], ["bank"]) refreshes the badge too. Pages may
- * also call `invalidateNavCounts(queryClient)` after any action.
+ * A missing endpoint (404) or any failure yields `null`, and a null count
+ * renders no badge. Keys are namespaced ["work","counts"] and
+ * ["enquiries","counts"] so a page invalidating its own prefix refreshes the
+ * badge too; pages may also call `invalidateNavCounts(queryClient)`.
  */
 
 import { useQueries, type QueryClient } from "@tanstack/react-query";
 
-import { api, isApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { NavCountKey } from "@/lib/nav";
 
 export const navCountKeys = {
   work: ["work", "counts"] as const,
-  mail: ["mail", "counts"] as const,
-  bank: ["bank", "counts"] as const,
+  enquiries: ["enquiries", "counts"] as const,
 };
 
-export type NavCounts = Record<NavCountKey, number | null>;
+export interface WorkViewCounts {
+  total: number | null;
+  views: Record<string, number>;
+}
+
+export type NavCounts = Record<NavCountKey, number | null> & { workViews: Record<string, number> };
 
 const REFRESH_MS = 60_000;
 
-/** Treat a missing endpoint or any failure as "no count". */
-async function tolerant(load: () => Promise<number | null>): Promise<number | null> {
+async function tolerant<T>(load: () => Promise<T>): Promise<T | null> {
   try {
     return await load();
-  } catch (error) {
-    if (isApiError(error) && (error.status === 404 || error.status === 403)) return null;
+  } catch {
     return null;
   }
 }
 
-function sumCounts(payload: unknown): number | null {
-  if (!payload || typeof payload !== "object") return null;
-  const body = payload as Record<string, unknown>;
-  const counts = (body.counts && typeof body.counts === "object" ? body.counts : body) as Record<string, unknown>;
-  if (typeof counts.total === "number") return counts.total;
-  let sum = 0;
-  let seen = false;
-  for (const [key, value] of Object.entries(counts)) {
-    if (typeof value !== "number" || key === "stale" || key === "up_next") continue;
-    sum += value;
-    seen = true;
-  }
-  return seen ? sum : null;
-}
-
-export async function fetchWorkCount(): Promise<number | null> {
-  return tolerant(async () => sumCounts(await api.get<unknown>("/work/counts")));
-}
-
-export async function fetchMailCount(): Promise<number | null> {
+export async function fetchWorkCounts(): Promise<WorkViewCounts | null> {
   return tolerant(async () => {
-    const res = await api.get<{ total?: number; counts?: Record<string, number> }>("/inbox/conversations", {
-      params: { view: "needs_reply", page_size: 1 },
-    });
-    if (typeof res.counts?.needs_reply === "number") return res.counts.needs_reply;
-    return typeof res.total === "number" ? res.total : null;
+    const payload = await api.get<{ counts?: Record<string, unknown> } & Record<string, unknown>>("/work/counts");
+    const counts = (payload.counts && typeof payload.counts === "object" ? payload.counts : payload) as Record<string, unknown>;
+    const views: Record<string, number> = {};
+    let sum = 0;
+    let seen = false;
+    for (const [key, value] of Object.entries(counts)) {
+      if (typeof value !== "number") continue;
+      views[key] = value;
+      if (key === "stale" || key === "up_next" || key === "total") continue;
+      sum += value;
+      seen = true;
+    }
+    const total = typeof counts.total === "number" ? counts.total : seen ? sum : null;
+    return { total, views };
   });
 }
 
-export async function fetchBankCount(): Promise<number | null> {
+/** Kept for callers of the first build. */
+export async function fetchWorkCount(): Promise<number | null> {
+  return (await fetchWorkCounts())?.total ?? null;
+}
+
+export async function fetchEnquiryCount(): Promise<number | null> {
   return tolerant(async () => {
-    const res = await api.get<{ counts?: Record<string, number> }>("/payments/summary");
-    return typeof res.counts?.suggested === "number" ? res.counts.suggested : null;
+    const res = await api.get<{ waiting?: number }>("/enquiries/counts");
+    return typeof res.waiting === "number" ? res.waiting : null;
   });
 }
 
@@ -83,12 +78,11 @@ export function invalidateNavCounts(queryClient: QueryClient): void {
 /** Counts for the sidebar. Admin only; managers get nulls without a request. */
 export function useNavCounts(): NavCounts {
   const { isAdmin } = useAuth();
-  const [work, mail, bank] = useQueries({
+  const [work, enquiries] = useQueries({
     queries: [
-      { queryKey: navCountKeys.work, queryFn: fetchWorkCount, enabled: isAdmin, refetchInterval: REFRESH_MS, staleTime: 30_000, retry: false },
-      { queryKey: navCountKeys.mail, queryFn: fetchMailCount, enabled: isAdmin, refetchInterval: REFRESH_MS, staleTime: 30_000, retry: false },
-      { queryKey: navCountKeys.bank, queryFn: fetchBankCount, enabled: isAdmin, refetchInterval: REFRESH_MS, staleTime: 30_000, retry: false },
+      { queryKey: navCountKeys.work, queryFn: fetchWorkCounts, enabled: isAdmin, refetchInterval: REFRESH_MS, staleTime: 30_000, retry: false },
+      { queryKey: navCountKeys.enquiries, queryFn: fetchEnquiryCount, enabled: isAdmin, refetchInterval: REFRESH_MS, staleTime: 30_000, retry: false },
     ],
   });
-  return { work: work.data ?? null, mail: mail.data ?? null, bank: bank.data ?? null };
+  return { work: work.data?.total ?? null, enquiries: enquiries.data ?? null, workViews: work.data?.views ?? {} };
 }

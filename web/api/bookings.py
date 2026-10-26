@@ -180,7 +180,7 @@ def _parse_bucket(raw: str | None) -> list[str] | None:
 
 @bp.get("")
 def list_bookings():
-    page, size = page_args()
+    page, size = page_args(max_size=500)
     statuses = _parse_statuses(request.args.get("status"))
     bucket_statuses = _parse_bucket(request.args.get("bucket"))
     if bucket_statuses is not None:
@@ -197,7 +197,16 @@ def list_bookings():
         sort=request.args.get("sort"),
     )
     settings = get_settings()
-    return paginated([_list_item(r, settings) for r in rows], total, page, size)
+    actions = booking_service.latest_actions([int(r["id"]) for r in rows])
+    items = []
+    for r in rows:
+        item = _list_item(r, settings)
+        act = actions.get(int(r["id"]))
+        item["latest_action"] = (
+            {"label": act["label"], "at": act["at"].isoformat(), "who": act["who"]} if act else None
+        )
+        items.append(item)
+    return paginated(items, total, page, size)
 
 
 @bp.get("/counts")

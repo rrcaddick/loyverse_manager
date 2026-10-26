@@ -1234,3 +1234,97 @@ def decline_request(booking_id: int, reason: str | None, actor: int | None) -> d
         raise InvalidTransition("Only a request can be declined", {"status": "Not a request"})
     set_status(booking_id, "declined", actor, reason=reason or "Request declined")
     return _require(booking_id)
+
+
+# ------------------------------------------------------- latest action ---
+
+EMAIL_ACTION_LABELS = {
+    "proforma": "Proforma sent",
+    "invoice": "Statement sent",
+    "final_invoice": "Tax invoice sent",
+    "ticket": "Ticket emailed",
+    "payment_confirmation": "Payment confirmation sent",
+    "deposit_reminder": "Deposit reminder sent",
+    "still_interested": "Follow-up sent",
+    "final_details": "Final details sent",
+    "expiry": "Lapse notice sent",
+    "answers": "Answers sent",
+    "acknowledgement": "Request acknowledged",
+    "bounce_back": "Form link sent",
+    "convert_enquiry": "Form link sent",
+    "reply": "We replied",
+}
+STATUS_ACTION_LABELS = {
+    "requested": "Request received",
+    "enquiry": "Request accepted",
+    "proforma_sent": "Proforma sent",
+    "confirmed": "Confirmed",
+    "completed": "Visit completed",
+    "cancelled": "Cancelled",
+    "lapsed": "Lapsed",
+    "no_show": "No show",
+    "declined": "Declined",
+}
+
+
+def latest_actions(booking_ids: list[int] | tuple[int, ...]) -> dict[int, dict]:
+    """The most recent thing that happened on each booking, from either side:
+    an email we sent (by kind), a customer email, a payment, a WhatsApp
+    ticket, a status change or the creation. ``{id: {label, at, who}}``;
+    ``who`` is ``us``, ``customer`` or ``system``."""
+    ids = sorted({int(b) for b in booking_ids})
+    if not ids:
+        return {}
+    marks = ",".join(["%s"] * len(ids))
+    rows = query(
+        f"""
+        SELECT booking_id, 'email' AS src, direction, kind, sent_at AS at, from_name AS name
+        FROM email_messages
+        WHERE booking_id IN ({marks}) AND sent_at IS NOT NULL AND is_auto_generated = 0
+          AND (direction = 'inbound' OR send_status = 'sent')
+        UNION ALL
+        SELECT booking_id, 'payment', NULL, kind, CAST(paid_on AS DATETIME), NULL
+        FROM payments WHERE booking_id IN ({marks})
+        UNION ALL
+        SELECT booking_id, 'event', NULL, kind, created_at, JSON_UNQUOTE(JSON_EXTRACT(data, '$.to'))
+        FROM booking_events
+        WHERE booking_id IN ({marks}) AND kind IN ('status_changed', 'created', 'ticket_sent', 'whatsapp_sent', 'arrivals_recorded')
+        """,
+        (*ids, *ids, *ids),
+    )
+    best: dict[int, dict] = {}
+    for r in rows:
+        bid = int(r["booking_id"])
+        at = r.get("at")
+        if at is None:
+            continue
+        label, who = _action_label(r)
+        if label is None:
+            continue
+        current = best.get(bid)
+        if current is None or at > current["at"]:
+            best[bid] = {"label": label, "at": at, "who": who}
+    return best
+
+
+def _action_label(r: dict) -> tuple[str | None, str]:
+    src = r["src"]
+    kind = r.get("kind") or ""
+    if src == "email":
+        if r.get("direction") == "inbound":
+            return "Customer wrote", "customer"
+        return EMAIL_ACTION_LABELS.get(kind, "Email sent"), "us"
+    if src == "payment":
+        return ("Cash received" if kind == "cash" else "Payment received"), "customer"
+    if kind == "status_changed":
+        to = r.get("name") or ""
+        if to in ("proforma_sent",):
+            return None, "us"  # the email row says it better
+        return STATUS_ACTION_LABELS.get(to, "Status changed"), "us"
+    if kind == "created":
+        return "Added", "us"
+    if kind in ("ticket_sent", "whatsapp_sent"):
+        return "Ticket sent on WhatsApp", "us"
+    if kind == "arrivals_recorded":
+        return "Arrivals recorded", "system"
+    return None, "system"

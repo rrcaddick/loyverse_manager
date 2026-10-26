@@ -1,10 +1,11 @@
 /**
- * /bookings — one list split by status (spec §6): SegmentedTabs with counts
- * from GET /bookings/counts (Pending · Confirmed · Lapsed · Past · All),
- * one search box, an Upcoming / This month / Past / All dates range, a
- * per-tab default sort, 25 rows a page. State lives in the URL
+ * /bookings — one data table, split by status bucket (owner's notes, 26 Oct
+ * 2026; docs/research/08): Requests · Pending · Confirmed · Lapsed · Past ·
+ * All as filters over the same columns, one search box, a date range
+ * (upcoming, this week, this month, next month, past, all), a page size,
+ * zebra rows, the full page width. State lives in the URL
  * (features/bookings/list-params.ts); the header search lands as ?q=.
- * Cards on a phone, a 48 px DataTable otherwise.
+ * Cards on a phone.
  */
 
 import type { SortingState } from "@tanstack/react-table";
@@ -24,7 +25,7 @@ import { useBookingCounts, useBookings } from "@/features/bookings/api";
 import { BookingFormDialog } from "@/features/bookings/components/booking-form-dialog";
 import { BookingCards } from "@/features/bookings/components/list-cards";
 import { columnsFor } from "@/features/bookings/components/list-columns";
-import { PAGE_SIZE, RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
+import { PAGE_SIZES, RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
 import type { BookingBucket } from "@/features/bookings/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -32,14 +33,15 @@ import { errorMessage } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const TAB_LABELS: Record<BookingBucket, string> = { pending: "Pending", confirmed: "Confirmed", lapsed: "Lapsed", past: "Past", all: "All" };
+const TAB_LABELS: Record<BookingBucket, string> = { requests: "Requests", pending: "Pending", confirmed: "Confirmed", lapsed: "Lapsed", past: "Past", all: "All" };
 
 const EMPTY_COPY: Record<BookingBucket, { title: string; hint: string }> = {
-  pending: { title: "Nothing pending", hint: "New requests from the form, the inbox or the phone land here until the deposit arrives." },
+  requests: { title: "No requests to review", hint: "Requests from the public form wait here until they are accepted or declined." },
+  pending: { title: "Nothing pending", hint: "Accepted requests and enquiries stay here until the deposit arrives." },
   confirmed: { title: "No confirmed visits", hint: "A booking moves here when its deposit is recorded or matched from the bank." },
-  lapsed: { title: "Nothing lapsed or cancelled", hint: "Holds that expire without a deposit, and cancellations, are kept here." },
+  lapsed: { title: "Nothing lapsed, cancelled or declined", hint: "Holds that expire without a deposit, cancellations and declined requests are kept here." },
   past: { title: "No past visits yet", hint: "Completed visits and no-shows are kept here." },
-  all: { title: "No bookings yet", hint: "New requests from the form, the inbox or the phone will show up here." },
+  all: { title: "No bookings yet", hint: "Requests from the form, the inbox or the phone will show up here." },
 };
 
 export default function BookingsPage() {
@@ -67,6 +69,7 @@ export default function BookingsPage() {
   const total = list.data?.total ?? 0;
   const items = list.data?.items ?? [];
   const c = counts.data;
+  const clear = () => update({ range: TAB_DEFAULTS[state.tab].range, q: "" });
 
   return (
     <>
@@ -84,6 +87,7 @@ export default function BookingsPage() {
           value={state.tab}
           onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
           items={[
+            { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
             { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
             { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
             { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
@@ -111,19 +115,19 @@ export default function BookingsPage() {
         list.isPending ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : items.length === 0 ? (
-          <EmptyBookings state={state} onClear={() => update({ range: TAB_DEFAULTS[state.tab].range, q: "" })} onCreate={() => setCreateOpen(true)} />
+          <EmptyBookings state={state} onClear={clear} onCreate={() => setCreateOpen(true)} />
         ) : (
           <>
             <BookingCards items={items} tab={state.tab} />
-            {total > PAGE_SIZE ? (
+            {total > state.size ? (
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <Button variant="outline" size="sm" disabled={state.page <= 1} onClick={() => update({ page: state.page - 1 }, false)}>
                   Previous
                 </Button>
                 <span className="tabular">
-                  Page {state.page} of {Math.ceil(total / PAGE_SIZE)}
+                  Page {state.page} of {Math.ceil(total / state.size)}
                 </span>
-                <Button variant="outline" size="sm" disabled={state.page * PAGE_SIZE >= total} onClick={() => update({ page: state.page + 1 }, false)}>
+                <Button variant="outline" size="sm" disabled={state.page * state.size >= total} onClick={() => update({ page: state.page + 1 }, false)}>
                   Next
                 </Button>
               </div>
@@ -131,7 +135,7 @@ export default function BookingsPage() {
           </>
         )
       ) : (
-        <section className={cn("rounded-xl bg-card px-4 pt-1 pb-3 ring-1 ring-border transition-opacity sm:px-5", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
+        <section className={cn("overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
           <DataTable
             key={state.tab}
             columns={columns}
@@ -140,15 +144,17 @@ export default function BookingsPage() {
             getRowId={(b) => String(b.id)}
             onRowClick={(b) => navigate(`/bookings/${b.id}`)}
             rowClassName={() => "h-row-lg"}
+            className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&>div:last-child]:px-4"
             manualPagination
             rowCount={total}
-            pageSize={PAGE_SIZE}
-            pageSizeOptions={[PAGE_SIZE]}
-            paginationState={{ pageIndex: state.page - 1, pageSize: PAGE_SIZE }}
+            pageSize={state.size}
+            pageSizeOptions={[...PAGE_SIZES]}
+            paginationState={{ pageIndex: state.page - 1, pageSize: state.size }}
             onPaginationChange={(updater) => {
-              const current = { pageIndex: state.page - 1, pageSize: PAGE_SIZE };
+              const current = { pageIndex: state.page - 1, pageSize: state.size };
               const next = typeof updater === "function" ? updater(current) : updater;
-              update({ page: next.pageIndex + 1 }, false);
+              if (next.pageSize !== state.size) update({ size: next.pageSize, page: 1 });
+              else update({ page: next.pageIndex + 1 }, false);
             }}
             manualSorting
             sorting={sorting}
@@ -161,7 +167,7 @@ export default function BookingsPage() {
               }
               update({ sort: `${first.desc ? "-" : ""}${first.id}` });
             }}
-            emptyState={<EmptyBookings state={state} onClear={() => update({ range: TAB_DEFAULTS[state.tab].range, q: "" })} onCreate={() => setCreateOpen(true)} />}
+            emptyState={<EmptyBookings state={state} onClear={clear} onCreate={() => setCreateOpen(true)} />}
           />
         </section>
       )}
@@ -243,18 +249,13 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
         </InputGroup>
       </form>
 
-      <Select value={state.range} onValueChange={(v) => onChange({ range: v as RangePreset })}>
-        <SelectTrigger className="w-full sm:w-40" aria-label="Date range">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {RANGE_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div role="group" aria-label="Date range" className="flex flex-wrap items-center gap-1">
+        {RANGE_OPTIONS.map((o) => (
+          <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
+            {o.label}
+          </Button>
+        ))}
+      </div>
 
       {hasActiveFilters(state) ? (
         <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
@@ -263,11 +264,25 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
         </Button>
       ) : null}
 
-      {summary ? (
-        <span className="text-sm tabular text-muted-foreground sm:ml-auto" aria-live="polite">
-          {summary}
-        </span>
-      ) : null}
+      <div className="flex items-center gap-3 sm:ml-auto">
+        {summary ? (
+          <span className="text-sm tabular text-muted-foreground" aria-live="polite">
+            {summary}
+          </span>
+        ) : null}
+        <Select value={String(state.size)} onValueChange={(v) => onChange({ size: Number(v) })}>
+          <SelectTrigger size="sm" className="w-28" aria-label="Rows per page">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZES.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n === 500 ? "All rows" : `${n} rows`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

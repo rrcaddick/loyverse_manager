@@ -70,22 +70,31 @@ export interface BookingRow {
 }
 
 /** GET /bookings items. */
+export interface LatestAction {
+  label: string;
+  at: string;
+  who: "us" | "customer" | "system";
+}
+
 export interface BookingListItem extends BookingRow {
   paid_total: number;
   total_amount: number;
   balance_due: number;
   deposit_covered: boolean;
   status_label: string;
+  /** The most recent thing that happened, from either side (research/04 + owner note 26 Oct). */
+  latest_action?: LatestAction | null;
   /** Reason of the last status change (requested from the backend; absent today). */
   status_reason?: string | null;
 }
 
 /** GET /bookings/counts: per-status counts plus the list tabs' buckets. */
-export type BookingBucket = "pending" | "confirmed" | "lapsed" | "past" | "all";
-export const BOOKING_BUCKETS: BookingBucket[] = ["pending", "confirmed", "lapsed", "past", "all"];
+export type BookingBucket = "requests" | "pending" | "confirmed" | "lapsed" | "past" | "all";
+export const BOOKING_BUCKETS: BookingBucket[] = ["requests", "pending", "confirmed", "lapsed", "past", "all"];
 
 export interface BookingCounts {
   counts: Partial<Record<BookingStatus, number>>;
+  requests?: number;
   pending: number;
   confirmed: number;
   lapsed: number;

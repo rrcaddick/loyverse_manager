@@ -95,7 +95,16 @@ export function useWorkActions(): WorkActions {
         navigate(action.party_key ? `/mail?party=${encodeURIComponent(action.party_key)}` : `/mail/${action.thrid}`);
         return;
       case "open_booking":
-        navigate(`/bookings/${action.booking_id}`);
+        navigate(action.tab ? `/bookings/${action.booking_id}?tab=${action.tab}` : `/bookings/${action.booking_id}`);
+        return;
+      case "open_enquiry":
+        navigate(action.tab ? `/enquiries/${action.enquiry_id}?tab=${action.tab}` : `/enquiries/${action.enquiry_id}`);
+        return;
+      case "assign_message":
+        void guarded(row, () => api.post(`/inbound/messages/${action.message_id}/assign`, { booking_id: action.booking_id })).then(() => {
+          void qc.invalidateQueries({ queryKey: ["bookings"] });
+          done(row, "Mail assigned", row.title);
+        });
         return;
       case "open_transaction":
         navigate(`/bank?tx=${action.tx_id}`);

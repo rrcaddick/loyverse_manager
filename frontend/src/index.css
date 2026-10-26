@@ -185,7 +185,7 @@
   --spacing-header: 3.5rem; /* app header 56 */
   --spacing-target: 2.75rem; /* minimum click target 44 */
 
-  --container-page: 1600px; /* page content cap on 1920 displays */
+  --container-page: 100%; /* lists use the width they are given (research/08) */
   --container-prose: 42rem; /* 68 ch for prose and emails */
 
   /* ---- shape: 8px base radius */
@@ -199,7 +199,7 @@
 
   /* ---- elevation: one overlay shadow; everything else is a 1 px border. */
   --shadow-xs: var(--shadow-raised);
-  --shadow-sm: var(--shadow-raised);
+  --shadow-sm: var(--shadow-card, var(--shadow-raised));
   --shadow-md: var(--shadow-overlay);
   --shadow-lg: var(--shadow-overlay);
   --shadow-xl: var(--shadow-overlay);

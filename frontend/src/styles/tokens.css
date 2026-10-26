@@ -155,17 +155,17 @@
   --on-solid: #ffffff;
 
   /* ---- neutral tiers ------------------------------------------------- */
-  --background: oklch(0.985 var(--surface-c) var(--surface-h));
+  --background: oklch(0.975 var(--surface-c) var(--surface-h));
   --surface-canvas: var(--background);
-  --card: oklch(0.995 calc(var(--surface-c) * 0.5) var(--surface-h));
-  --surface-nested: oklch(0.965 var(--surface-c) var(--surface-h));
+  --card: oklch(0.998 calc(var(--surface-c) * 0.3) var(--surface-h));
+  --surface-nested: oklch(0.955 var(--surface-c) var(--surface-h));
   --sidebar: oklch(0.94 calc(var(--surface-c) * 1.4) var(--surface-h));
-  --border: oklch(0.86 calc(var(--surface-c) * 1.5) var(--surface-h));
-  --border-strong: oklch(0.78 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --border: oklch(0.82 calc(var(--surface-c) * 1.5) var(--surface-h));
+  --border-strong: oklch(0.72 calc(var(--surface-c) * 1.5) var(--surface-h));
   --input: oklch(0.80 calc(var(--surface-c) * 1.5) var(--surface-h));
 
   --foreground: oklch(0.21 var(--ink-c) var(--surface-h));
-  --muted-foreground: oklch(0.47 var(--ink-c) var(--surface-h));
+  --muted-foreground: oklch(0.42 var(--ink-c) var(--surface-h));
   --faint-foreground: oklch(0.62 var(--ink-c) var(--surface-h));
 
   /* ---- accent (the only hue a theme changes) ------------------------- */
@@ -262,7 +262,8 @@
   /* ---- shape and elevation ------------------------------------------- */
   --radius: 0.5rem;
   --shadow-overlay: 0 8px 24px -8px oklch(0.2 0.01 60 / 0.18), 0 1px 2px oklch(0.2 0.01 60 / 0.08);
-  --shadow-raised: 0 1px 2px oklch(0.2 0.01 60 / 0.06);
+  --shadow-raised: 0 1px 2px oklch(0.2 0.01 60 / 0.07), 0 2px 6px -2px oklch(0.2 0.01 60 / 0.08);
+  --shadow-card: 0 1px 2px oklch(0.2 0.01 60 / 0.07), 0 2px 6px -2px oklch(0.2 0.01 60 / 0.08);
 
   color-scheme: light;
 }
@@ -288,13 +289,13 @@
   --grey-solid: oklch(0.48 0.01 60);
   --on-solid: #ffffff;
 
-  --background: oklch(0.20 var(--surface-c-dark) var(--surface-h));
+  --background: oklch(0.19 var(--surface-c-dark) var(--surface-h));
   --surface-canvas: var(--background);
-  --card: oklch(0.245 var(--surface-c-dark) var(--surface-h));
-  --surface-nested: oklch(0.27 var(--surface-c-dark) var(--surface-h));
+  --card: oklch(0.25 var(--surface-c-dark) var(--surface-h));
+  --surface-nested: oklch(0.28 var(--surface-c-dark) var(--surface-h));
   --sidebar: oklch(0.17 var(--surface-c-dark) var(--surface-h));
-  --border: oklch(1 0 0 / 14%);
-  --border-strong: oklch(1 0 0 / 22%);
+  --border: oklch(1 0 0 / 18%);
+  --border-strong: oklch(1 0 0 / 30%);
   --input: oklch(1 0 0 / 20%);
 
   --foreground: oklch(0.95 calc(var(--ink-c) * 0.5) var(--surface-h));
@@ -382,7 +383,8 @@
   --paper-0: var(--card);
 
   --shadow-overlay: 0 12px 32px -8px oklch(0 0 0 / 0.5), 0 1px 2px oklch(0 0 0 / 0.4);
-  --shadow-raised: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-raised: 0 1px 2px oklch(0 0 0 / 0.35), 0 2px 6px -2px oklch(0 0 0 / 0.3);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.35), 0 2px 6px -2px oklch(0 0 0 / 0.3);
 
   color-scheme: dark;
 }

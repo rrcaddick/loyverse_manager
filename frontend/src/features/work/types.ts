@@ -8,15 +8,15 @@
 
 import type { BookingStatus } from "@/types/api";
 
-export type WorkView = "up_next" | "reply" | "new_requests" | "confirm_money" | "send_tickets" | "reminders" | "holds" | "arrivals" | "stale";
+export type WorkView = "up_next" | "reply" | "new_requests" | "enquiries" | "allocate" | "pops" | "confirm_money" | "send_tickets" | "reminders" | "holds" | "arrivals" | "stale";
 
-export const WORK_VIEWS: WorkView[] = ["up_next", "reply", "new_requests", "confirm_money", "send_tickets", "reminders", "holds", "arrivals", "stale"];
+export const WORK_VIEWS: WorkView[] = ["up_next", "reply", "new_requests", "enquiries", "allocate", "pops", "confirm_money", "send_tickets", "reminders", "holds", "arrivals", "stale"];
 
 export function isWorkView(value: string | null | undefined): value is WorkView {
   return !!value && (WORK_VIEWS as string[]).includes(value);
 }
 
-export type WorkKind = "reply" | "new_request" | "money" | "ticket" | "reminder" | "hold" | "arrival";
+export type WorkKind = "reply" | "new_request" | "money" | "ticket" | "reminder" | "hold" | "arrival" | "enquiry" | "allocate" | "pop";
 
 export interface WorkBookingRef {
   id: number;
@@ -35,6 +35,8 @@ interface ActionBase {
 export interface OpenBookingAction extends ActionBase {
   action: "open_booking";
   booking_id: number;
+  tab?: string;
+  pop_id?: number;
 }
 
 export interface OpenConversationAction extends ActionBase {
@@ -103,7 +105,21 @@ export interface SetStatusAction extends ActionBase {
   status: BookingStatus;
 }
 
+export interface OpenEnquiryAction extends ActionBase {
+  action: "open_enquiry";
+  enquiry_id: number;
+  tab?: string;
+}
+
+export interface AssignMessageAction extends ActionBase {
+  action: "assign_message";
+  message_id: number;
+  booking_id: number;
+}
+
 export type WorkAction =
+  | OpenEnquiryAction
+  | AssignMessageAction
   | OpenBookingAction
   | OpenConversationAction
   | OpenTransactionAction
@@ -138,6 +154,9 @@ export interface WorkCounts {
   up_next: number;
   reply: number;
   new_requests: number;
+  enquiries?: number;
+  allocate?: number;
+  pops?: number;
   confirm_money: number;
   send_tickets: number;
   reminders: number;
