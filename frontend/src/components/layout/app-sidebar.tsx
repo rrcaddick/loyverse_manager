@@ -43,7 +43,7 @@ function CountBadge({ count, tone = "primary" }: { count: number; tone?: "primar
       aria-hidden="true"
       className={cn(
         "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-        tone === "primary" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-accent text-sidebar-foreground ring-1 ring-sidebar-border",
+        tone === "primary" ? "bg-sidebar-primary text-sidebar-primary-foreground" : "bg-sidebar-primary/70 text-sidebar-primary-foreground",
       )}
     >
       {formatNumber(count)}
