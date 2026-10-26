@@ -173,7 +173,7 @@ export function DataTable<TData, TValue = unknown>({
         style={maxHeight ? ({ "--table-max-h": maxHeight } as React.CSSProperties) : undefined}
       >
         <Table className="[&_td]:align-middle">
-          <TableHeader className={cn("bg-surface-high [&_tr]:border-table-rule", stickyHeader && "sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--table-rule)]")}>
+          <TableHeader className={cn("bg-table-head text-table-head-foreground [&_tr]:border-table-rule", stickyHeader && "sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--table-rule)]")}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
@@ -184,7 +184,7 @@ export function DataTable<TData, TValue = unknown>({
                       colSpan={header.colSpan}
                       style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                       className={cn(
-                        "h-thead text-label text-foreground uppercase",
+                        "h-thead text-label text-table-head-foreground uppercase",
                         meta?.align === "right" && "text-right",
                         meta?.align === "center" && "text-center",
                         meta?.className,

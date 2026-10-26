@@ -145,10 +145,15 @@ function tokens(theme, isDark) {
   const primary = ink ? PV(L ? 22 : 88) : PV(L ? 35 : 44);
   const primaryHover = ink ? PV(L ? 30 : 80) : PV(L ? 28 : 38);
   const onPrimary = ink && !L ? N(12) : "#ffffff";
-  const primaryContainer = PV(L ? 88 : 30);
-  const onPrimaryContainer = PV(L ? 10 : 95);
+  // Secondary accent: a quiet tint of the primary hue (chroma 36), not the
+  // vivid palette, so it reads as "related to the primary", never as a second
+  // brighter colour (owner, 26 Oct). Selected states that must be strong use
+  // the primary fill itself.
+  const PS = (tn) => hexFromArgb(TonalPalette.fromHueAndChroma(r.primaryHue, hc || theme.ink ? 8 : 36).tone(tn));
+  const primaryContainer = PS(L ? 88 : 30);
+  const onPrimaryContainer = PS(L ? 12 : 94);
   // Selected is tinted so it differs from hover by hue as well as by tone.
-  const selected = ink ? N(L ? 80 : 38) : PV(L ? 86 : 34);
+  const selected = ink ? N(L ? 80 : 38) : PS(L ? 86 : 34);
   const secondaryContainer = NV(L ? 84 : 34);
   const onSecondaryContainer = NV(L ? 15 : 95);
 
@@ -211,6 +216,9 @@ function tokens(theme, isDark) {
     // The primary as *text or an icon* on a surface (links, active icons): deep in
     // light, light in dark. Fills keep using --primary.
     "primary-text": ink ? PV(L ? 22 : 90) : PV(L ? 35 : 80),
+    // Table head: the primary fill with its on-colour (owner, 26 Oct).
+    "table-head": primary,
+    "table-head-foreground": onPrimary,
     "primary-hover": primaryHover,
     "primary-soft": primaryContainer,
     "primary-container": primaryContainer,

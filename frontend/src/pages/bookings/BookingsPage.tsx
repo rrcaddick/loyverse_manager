@@ -257,7 +257,7 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
             size="sm"
             variant="ghost"
             aria-pressed={state.range === o.value}
-            className={cn(state.range === o.value && "bg-primary-container text-on-primary-container shadow-xs ring-1 ring-primary/30 hover:bg-primary-container hover:text-on-primary-container")}
+            className={cn(state.range === o.value && "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover hover:text-primary-foreground")}
             onClick={() => onChange({ range: o.value as RangePreset })}
           >
             {o.label}

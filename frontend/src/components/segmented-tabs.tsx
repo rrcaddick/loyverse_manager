@@ -90,7 +90,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
                     "-mb-px rounded-t-md border-b-2 border-transparent",
                     active ? "border-primary text-foreground" : "text-muted-foreground hover:text-foreground",
                   )
-                : cn("rounded-md", active ? "bg-primary-container text-on-primary-container shadow-sm ring-1 ring-primary/30" : "text-muted-foreground hover:bg-control-hover hover:text-foreground"),
+                : cn("rounded-md", active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-control-hover hover:text-foreground"),
             )}
           >
             {item.icon ? <item.icon aria-hidden="true" className="size-4" /> : null}
@@ -99,7 +99,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
               <span
                 className={cn(
                   "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-                  active ? "bg-primary text-primary-foreground" : "bg-foreground/8 text-muted-foreground",
+                  active ? "bg-primary-foreground text-primary" : "bg-foreground/8 text-muted-foreground",
                 )}
               >
                 {formatNumber(count)}

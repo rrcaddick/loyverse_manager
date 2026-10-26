@@ -115,6 +115,8 @@
   --color-control-hover: var(--control-hover);
   --color-control-border: var(--control-border);
   --color-table-rule: var(--table-rule);
+  --color-table-head: var(--table-head);
+  --color-table-head-foreground: var(--table-head-foreground);
   --color-ring: var(--ring);
   --color-selection-ring: var(--selection-ring);
   --color-selection-row: var(--selection-row);
