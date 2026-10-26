@@ -279,6 +279,14 @@ def today(d: date | None = None, *, for_manager: bool = False) -> dict:
         snap = work.snapshot(get_today())
         tiles["owed_at_gate"] = {"total": round(float(owed), 2), "paid": round(float(paid), 2)}
         tiles["needs_you"] = work.needs_you(snap)
+        try:
+            from src.models import mail_skipped
+            from src.services.inbound import _cfg
+
+            days = int(_cfg().get("skipped_days", 7))
+            tiles["skipped_mail"] = {"count": mail_skipped.count_recent(days), "days": days}
+        except Exception:  # noqa: BLE001 - never block Today on the log
+            tiles["skipped_mail"] = {"count": 0, "days": 7}
         out["up_next"] = snap["up_next"][:UP_NEXT_ON_TODAY]
         out["work_counts"] = snap["counts"]
     return out

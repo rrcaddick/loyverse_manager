@@ -13,6 +13,7 @@ from decimal import Decimal
 from src.models.base import execute, loads, query, query_one, serialize_row
 
 STATUSES = (
+    "requested",
     "enquiry",
     "proforma_sent",
     "confirmed",
@@ -20,6 +21,7 @@ STATUSES = (
     "cancelled",
     "lapsed",
     "no_show",
+    "declined",
 )
 ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed", "completed")
 TENTATIVE_STATUSES = ("enquiry", "proforma_sent")
@@ -27,9 +29,10 @@ FIRM_STATUSES = ("confirmed", "completed")
 
 # The bookings list tabs (docs/redesign-spec.md §6). ``all`` is no filter.
 BUCKETS: dict[str, tuple[str, ...]] = {
+    "requests": ("requested",),
     "pending": ("enquiry", "proforma_sent"),
     "confirmed": ("confirmed",),
-    "lapsed": ("lapsed", "cancelled"),
+    "lapsed": ("lapsed", "cancelled", "declined"),
     "past": ("completed", "no_show"),
     "all": STATUSES,
 }
@@ -80,6 +83,9 @@ WRITABLE_COLUMNS = frozenset(
         "ticket_sent_at",
         "ticket_emailed_at",
         "confirmed_at",
+        "accepted_at",
+        "declined_at",
+        "enquiry_id",
         "completed_at",
         "cancelled_at",
         "lapsed_at",

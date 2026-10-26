@@ -171,6 +171,8 @@ API_MODULES = (
     "web.api.calendar",
     "web.api.documents",
     "web.api.inbox",
+    "web.api.enquiries",
+    "web.api.inbound",
     "web.api.payments",
     "web.api.queue",
     "web.api.work",

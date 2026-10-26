@@ -39,6 +39,7 @@ from src.services.documents import (
 from src.utils.date import get_today
 
 KINDS = (
+    "convert_enquiry",
     "acknowledgement",
     "proforma",
     "invoice",
@@ -54,7 +55,7 @@ KINDS = (
     "reply",
 )
 # Kinds that make sense without a booking.
-BOOKING_OPTIONAL = {"bounce_back", "reply"}
+BOOKING_OPTIONAL = {"bounce_back", "reply", "convert_enquiry"}
 DASH = " – "
 
 
@@ -103,7 +104,7 @@ def _subject(
     if ctx.get("subject"):
         return str(ctx["subject"])
     if booking is None:
-        if kind == "bounce_back":
+        if kind in ("bounce_back", "convert_enquiry"):
             return f"Group bookings at {settings.documents.trading_name}"
         return str(settings.documents.trading_name)
     ref = booking["reference"]
@@ -185,9 +186,10 @@ def _preheader(kind: str, c: dict) -> str:
         "expiry": "We have not received the deposit, so the date is no longer reserved.",
         "answers": "Answers to the questions you asked with your booking request.",
         "bounce_back": "For a group visit, our booking request form is the quickest way to get a quote.",
+        "convert_enquiry": "A few details on our booking request form and we can send your proforma.",
         "reply": "",
     }.get(kind, "")
-    if kind in ("bounce_back", "reply") or not lead:
+    if kind in ("bounce_back", "reply", "convert_enquiry") or not lead:
         return sentence
     return f"{lead} · {sentence}" if sentence else lead
 

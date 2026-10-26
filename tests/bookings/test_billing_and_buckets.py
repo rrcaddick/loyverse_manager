@@ -44,9 +44,10 @@ def test_billing_fields_are_accepted_and_bounded(s):
 
 
 def test_buckets_cover_every_status_once():
+    assert bm.BUCKETS["requests"] == ("requested",)
     assert bm.BUCKETS["pending"] == ("enquiry", "proforma_sent")
     assert bm.BUCKETS["confirmed"] == ("confirmed",)
-    assert bm.BUCKETS["lapsed"] == ("lapsed", "cancelled")
+    assert bm.BUCKETS["lapsed"] == ("lapsed", "cancelled", "declined")
     assert bm.BUCKETS["past"] == ("completed", "no_show")
     seen = [st for key, sts in bm.BUCKETS.items() if key != "all" for st in sts]
     assert sorted(seen) == sorted(bm.STATUSES)
@@ -54,7 +55,7 @@ def test_buckets_cover_every_status_once():
 
 def test_counts_by_bucket_sums_statuses():
     by_status = {"enquiry": 3, "proforma_sent": 4, "confirmed": 5, "completed": 6, "cancelled": 1, "lapsed": 2, "no_show": 1}
-    assert bm.counts_by_bucket(by_status) == {"pending": 7, "confirmed": 5, "lapsed": 3, "past": 7, "all": 22}
+    assert bm.counts_by_bucket(by_status) == {"requests": 0, "pending": 7, "confirmed": 5, "lapsed": 3, "past": 7, "all": 22}
 
 
 # ------------------------------------------------------------------ DB ---

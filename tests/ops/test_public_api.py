@@ -63,7 +63,7 @@ def test_submit_then_fetch_receipt(client):
     assert set(body) >= {"id", "token", "reference", "group_name", "visit_date", "contact_email", "visitors", "acknowledged"}
     assert body["visitors"] == 42 and body["acknowledged"] is False and body["visit_date"] == "2026-11-05"
     row = query_one("SELECT people_booked, arrival_time, gazebos, status, source FROM bookings WHERE id = %s", (body["id"],))
-    assert (row["people_booked"], row["arrival_time"], row["gazebos"], row["status"], row["source"]) == (42, "10:00", 2, "enquiry", "form")
+    assert (row["people_booked"], row["arrival_time"], row["gazebos"], row["status"], row["source"]) == (42, "10:00", 2, "requested", "form")
     # Nothing was emailed: the toggle is off by default.
     assert query_one("SELECT COUNT(*) AS n FROM email_messages WHERE booking_id = %s", (body["id"],))["n"] == 0
 

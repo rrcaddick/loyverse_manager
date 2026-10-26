@@ -734,3 +734,136 @@ def reply_email(booking_id: int):
     detail["action"] = "reply"
     detail["action_result"] = result
     return ok(detail)
+
+
+# ------------------------------------------------- requests, contacts, money ---
+
+
+@bp.post("/<int:booking_id>/accept")
+def accept_request(booking_id: int):
+    """Review done: the request becomes an enquiry on the calendar and, unless
+    ``send_proforma`` is false, the proforma goes out in the same step."""
+    data = _json_body()
+    send_proforma = data.pop("send_proforma", True)
+    try:
+        booking_service.accept_request(booking_id, data, current_user_id())
+    except Exception as exc:  # noqa: BLE001
+        fields = getattr(exc, "fields", None)
+        if fields is not None:
+            raise ApiError("validation_error", str(exc), 422, fields)
+        raise
+    result = None
+    if send_proforma:
+        booking = _booking_or_404(booking_id)
+        result = ACTIONS["send-proforma"](booking, {}, current_user_id())
+    detail = booking_service.get_booking_detail(booking_id)
+    detail["action"] = "accept"
+    detail["action_result"] = result
+    return ok(detail)
+
+
+@bp.post("/<int:booking_id>/decline")
+def decline_request(booking_id: int):
+    data = _json_body()
+    try:
+        booking_service.decline_request(booking_id, data.get("reason"), current_user_id())
+    except Exception as exc:  # noqa: BLE001
+        fields = getattr(exc, "fields", None)
+        if fields is not None:
+            raise ApiError("validation_error", str(exc), 422, fields)
+        raise
+    return ok(booking_service.get_booking_detail(booking_id))
+
+
+@bp.get("/<int:booking_id>/contacts")
+def list_contacts(booking_id: int):
+    from src.models import booking_contact
+
+    _booking_or_404(booking_id)
+    return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]})
+
+
+@bp.post("/<int:booking_id>/contacts")
+def add_contact(booking_id: int):
+    from src.models import booking_contact
+
+    _booking_or_404(booking_id)
+    data = _json_body()
+    email = str(data.get("email") or "").strip().lower()
+    if "@" not in email:
+        raise ApiError("validation_error", "Enter an email address", 422, {"email": "Enter a valid email address"})
+    booking_contact.upsert(booking_id, email, name=data.get("name"), mobile=data.get("mobile"), role="cc", source="manual")
+    return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]}, 201)
+
+
+@bp.delete("/<int:booking_id>/contacts/<int:contact_id>")
+def delete_contact(booking_id: int, contact_id: int):
+    from src.models import booking_contact
+
+    _booking_or_404(booking_id)
+    booking_contact.delete(booking_id, contact_id)
+    return ok()
+
+
+@bp.get("/<int:booking_id>/payment-search")
+def payment_search(booking_id: int):
+    from src.services import payment_search as ps
+
+    booking = _booking_or_404(booking_id)
+    return ok(
+        ps.search(
+            booking,
+            reference=request.args.get("reference") or None,
+            amount=request.args.get("amount") or None,
+            tolerance=request.args.get("tolerance") or None,
+            date_from=_arg_date("from"),
+            date_to=_arg_date("to"),
+        )
+    )
+
+
+@bp.post("/<int:booking_id>/payment-search/allocate")
+def payment_allocate(booking_id: int):
+    from src.services import payment_search as ps
+
+    _booking_or_404(booking_id)
+    data = _json_body()
+    if not data.get("tx_id"):
+        raise ApiError("validation_error", "tx_id is required", 422, {"tx_id": "Required"})
+    result = ps.allocate(int(data["tx_id"]), booking_id, current_user_id())
+    detail = booking_service.get_booking_detail(booking_id)
+    detail["action_result"] = result
+    return ok(detail)
+
+
+@bp.get("/<int:booking_id>/pops")
+def list_pops(booking_id: int):
+    from src.models import pop as pop_model
+    from src.services import pop
+
+    _booking_or_404(booking_id)
+    return ok({"items": [pop.serialize(r) for r in pop_model.list_for_booking(booking_id)]})
+
+
+@bp.post("/<int:booking_id>/pops/<int:pop_id>/allocate")
+def pop_allocate(booking_id: int, pop_id: int):
+    from src.services import pop
+
+    _booking_or_404(booking_id)
+    data = _json_body()
+    if not data.get("tx_id"):
+        raise ApiError("validation_error", "tx_id is required", 422, {"tx_id": "Required"})
+    try:
+        pop.allocate(pop_id, int(data["tx_id"]), current_user_id())
+    except ValueError as exc:
+        raise ApiError("not_found", str(exc), 404)
+    return ok(booking_service.get_booking_detail(booking_id))
+
+
+@bp.post("/<int:booking_id>/pops/<int:pop_id>/dismiss")
+def pop_dismiss(booking_id: int, pop_id: int):
+    from src.services import pop
+
+    _booking_or_404(booking_id)
+    pop.dismiss(pop_id, current_user_id())
+    return ok(booking_service.get_booking_detail(booking_id))

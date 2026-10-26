@@ -49,6 +49,11 @@ _BODY_KEYS = (b"BODY[]", b"BODY.PEEK[]", b"RFC822")
 _FETCH_ITEMS = ["X-GM-MSGID", "X-GM-THRID", "INTERNALDATE", "FLAGS", "BODY.PEEK[]"]
 
 
+INBOX = "INBOX"
+SENT = "[Gmail]/Sent Mail"
+ALL_MAIL = "[Gmail]/All Mail"
+
+
 class GmailError(Exception):
     """Base class for Gmail transport failures."""
 
@@ -239,6 +244,72 @@ class GmailImap:
 
         return self._retry("search_above_uid", _do)
 
+    def search_gmail(self, query: str) -> list[int]:
+        """UIDs matching a Gmail search-box query (X-GM-RAW) in the selected folder.
+
+        Accepts the full web syntax: ``from:``, ``to:``, ``cc:``, ``subject:``,
+        ``filename:``, ``after:YYYY/MM/DD``, quoted phrases and ``OR``.
+        """
+
+        def _do():
+            return sorted(int(u) for u in self.client.gmail_search(query))
+
+        return self._retry("search_gmail", _do)
+
+    def search_thread(self, gmail_thrid: int) -> list[int]:
+        """Every UID of a Gmail conversation in the selected folder."""
+
+        def _do():
+            return sorted(int(u) for u in self.client.search(["X-GM-THRID", int(gmail_thrid)]))
+
+        return self._retry("search_thread", _do)
+
+    def search_msgid(self, gmail_msgid: int) -> list[int]:
+        def _do():
+            return sorted(int(u) for u in self.client.search(["X-GM-MSGID", int(gmail_msgid)]))
+
+        return self._retry("search_msgid", _do)
+
+    def fetch_meta(self, uids: Iterable[int], chunk: int = 200) -> Iterator[dict]:
+        """Headers only (no bodies): ``uid``, ``gmail_msgid``, ``gmail_thrid``,
+        ``internaldate``, ``size``, ``from_name``, ``from_email``, ``to``, ``cc``,
+        ``subject``, ``message_id``, ``headers`` (lower-cased name -> value)."""
+        uid_list = sorted(set(int(u) for u in uids))
+        items = [b"X-GM-MSGID", b"X-GM-THRID", b"INTERNALDATE", b"RFC822.SIZE", b"BODY.PEEK[HEADER]"]
+        for i in range(0, len(uid_list), max(1, chunk)):
+            batch = uid_list[i : i + chunk]
+
+            def _do(batch=batch):
+                return self.client.fetch(batch, items)
+
+            response = self._retry("fetch_meta", _do)
+            for uid in batch:
+                data = response.get(uid)
+                if not data:
+                    continue
+                raw = next((data[k] for k in (b"BODY[HEADER]", b"BODY.PEEK[HEADER]") if k in data), b"")
+                yield dict(
+                    _parse_header_block(bytes(raw)),
+                    uid=uid,
+                    gmail_msgid=_as_int(data.get(b"X-GM-MSGID")),
+                    gmail_thrid=_as_int(data.get(b"X-GM-THRID")),
+                    internaldate=data.get(b"INTERNALDATE"),
+                    size=_as_int(data.get(b"RFC822.SIZE")) or 0,
+                )
+
+    # -- idle --------------------------------------------------------------
+
+    def idle_wait(self, timeout: int = 1500) -> bool:
+        """Block until the server reports a change in the selected folder or
+        ``timeout`` seconds pass. Returns True when something changed."""
+        client = self.client
+        client.idle()
+        try:
+            responses = client.idle_check(timeout=timeout)
+        finally:
+            client.idle_done()
+        return any(len(r) > 1 and r[1] in (b"EXISTS", b"RECENT", b"EXPUNGE", b"FETCH") for r in responses or [])
+
     # -- fetch -------------------------------------------------------------
 
     def fetch(self, uids: Iterable[int], chunk: int = 50) -> Iterator[dict]:
@@ -273,6 +344,91 @@ class GmailImap:
                     "flags": [_as_str(f) for f in data.get(b"FLAGS", ())],
                     "raw": bytes(raw),
                 }
+
+
+def _parse_header_block(raw: bytes) -> dict:
+    """The few header fields the planners need, parsed from a BODY[HEADER] block."""
+    import email
+    import email.policy
+    from email.utils import getaddresses
+
+    out = {
+        "from_name": None, "from_email": None, "to": [], "cc": [], "subject": "",
+        "message_id": None, "in_reply_to": None, "date": None, "headers": {},
+    }
+    if not raw:
+        return out
+    try:
+        msg = email.message_from_bytes(raw, policy=email.policy.default)
+    except Exception:  # noqa: BLE001
+        return out
+    try:
+        pairs = getaddresses([str(v) for v in msg.get_all("From", [])])
+    except Exception:  # noqa: BLE001
+        pairs = []
+    if pairs:
+        out["from_name"] = (pairs[0][0] or None)
+        out["from_email"] = (pairs[0][1] or "").lower() or None
+
+    def _list(name: str) -> list[str]:
+        try:
+            return [a.lower() for _n, a in getaddresses([str(v) for v in msg.get_all(name, [])]) if a]
+        except Exception:  # noqa: BLE001
+            return []
+
+    out["to"] = _list("To")
+    out["cc"] = _list("Cc")
+    out["subject"] = str(msg.get("Subject") or "")[:500]
+    out["message_id"] = (str(msg.get("Message-ID") or "").strip() or None)
+    out["in_reply_to"] = (str(msg.get("In-Reply-To") or "").strip() or None)
+    try:
+        from email.utils import parsedate_to_datetime
+
+        out["date"] = parsedate_to_datetime(str(msg.get("Date"))) if msg.get("Date") else None
+    except Exception:  # noqa: BLE001
+        out["date"] = None
+    headers: dict[str, str] = {}
+    for key, value in msg.items():
+        k = key.lower()
+        v = str(value)
+        headers[k] = (headers[k] + "\n" + v) if k in headers else v
+    out["headers"] = headers
+    return out
+
+
+class GmailImapWriter(GmailImap):
+    """The one read-write session: it only ever adds or removes Gmail labels.
+
+    Removing the ``\\Inbox`` label is what Gmail calls archiving; nothing here
+    deletes, moves or flags a message.
+    """
+
+    def select(self, folder: str, readonly: bool = False) -> int:
+        def _do():
+            info = self.client.select_folder(folder, readonly=readonly)
+            self._folder = folder
+            return int(info.get(b"UIDVALIDITY", 0))
+
+        return self._retry("select_rw", _do)
+
+    def ensure_label(self, label: str) -> None:
+        names = set(self.list_folders())
+        if label not in names:
+            self._retry("create_folder", self.client.create_folder, label)
+
+    def add_label(self, uids: Iterable[int], label: str) -> None:
+        uid_list = sorted(set(int(u) for u in uids))
+        if uid_list:
+            self._retry("add_gmail_labels", self.client.add_gmail_labels, uid_list, label)
+
+    def remove_label(self, uids: Iterable[int], label: str) -> None:
+        uid_list = sorted(set(int(u) for u in uids))
+        if uid_list:
+            self._retry("remove_gmail_labels", self.client.remove_gmail_labels, uid_list, label)
+
+    def archive(self, uids: Iterable[int]) -> None:
+        self.remove_label(uids, "\\Inbox")
+
 
 
 def _as_int(value) -> int | None:

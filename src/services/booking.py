@@ -63,6 +63,9 @@ GROUP_TYPE_FALLBACK = "other"
 # ------------------------------------------------------------ status machine --
 
 TRANSITIONS: dict[str, frozenset[str]] = {
+    # A form request waits for review: accept puts it on the calendar (enquiry,
+    # then the proforma goes out) or decline closes it without a word being sent.
+    "requested": frozenset({"enquiry", "proforma_sent", "declined", "cancelled"}),
     "enquiry": frozenset({"proforma_sent", "confirmed", "cancelled", "lapsed"}),
     "proforma_sent": frozenset({"confirmed", "cancelled", "lapsed"}),
     # confirmed → proforma_sent is the revert when a matched deposit is removed
@@ -72,9 +75,12 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "cancelled": frozenset({"enquiry"}),
     "lapsed": frozenset({"enquiry"}),
     "no_show": frozenset(),
+    "declined": frozenset({"requested", "enquiry"}),
 }
 
 STATUS_STAMPS = {
+    "enquiry": "accepted_at",
+    "declined": "declined_at",
     "proforma_sent": "proforma_sent_at",
     "confirmed": "confirmed_at",
     "completed": "completed_at",
@@ -83,6 +89,7 @@ STATUS_STAMPS = {
 }
 
 STATUS_LABELS = {
+    "requested": "Request",
     "enquiry": "Enquiry",
     "proforma_sent": "Proforma sent",
     "confirmed": "Confirmed",
@@ -90,6 +97,7 @@ STATUS_LABELS = {
     "cancelled": "Cancelled",
     "lapsed": "Lapsed",
     "no_show": "No show",
+    "declined": "Declined",
 }
 
 FIELD_LABELS = {
@@ -1201,3 +1209,28 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
         }
     )
     return detail
+
+
+# ------------------------------------------------------------ requests ---
+
+
+def accept_request(booking_id: int, data: Mapping[str, Any] | None, actor: int | None) -> dict:
+    """Review done: apply any edits, put the request on the calendar as an
+    enquiry. The proforma is sent by the caller (the API's send-proforma
+    action) so the send stays a visible, logged step."""
+    booking = _require(booking_id)
+    if booking["status"] != "requested":
+        raise InvalidTransition("Only a request can be accepted", {"status": "Not a request"})
+    changes = {k: v for k, v in dict(data or {}).items() if k != "status"}
+    if changes:
+        update_booking(booking_id, changes, actor)
+    set_status(booking_id, "enquiry", actor, reason="Request accepted")
+    return _require(booking_id)
+
+
+def decline_request(booking_id: int, reason: str | None, actor: int | None) -> dict:
+    booking = _require(booking_id)
+    if booking["status"] != "requested":
+        raise InvalidTransition("Only a request can be declined", {"status": "Not a request"})
+    set_status(booking_id, "declined", actor, reason=reason or "Request declined")
+    return _require(booking_id)

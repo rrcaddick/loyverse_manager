@@ -192,6 +192,17 @@ enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorde
    ├──cancel──▶ cancelled        ├──hold expires──▶ lapsed (button, suggested by queue)  ├──visit day: arrivals recorded──▶ completed
    └──(any)                      └──cancel──▶ cancelled                                 └──no arrivals after date──▶ no_show
 ```
+- **Requests (migration 011, Oct 26):** the public form creates `requested`
+  (not on the calendar). `POST /bookings/:id/accept` applies edits, moves it to
+  `enquiry` and sends the proforma in the same step; `POST …/decline` →
+  `declined`. `requested → enquiry | proforma_sent | declined | cancelled`;
+  `declined → requested | enquiry`. Bookings list bucket `requests`.
+- **Inbound mail, enquiries, contacts, proof of payment, payment search:** see
+  `docs/handoff/migration-and-inbound.md` (tables `booking_contacts`,
+  `enquiries`, `mail_skipped`, `pop_candidates`; `email_messages.inbound_outcome`
+  …; `documents.kind` gains `pop|attachment`; settings section `inbound`;
+  endpoints `/enquiries/*`, `/inbound/*`, `/bookings/:id/{accept,decline,
+  contacts,payment-search,pops}`).
 - `confirm` happens when `paid_total ≥ deposit_due`, or deposit waived + admin
   clicks Confirm. Admin can also Confirm manually with a reason.
 - Reopen: cancelled/lapsed → enquiry (admin).

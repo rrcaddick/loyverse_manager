@@ -134,6 +134,18 @@ services:
       - logs:/app/logs
       - data:/app/data
 
+  inbound:
+    <<: *app
+    # Always on: watches the inbox (IMAP IDLE), runs the inbound pipeline and
+    # the periodic sweep (docs/handoff/migration-and-inbound.md).
+    command: ["inbound-worker"]
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+
   scheduler:
     <<: *app
     # Behind a profile, so `docker compose up` does NOT create it and nothing

@@ -25,6 +25,7 @@ def _ctx(kind: str, payments: list[dict]) -> dict:
         "expiry": {},
         "answers": {"questions": [{"question": "Can we bring a braai?", "answer": "Yes, braai facilities are available."}, {"question": "Bus parking?", "answer": None}]},
         "bounce_back": {"form_url": FORM},
+        "convert_enquiry": {"form_url": FORM + "?enquiry=tok"},
         "reply": {"body_html": "<p>Hi Thandi,</p><p>Thanks for letting us know about the extra minibus.</p>"},
     }[kind]
 
@@ -42,6 +43,7 @@ EXPECTED = {
     "expiry": ["lapsed", "no longer reserved"],
     "answers": ["Can we bring a braai?", "braai facilities", "come back to you"],
     "bounce_back": ["Request a group booking", FORM],
+    "convert_enquiry": ["Complete the booking request", FORM + "?enquiry=tok"],
     "reply": ["extra minibus"],
 }
 
@@ -59,6 +61,7 @@ SUBJECTS = {
     "expiry": "Booking FY1703 released – 7 Nov",
     "answers": "Your questions – FY1703",
     "bounce_back": "Group bookings at The Farmyard Park",
+    "convert_enquiry": "Group bookings at The Farmyard Park",
     "reply": "FY1703 – Hillside Community Church – Saturday 7 November 2026",
 }
 
@@ -88,13 +91,13 @@ def _rows(html: str) -> list[tuple[str, str]]:
 
 @pytest.mark.parametrize("kind", KINDS)
 def test_every_kind_renders(settings, booking, payments, preview_dir, kind):
-    b = None if kind == "bounce_back" else booking
+    b = None if kind in ("bounce_back", "convert_enquiry") else booking
     r = render_email(kind, b, settings, logo_url=LOGO, **_ctx(kind, payments))
     assert isinstance(r, RenderedEmail)
     assert r.subject and r.html and r.text
     assert _plain(r.subject) == SUBJECTS[kind]
     assert len(r.subject) <= 60 or kind == "reply"
-    if kind not in ("bounce_back", "reply"):
+    if kind not in ("bounce_back", "reply", "convert_enquiry"):
         # group and date in the preheader
         assert "Hillside Community Church · Saturday 7 November 2026" in r.html
     html = _plain(r.html)  # css_inline re-serialises NBSP as an entity
@@ -103,7 +106,7 @@ def test_every_kind_renders(settings, booking, payments, preview_dir, kind):
     if kind in FIRST_ROW:
         assert _rows(html)[0] == FIRST_ROW[kind], f"{kind}: first card row is not the amount"
     assert "max-width: 480px" in r.html  # card rows stack on narrow screens
-    if kind in ("expiry", "answers", "bounce_back", "reply"):
+    if kind in ("expiry", "answers", "bounce_back", "reply", "convert_enquiry"):
         assert "Attached:" not in r.html
     # layout and signature
     assert LOGO in r.html

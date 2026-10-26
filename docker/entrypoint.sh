@@ -14,6 +14,9 @@
 #   recompute-reminders one-off reminder recompute
 #   backup              one-off database dump
 #   import-sheet        one-off import of the old booking sheet CSV (args passed through)
+#   migrate-season      one-off season migration (dry run unless --apply; args passed through)
+#   inbound-worker      long-running inbox watcher (IMAP IDLE + sweep)
+#   inbound-sweep       one-off inbound sweep
 #   import-mail         one-off full mailbox import + thread linking (args passed through)
 #   create-user         create a portal user (args passed through)
 #   <anything else>     executed verbatim (e.g. bash, python)
@@ -83,6 +86,9 @@ case "${1:-web}" in
   recompute-reminders) exec python -m scripts.recompute_reminders ;;
   backup)              exec bash scripts/backup_db.sh ;;
   import-sheet)        shift; exec python -m scripts.import_sheet "$@" ;;
+  migrate-season)      shift; exec python -m scripts.migrate_season "$@" ;;
+  inbound-worker)      exec python -m scripts.inbound_worker ;;
+  inbound-sweep)       exec python -m scripts.inbound_sweep ;;
   import-mail)         shift; exec python -m scripts.import_mail "$@" ;;
   create-user)         shift; exec python -m scripts.create_user "$@" ;;
 

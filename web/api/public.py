@@ -106,8 +106,17 @@ def booking_request():
         )
 
     clean.pop("policy_accepted", None)
+    clean["status"] = "requested"  # reviewed and accepted before it is a booking
     booking = public_form.create_booking_compat(clean, source="form", actor=None)
     booking_id = int(booking["id"])
+    enquiry_token = data.get("enquiry_token") or data.get("enquiry")
+    if enquiry_token:
+        try:
+            from src.services import enquiries
+
+            enquiries.attach_request_by_token(str(enquiry_token), booking_id)
+        except Exception as exc:  # noqa: BLE001 - the request stands on its own
+            logger.warning(f"Enquiry token on request {booking_id} not applied: {exc}")
     public_form.record_submission(booking_id, data, ip, user_agent, True)
     logger.info(f"Form enquiry {booking.get('reference')} created for '{clean['group_name']}' from {ip}")
 

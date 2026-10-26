@@ -962,22 +962,32 @@ def _sync_folder(
         try:
             parsed = parse_message(item["raw"], item.get("internaldate"))
             row = build_row(item, parsed, folder)
-            verdict, reason = classify_automated(parsed, row, ignored_rules)
-            if verdict == "drop" and not (
-                item.get("gmail_msgid") and em.get_by_gmail_msgid(item["gmail_msgid"])
-            ):
-                # Certain automated mail that names no booking is never stored.
-                stats["dropped"] += 1
-                logger.info(
-                    f"{folder} uid {uid}: dropped automated mail from {row.get('from_email')} "
-                    f"({(row.get('subject') or '')[:60]!r}): {reason}"
+            verdict = None
+            if row.get("direction") == "inbound":
+                from src.models import mail_skipped
+                from src.services import inbound
+
+                grade, reason = inbound.classify_automated(
+                    parsed.headers, parsed.from_email, parsed.from_name, parsed.subject, parsed.text
                 )
-                max_uid = max(max_uid, uid)
-                continue
-            if verdict is not None:
-                row["is_auto_generated"] = True
-                stats["automated"] += 1
-                logger.info(f"{folder} uid {uid}: stored as automated: {reason}")
+                names_booking = grade is not None and match_booking_direct(row)[0] is not None
+                already = bool(item.get("gmail_msgid") and em.get_by_gmail_msgid(item["gmail_msgid"]))
+                if grade is not None and not names_booking and not already:
+                    # Automated mail stays in Gmail untouched; only its headers are logged
+                    # so it can be rescued from the app (inbound.rescue_skipped).
+                    stats["dropped"] += 1
+                    mail_skipped.record(
+                        item.get("gmail_msgid"), item.get("gmail_thrid"), uid, parsed.from_email, parsed.from_name,
+                        parsed.subject, row.get("sent_at"), grade, reason,
+                    )
+                    logger.info(f"{folder} uid {uid}: skipped ({grade}) {row.get('from_email')}: {reason}")
+                    max_uid = max(max_uid, uid)
+                    continue
+                if grade is not None:
+                    verdict = grade
+                    row["is_auto_generated"] = True
+                    stats["automated"] += 1
+                    logger.info(f"{folder} uid {uid}: stored as automated (names a booking): {reason}")
             message_id, outcome, previous_thrid = em.upsert_by_gmail_msgid(row)
             stats[outcome] += 1
             # A claimed row keeps the split mail_send stored; only its thread ids changed.
@@ -991,9 +1001,17 @@ def _sync_folder(
                         em.update(message_id, has_attachments=True)
             if outcome == "inserted":
                 row["id"] = message_id
-                booking_id, _method, pending = apply_match(message_id, row, window_days)
-                stats["matched"] += int(bool(booking_id))
-                stats["pending"] += int(pending)
+                if row.get("direction") == "inbound" and folder == INBOX:
+                    from src.services import inbound
+
+                    stored = em.get(message_id) or row
+                    result = inbound.process_message(message_id, stored, send=True)
+                    stats["matched"] += int(result.get("outcome") in ("booking", "allocate"))
+                    stats["pending"] += int(result.get("outcome") == "pending_form")
+                else:
+                    booking_id, _method, pending = apply_match(message_id, row, window_days)
+                    stats["matched"] += int(bool(booking_id))
+                    stats["pending"] += int(pending)
         except Exception as exc:  # noqa: BLE001 - one bad message must not stall the folder
             stats["errors"] += 1
             logger.error(f"{folder} uid {uid}: {exc}", exc_info=True)

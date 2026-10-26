@@ -80,6 +80,18 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "bounce_back_enabled": True,
         "review_window_days": 14,
     },
+    "inbound": {
+        "active_days_after_visit": 14,
+        "form_window_hours": 24,
+        "sweep_interval_hours": 24,
+        "bounce_back_enabled": True,
+        "labels_enabled": True,
+        "archive_enabled": False,
+        "label_bookings": "Farmyard/Bookings",
+        "label_enquiries": "Farmyard/Enquiries",
+        "label_process": "Farmyard/Process",
+        "skipped_days": 7,
+    },
     "form": {
         "group_types": [
             {"code": "school", "label": "School", "weekday_tier": "school_weekday", "weekend_tier": "nonprofit_kids_weekend"},

@@ -57,6 +57,9 @@ VIEWS = (
     "up_next",
     "reply",
     "new_requests",
+    "enquiries",
+    "allocate",
+    "pops",
     "confirm_money",
     "send_tickets",
     "reminders",
@@ -64,7 +67,7 @@ VIEWS = (
     "arrivals",
     "stale",
 )
-LIVE_VIEWS = ("reply", "new_requests", "confirm_money", "send_tickets", "reminders", "holds", "arrivals")
+LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "confirm_money", "send_tickets", "reminders", "holds", "arrivals")
 
 UP_NEXT_SIZE = 10
 MONEY_WINDOW_DAYS = 30
@@ -287,7 +290,7 @@ def _new_request_rows(today: date) -> list[dict]:
                (SELECT COUNT(*) FROM booking_questions q
                  WHERE q.booking_id = b.id AND q.answer IS NULL) AS unanswered
         FROM bookings b
-        WHERE b.status = 'enquiry' AND b.proforma_sent_at IS NULL
+        WHERE b.status = 'requested' OR (b.status = 'enquiry' AND b.proforma_sent_at IS NULL)
         ORDER BY COALESCE(b.enquiry_date, DATE(b.created_at)), b.created_at, b.id
         """
     )
@@ -321,9 +324,131 @@ def _new_request_rows(today: date) -> list[dict]:
                 context=" · ".join(bits),
                 amount=None,
                 age_days=waiting,
-                primary=_act("Send proforma", "open_booking", booking_id=int(r["booking_id"])),
+                primary=_act(
+                    "Review request" if r["status"] == "requested" else "Send proforma",
+                    "open_booking", booking_id=int(r["booking_id"]),
+                ),
                 secondary=secondary,
                 sort_key=_key(TIER_NEW_REQUEST, _as_date(since) or today, int(r["booking_id"])),
+            )
+        )
+    return out
+
+
+# -------------------------------------------------------------- enquiries ---
+
+
+def _enquiry_rows(today: date) -> list[dict]:
+    """Open enquiries: unmatched conversations waiting on us."""
+    rows = query(
+        """
+        SELECT id, sender_email, sender_name, subject, status, last_inbound_at, first_message_at,
+               message_count, snippet, convert_sent_at
+        FROM enquiries WHERE status IN ('open','replied')
+        ORDER BY COALESCE(last_inbound_at, created_at), id
+        """
+    )
+    out = []
+    for r in rows:
+        waiting = _days_since(r.get("last_inbound_at") or r.get("first_message_at"), today)
+        bits = [(r.get("subject") or "(no subject)")[:80]]
+        if r["status"] == "replied":
+            bits.append("replied, customer wrote again")
+        if r.get("convert_sent_at"):
+            bits.append("form sent")
+        bits.append(f"waiting {waiting} d")
+        out.append(
+            _row(
+                "enquiry",
+                f"enquiry:{r['id']}",
+                booking=None,
+                title=r.get("sender_name") or r.get("sender_email"),
+                context=" · ".join(bits),
+                amount=None,
+                age_days=waiting,
+                primary=_act("Reply", "open_enquiry", enquiry_id=int(r["id"])),
+                secondary=[_act("Convert", "open_enquiry", enquiry_id=int(r["id"]), tab="convert")],
+                sort_key=_key(TIER_NEW_REQUEST, _as_date(r.get("last_inbound_at")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
+def _allocate_rows(today: date) -> list[dict]:
+    """Mail that belongs to one of several bookings of the same people."""
+    rows = query(
+        """
+        SELECT id, gmail_thrid, from_name, from_email, subject, sent_at, candidate_booking_ids
+        FROM email_messages
+        WHERE direction = 'inbound' AND inbound_outcome = 'allocate' AND booking_id IS NULL
+        ORDER BY sent_at, id
+        """
+    )
+    out = []
+    for r in rows:
+        import json as _json
+
+        try:
+            ids = [int(x) for x in _json.loads(r.get("candidate_booking_ids") or "[]")]
+        except Exception:  # noqa: BLE001
+            ids = []
+        if not ids:
+            continue
+        marks = ",".join(["%s"] * len(ids))
+        cands = query(f"SELECT {BOOKING_COLS} FROM bookings b WHERE b.id IN ({marks}) ORDER BY b.visit_date", ids)
+        waiting = _days_since(r.get("sent_at"), today)
+        out.append(
+            _row(
+                "allocate",
+                f"allocate:{r['id']}",
+                booking=None,
+                title=r.get("from_name") or r.get("from_email"),
+                context=f"{(r.get('subject') or '(no subject)')[:70]} · which of {len(cands)} bookings? · waiting {waiting} d",
+                amount=None,
+                age_days=waiting,
+                primary=_act("Assign", "open_conversation", thrid=str(r["gmail_thrid"]) if r.get("gmail_thrid") else None, message_id=int(r["id"])),
+                secondary=[
+                    _act(f"{c['reference']} · {_short_day(c['visit_date'])}", "assign_message", message_id=int(r["id"]), booking_id=int(c["booking_id"]))
+                    for c in cands
+                ],
+                sort_key=_key(TIER_REPLY, _as_date(r.get("sent_at")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
+def _pop_rows(today: date) -> list[dict]:
+    """Proof of payment to verify: the search opens pre-filled on the booking."""
+    rows = query(
+        """
+        SELECT p.id, p.booking_id, p.amount, p.reference, p.bank_name, p.parsed, p.created_at,
+               b.reference AS booking_reference, b.group_name, b.visit_date, b.status, b.people_booked
+        FROM pop_candidates p JOIN bookings b ON b.id = p.booking_id
+        WHERE p.status = 'pending' ORDER BY p.created_at
+        """
+    )
+    out = []
+    for r in rows:
+        waiting = _days_since(r.get("created_at"), today)
+        bits = ["Proof of payment" + (" (read from the PDF)" if r.get("parsed") else " (needs a look)")]
+        if r.get("bank_name"):
+            bits.append(str(r["bank_name"]))
+        if r.get("reference"):
+            bits.append(f"ref {r['reference']}")
+        bits.append(f"waiting {waiting} d")
+        chip = _chip({**r, "reference": r["booking_reference"]})
+        out.append(
+            _row(
+                "pop",
+                f"pop:{r['id']}",
+                booking=chip,
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=r.get("amount"),
+                age_days=waiting,
+                primary=_act("Verify payment", "open_booking", booking_id=int(r["booking_id"]), tab="payments", pop_id=int(r["id"])),
+                secondary=[],
+                sort_key=_key(TIER_MONEY, _as_date(r.get("created_at")) or today, int(r["id"])),
             )
         )
     return out
@@ -667,6 +792,9 @@ def snapshot(today: date | None = None) -> dict:
     views = {
         "reply": _reply_rows(today),
         "new_requests": _new_request_rows(today),
+        "enquiries": _enquiry_rows(today),
+        "allocate": _allocate_rows(today),
+        "pops": _pop_rows(today),
         "confirm_money": _money_rows(today),
         "send_tickets": _ticket_rows(today),
         "reminders": _reminder_rows(today),
