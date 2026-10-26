@@ -116,3 +116,18 @@ def test_park_addresses_are_never_contacts():
     assert mt.is_park_address("farmyardmanagers@gmail.com")
     assert mt.is_park_address("info@farmyardpark.co.za")
     assert not mt.is_park_address("jill@example.com")
+
+
+def test_senders_on_attached_mail_become_full_contacts():
+    from src.services import migration
+
+    t = mt.ThreadFacts(thrid=1, participants={"zdollie@nhhs.co.za", "office@nhhs.co.za"}, senders={"zdollie@nhhs.co.za"})
+    assert migration.mt.expandable_addresses(t, set()) == {"zdollie@nhhs.co.za"}  # office@ is a shared box
+    assert t.senders == {"zdollie@nhhs.co.za"}
+
+
+def test_dates_in_reads_written_dates():
+    from datetime import date
+
+    found = mt.dates_in("Quotation: 19 December 2026 for 550 people, or 7/11/2026")
+    assert date(2026, 12, 19) in found and date(2026, 11, 7) in found

@@ -299,6 +299,7 @@ class ThreadFacts:
 
     thrid: int
     participants: set[str] = field(default_factory=set)  # lower-case addresses, own excluded
+    senders: set[str] = field(default_factory=set)  # addresses that wrote to us on this thread
     from_names: set[str] = field(default_factory=set)
     subjects: set[str] = field(default_factory=set)
     text: str = ""
@@ -421,6 +422,32 @@ def choose_cluster(
 
 
 # ------------------------------------------------------------- helpers ---
+
+
+_DATE_MENTION_RE = re.compile(
+    r"\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*(?:\s+\d{4})?"
+    r"|\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}|\d{4}-\d{2}-\d{2})\b",
+    re.IGNORECASE,
+)
+
+
+def dates_in(text: str | None, default_year: int | None = None) -> set[date]:
+    """Calendar dates written in the text (day-first; a missing year takes
+    ``default_year`` or the current one)."""
+    if not text:
+        return set()
+    from dateutil import parser as dateparser
+
+    year = default_year or datetime.now().year
+    out: set[date] = set()
+    for m in _DATE_MENTION_RE.finditer(text[:8000]):
+        try:
+            d = dateparser.parse(m.group(1), dayfirst=True, default=datetime(year, 1, 1))
+        except Exception:  # noqa: BLE001
+            continue
+        if d and 2024 <= d.year <= 2030:
+            out.add(d.date())
+    return out
 
 
 def is_noreply(address: str | None) -> bool:

@@ -202,6 +202,8 @@ def fetch_thread(imap: GmailImap, thrid: int, own: set[str]) -> ThreadPlan | Non
         for a in parsed.participant_emails:
             if not is_own(a, own):
                 facts.participants.add(a)
+        if direction == "inbound" and parsed.from_email and not is_own(parsed.from_email, own):
+            facts.senders.add(parsed.from_email.lower())
         if direction == "inbound" and parsed.from_name:
             facts.from_names.add(parsed.from_name)
         if parsed.subject:
@@ -261,8 +263,13 @@ def plan_booking(
     *,
     floor: date = mt.HARD_FLOOR,
     include_bank: bool = True,
+    others: list[dict] | None = None,
 ) -> BookingPlan:
-    """Find, fetch and score the conversations of one booking. Read-only."""
+    """Find, fetch and score the conversations of one booking. Read-only.
+
+    ``others`` are the rest of the season's bookings: a conversation that
+    fits one of them better (a shared contact's other visit) is not attached
+    here but reported for that booking."""
     own = own if own is not None else own_addresses()
     bf = mt.BookingFacts.from_row(row)
     plan = BookingPlan(booking=bf, sheet_row=row)
@@ -326,7 +333,11 @@ def plan_booking(
         plan.notes.append(f"{len(expand)} addresses on the matched mail, first {MAX_EXPAND_ADDRESSES} searched")
         expand = expand[:MAX_EXPAND_ADDRESSES]
     if expand:
-        bf.cc_emails.update(expand)
+        # People who wrote to us on an attached conversation are the booking's
+        # contacts; people who were only copied are weaker evidence.
+        wrote = {a for tp in plan.threads.values() if tp.verdict == "attach" for a in tp.facts.senders}
+        for a in expand:
+            (bf.emails if a in wrote else bf.cc_emails).add(a)
         plan.learned_emails.update(expand)
         for address in expand:
             new_thrids = []
@@ -346,6 +357,29 @@ def plan_booking(
         for tp in plan.threads.values():
             tp.score, tp.why = mt.score(tp.facts, bf)
             tp.verdict = mt.verdict(tp.score)
+
+    # A shared contact's other booking: hand the conversation to the better fit.
+    if others:
+        other_facts = [
+            mt.BookingFacts.from_row(o) for o in others
+            if o is not row and (o.get("doc_number") != row.get("doc_number") or o.get("group_name") != row.get("group_name"))
+        ]
+        for tp in plan.threads.values():
+            if tp.verdict != "attach":
+                continue
+            mentioned = mt.dates_in(" ".join(tp.facts.subjects) + " " + tp.facts.text[:3000])
+            best: tuple[int, mt.BookingFacts] | None = None
+            for of in other_facts:
+                pts, _why = mt.score(tp.facts, of)
+                if pts >= mt.REVIEW_THRESHOLD and (best is None or pts > best[0]):
+                    best = (pts, of)
+            if best is None:
+                continue
+            o_pts, of = best
+            date_says_other = bool(of.visit_date in mentioned and bf.visit_date not in mentioned)
+            if o_pts > tp.score or (date_says_other and o_pts >= mt.REVIEW_THRESHOLD):
+                tp.verdict = "review"
+                tp.why.append(f"fits {of.reference or of.group_name} ({of.group_name}, {of.visit_date:%-d %b}) better")
 
     # Seasons: newest cluster of the attachable conversations wins.
     attachable = [tp.facts for tp in plan.threads.values() if tp.verdict == "attach"]

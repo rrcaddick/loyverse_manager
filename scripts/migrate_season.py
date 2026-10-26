@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     started = datetime.now()
     today = get_today()
     rows = migration.load_sheet_bookings(args.sheet, args.from_visit)
+    season_rows = list(rows)  # every booking of the season, for conflict checks
     if args.upcoming:
         rows = [r for r in rows if r["visit_date"] >= today]
     if args.booking:
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     own = migration.own_addresses()
     with GmailImap() as imap:
         for i, row in enumerate(rows, 1):
-            plan = migration.plan_booking(imap, row, own, include_bank=not args.no_bank)
+            plan = migration.plan_booking(imap, row, own, include_bank=not args.no_bank, others=season_rows)
             plans.append(plan)
             status = f"{len(plan.chosen)} conversation(s)" if plan.chosen else "nothing"
             print(f"[{i}/{len(rows)}] {row.get('reference') or '-':8} {row['group_name'][:40]:40} -> {status}  ({plan.cluster_note})", flush=True)
