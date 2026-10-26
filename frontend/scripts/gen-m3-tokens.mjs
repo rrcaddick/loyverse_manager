@@ -124,7 +124,9 @@ function tokens(theme, isDark) {
   const canvas = N(L ? 90 : 8);
   const card = N(L ? 100 : 22);
   const nested = N(L ? 94 : 27);
-  const head = N(L ? 80 : 32);
+  // Owner, 26 Oct: table head as dark as the hovered row; both twice the
+  // earlier step from the card (light 100 → 70, dark 22 → 46).
+  const head = N(L ? 70 : 46);
   const highest = N(L ? 76 : 36);
   const sidebar = L ? N(22) : P(23);
   const sidebarText = L ? N(92) : P(94);
@@ -144,7 +146,7 @@ function tokens(theme, isDark) {
   const primaryContainer = PV(L ? 88 : 30);
   const onPrimaryContainer = PV(L ? 10 : 95);
   // Selected is tinted so it differs from hover by hue as well as by tone.
-  const selected = ink ? N(L ? 80 : 44) : PV(L ? 86 : 34);
+  const selected = ink ? N(L ? 80 : 38) : PV(L ? 86 : 34);
   const secondaryContainer = NV(L ? 84 : 34);
   const onSecondaryContainer = NV(L ? 15 : 95);
 
@@ -224,7 +226,9 @@ function tokens(theme, isDark) {
     "state-focus": `color-mix(in srgb, ${text} 12%, transparent)`,
     // Hover must read against BOTH row colours (card 100/22, zebra 94/27), so it
     // is a fixed step beyond the zebra row, not a thin state layer over the card.
-    "surface-hover": N(L ? 85 : 35),
+    "surface-hover": N(L ? 70 : 46),
+    // Row separators: twice the earlier darkness (light NV70 → 40, dark NV45 → 68).
+    "table-rule": NV(L ? 40 : 68),
     "direction-in": sem["blue-solid"],
     "direction-out": grey["grey-solid"],
 
