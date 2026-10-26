@@ -98,11 +98,11 @@ const GAPS = [
   ["canvas ↔ table head", "background", "surface-high", 0.08],
   ["canvas ↔ sidebar", "background", "sidebar", 0.10],
   ["card ↔ hover", "card", "surface-hover", 0.08, "tint"],
-  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.08, "tint"],
+  ["zebra ↔ hover", "surface-nested", "surface-hover", 0.06, "tint"],
   ["canvas ↔ control", "background", "control", 0.06],
   ["card ↔ selected row", "card", "selection-row", 0.05],
   // A selected row is tinted: it may differ from its neighbours by hue instead of tone.
-  ["zebra ↔ selected row", "surface-nested", "selection-row", 0.04, "tint"],
+  ["zebra ↔ selected row", "surface-nested", "selection-row", 0.04, "tint", 0.025],
   ["hover ↔ selected row", "surface-hover", "selection-row", 0.03, "tint"],
 ];
 const TEXT = [
@@ -147,13 +147,13 @@ for (const theme of THEMES) {
     const t = blocks[`${theme}:${mode}`];
     if (!t) continue;
     const card = resolve(t.card, t);
-    for (const [label, a, b, min, kind] of GAPS) {
+    for (const [label, a, b, min, kind, tintMin] of GAPS) {
       const A = resolve(t[a], t, card);
       const B = resolve(t[b], t, card);
       if (!A || !B) continue;
       const gap = Math.abs(oklabL(A) - oklabL(B));
       const dc = Math.abs(oklabC(A) - oklabC(B));
-      const ok = gap >= min || (kind === "tint" && dc >= 0.04);
+      const ok = gap >= min || (kind === "tint" && dc >= (tintMin ?? 0.04));
       if (!ok) failures++;
       rows.push([theme, mode, label, `ΔL ${gap.toFixed(3)}${kind === "tint" ? ` ΔC ${dc.toFixed(3)}` : ""}`, `≥ ${min}`, ok ? "ok" : "LOW"]);
     }

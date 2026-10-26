@@ -31,11 +31,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  Blend,
   Hct,
   MaterialDynamicColors,
   SchemeMonochrome,
   SchemeNeutral,
-  SchemeTonalSpot,
+  SchemeVibrant,
   TonalPalette,
   argbFromHex,
   hexFromArgb,
@@ -44,17 +45,18 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(here, "../src/styles/tokens.css");
 
-// accentHue: the highlight role (Material's tertiary, at full strength) for
-// count badges and notification dots. A hue away from the primary and clear
-// of the four meaning colours (green 145, amber 72, red 25, blue 250).
+// Each theme is ONE seed: its primary colour. Secondary, tertiary (the accent),
+// error, the neutrals and every container come from Material's own scheme for
+// that seed. No hand-picked hues. Vibrant keeps the chroma the owner wants;
+// Neutral is the ink-and-paper default; Monochrome at contrast 1.0 is the
+// high-contrast theme.
 const THEMES = [
-  // Graphite is the ink-and-paper theme: its primary is ink, its highlight raspberry.
-  { id: "graphite", seed: "#605b53", scheme: SchemeNeutral, contrast: 0.0, isDefault: true, ink: true, accentHue: 352 },
-  { id: "fynbos", seed: "#8a3fa6", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 190 },
-  { id: "indigo", seed: "#4f55d9", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 340 },
-  { id: "lagoon", seed: "#15808f", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 350 },
-  { id: "cocoa", seed: "#7d5536", scheme: SchemeTonalSpot, contrast: 0.0, accentHue: 200 },
-  { id: "contrast", seed: "#303030", scheme: SchemeMonochrome, contrast: 1.0, highContrast: true, accentHue: 352 },
+  { id: "graphite", seed: "#605b53", scheme: SchemeNeutral, contrast: 0.0, isDefault: true },
+  { id: "fynbos", seed: "#8a3fa6", scheme: SchemeVibrant, contrast: 0.0 },
+  { id: "indigo", seed: "#4f55d9", scheme: SchemeVibrant, contrast: 0.0 },
+  { id: "lagoon", seed: "#15808f", scheme: SchemeVibrant, contrast: 0.0 },
+  { id: "cocoa", seed: "#7d5536", scheme: SchemeVibrant, contrast: 0.0 },
+  { id: "contrast", seed: "#303030", scheme: SchemeMonochrome, contrast: 1.0, highContrast: true },
 ];
 
 const ROLES = [
@@ -62,16 +64,17 @@ const ROLES = [
   "surfaceContainerHigh", "surfaceContainerHighest", "onSurface", "onSurfaceVariant", "outline", "outlineVariant",
   "primary", "onPrimary", "primaryContainer", "onPrimaryContainer", "secondary", "onSecondary", "secondaryContainer",
   "onSecondaryContainer", "tertiary", "onTertiary", "tertiaryContainer", "onTertiaryContainer", "error", "onError",
-  "errorContainer", "onErrorContainer", "inverseSurface", "inverseOnSurface", "surfaceTint",
+  "errorContainer", "onErrorContainer", "inverseSurface", "inverseOnSurface", "inversePrimary", "primaryFixedDim", "onPrimaryFixed", "surfaceTint",
 ];
 
-const SEMANTIC = {
-  green: TonalPalette.fromHueAndChroma(145, 60),
-  amber: TonalPalette.fromHueAndChroma(72, 72),
-  red: TonalPalette.fromHueAndChroma(25, 84),
-  blue: TonalPalette.fromHueAndChroma(250, 60),
-};
-const HEAT = TonalPalette.fromHueAndChroma(72, 64);
+// Custom colours (meaning): green, amber, blue, plus the heat ramp. Material's
+// rule for a custom colour is to harmonise it toward the seed, then build its
+// tonal palette; red is the scheme's own error role.
+const SEMANTIC_SEEDS = { green: "#2e7d32", amber: "#e08a00", blue: "#1e63b5" };
+const HEAT_SEED = "#e08a00";
+function harmonised(hex, seedHex) {
+  return TonalPalette.fromInt(Blend.harmonize(argbFromHex(hex), argbFromHex(seedHex)));
+}
 
 function roles(theme, isDark) {
   const scheme = new theme.scheme(Hct.fromInt(argbFromHex(theme.seed)), isDark, theme.contrast);
@@ -87,6 +90,8 @@ function roles(theme, isDark) {
   }
   if (missing.length) throw new Error(`Missing Material roles: ${missing.join(", ")}`);
   out.primaryTone = (t) => hexFromArgb(scheme.primaryPalette.tone(t));
+  out.tertiaryTone = (t) => hexFromArgb(scheme.tertiaryPalette.tone(t));
+  out.errorTone = (t) => hexFromArgb(scheme.errorPalette.tone(t));
   out.primaryHue = scheme.primaryPalette.hue;
   out.neutralTone = (t) => hexFromArgb(scheme.neutralPalette.tone(t));
   out.neutralVariantTone = (t) => hexFromArgb(scheme.neutralVariantPalette.tone(t));
@@ -102,100 +107,84 @@ function tokens(theme, isDark) {
   const N = (tn) => r.neutralTone(tn);
   const NV = (tn) => r.neutralVariantTone(tn);
   const P = (tn) => r.primaryTone(tn);
-  // Depth: buttons, active items and selections use a vivid palette on the
-  // seed's hue (chroma 84) rather than the scheme's tempered primary.
-  const PV = (tn) => hexFromArgb(TonalPalette.fromHueAndChroma(r.primaryHue, hc || theme.ink ? (theme.ink ? 10 : 0) : 84).tone(tn));
-  const ink = !!theme.ink || hc;
 
-  // Semantic hues: richer fills than Material's tone-90 pastels (owner, 26 Oct).
+  // Meaning colours: Material custom colours harmonised to this theme's seed.
   const sem = {};
-  for (const [name, pal] of Object.entries(SEMANTIC)) {
-    sem[`${name}-text`] = tone(pal, L ? (hc ? 15 : 20) : hc ? 95 : 92);
-    sem[`${name}-soft`] = tone(pal, L ? 82 : 32);
-    sem[`${name}-solid`] = tone(pal, L ? (hc ? 30 : 38) : 42);
+  for (const [name, hex] of Object.entries(SEMANTIC_SEEDS)) {
+    const pal = harmonised(hex, theme.seed);
+    sem[`${name}-text`] = tone(pal, L ? 30 : 80);     // on-container role, used as text on surfaces
+    sem[`${name}-soft`] = tone(pal, L ? 90 : 30);     // container
+    sem[`${name}-solid`] = tone(pal, L ? 40 : 40);    // the colour itself (white text on it)
   }
-  const grey = {
-    "grey-text": NV(L ? 20 : 92),
-    "grey-soft": NV(L ? 84 : 34),
-    "grey-solid": NV(45),
-  };
+  sem["red-text"] = r.errorTone(L ? 30 : 85);
+  sem["red-soft"] = hc ? N(L ? 96 : 20) : r.errorContainer;
+  sem["red-solid"] = r.errorTone(40);
+  const grey = { "grey-text": NV(L ? 30 : 80), "grey-soft": NV(L ? 90 : 30), "grey-solid": NV(45) };
+  const HEAT = harmonised(HEAT_SEED, theme.seed);
 
-  // The banded surface ladder (calibration sheet, ladder D): every region
-  // that is seen at once sits ten or more tones from the others.
-  //   light  sidebar 22 (dark column) · canvas 90 · table head 80 · zebra 94 · card 100
-  //   dark   sidebar primary 20       · canvas 8  · card 22 · zebra 27 · table head 32
+  // Surfaces: the owner's banded ladder (calibration sheet, D), drawn from the
+  // scheme's neutral palette. Light: canvas 90, card 100, zebra 88, table
+  // head = primary. Dark: canvas 8, card 22, zebra 32.
   const canvas = N(L ? 90 : 8);
   const card = N(L ? 100 : 22);
-  // Zebra rows twice the earlier step from the card (light 100 → 88, dark 22 → 32):
-  // subtle striping reads as none at desktop scale (owner, 26 Oct).
   const nested = N(L ? 88 : 32);
-  // Owner, 26 Oct: table head as dark as the hovered row; both twice the
-  // earlier step from the card (light 100 → 70, dark 22 → 46).
-  const head = N(L ? 70 : 46);
-  const highest = N(L ? 76 : 36);
-  const sidebar = L ? N(22) : P(23);
-  const sidebarText = L ? N(92) : P(94);
-  const sidebarMuted = L ? NV(80) : P(78);
-  const sidebarHover = L ? N(30) : P(30);
-  const sidebarBorder = L ? N(32) : P(33);
+  const high = N(L ? 70 : 46);
+  const highest = N(L ? 64 : 52);
+  // Navigation: inverse surface in light (Material's role for a dark panel on a
+  // light theme); the primary container in dark (a tinted panel).
+  const sidebar = hc ? N(L ? 12 : 22) : L ? r.inverseSurface : r.primaryContainer;
+  const sidebarText = hc ? N(L ? 100 : 98) : L ? r.inverseOnSurface : r.onPrimaryContainer;
+  const sidebarMuted = hc ? N(L ? 85 : 85) : L ? N(80) : P(80);
+  const sidebarHover = hc ? N(L ? 25 : 22) : L ? N(30) : P(35);
+  const sidebarBorder = hc ? N(L ? 40 : 40) : L ? N(32) : P(40);
+  const sidebarActive = hc ? N(L ? 100 : 95) : L ? r.inversePrimary : r.primary;
+  const sidebarActiveText = hc ? N(L ? 0 : 5) : L ? P(20) : r.onPrimary;
   const popover = N(L ? 100 : 32);
-  const border = L ? (hc ? NV(40) : NV(70)) : hc ? NV(70) : NV(45);
-  const borderStrong = L ? NV(50) : NV(60);
-  const text = N(L ? 10 : 95);
-  const muted = NV(L ? 30 : 80);
-  const faint = NV(L ? 50 : 60);
-  // Ink themes: a near-black button in light, a near-white one in dark.
-  const primary = ink ? PV(L ? 22 : 88) : PV(L ? 35 : 44);
-  const primaryHover = ink ? PV(L ? 30 : 80) : PV(L ? 28 : 38);
-  const onPrimary = ink && !L ? N(12) : "#ffffff";
-  // Secondary accent: a quiet tint of the primary hue (chroma 36), not the
-  // vivid palette, so it reads as "related to the primary", never as a second
-  // brighter colour (owner, 26 Oct). Selected states that must be strong use
-  // the primary fill itself.
-  const PS = (tn) => hexFromArgb(TonalPalette.fromHueAndChroma(r.primaryHue, hc || theme.ink ? 8 : 36).tone(tn));
-  const primaryContainer = PS(L ? 88 : 30);
-  const onPrimaryContainer = PS(L ? 12 : 94);
-  // Selected is tinted so it differs from hover by hue as well as by tone.
-  const selected = ink ? N(L ? 80 : 38) : PS(L ? 86 : 40);
-  const secondaryContainer = NV(L ? 84 : 34);
-  // Highlight (accent): badges and dots. Solid, strong, its own hue.
-  const AC = (tn) => hexFromArgb(TonalPalette.fromHueAndChroma(theme.accentHue, hc ? 0 : 60).tone(tn));
-  // Two badge forms, chosen by the surface under them, not by the mode:
-  // on a light surface a deep fill with white text; on a dark surface a light
-  // fill with dark text. --highlight follows the mode's default surface.
-  const badgeLight = { bg: hc ? N(15) : AC(45), fg: hc ? N(100) : "#ffffff" };
-  const badgeDark = { bg: hc ? N(95) : AC(72), fg: hc ? N(5) : AC(12) };
-  const highlight = L ? badgeLight.bg : badgeDark.bg;
-  const highlightFg = L ? badgeLight.fg : badgeDark.fg;
-  const primaryIsLight = ink && !L;
-  const onPrimaryBadge = primaryIsLight ? badgeLight : badgeDark;
-  const onSecondaryContainer = NV(L ? 15 : 95);
+  const border = hc ? r.outline : r.outlineVariant;
+  const borderStrong = r.outline;
+  const text = r.onSurface;
+  const muted = r.onSurfaceVariant;
+  const faint = r.outline;
 
-  // Elevation at desktop scale (owner, 26 Oct): Material's phone-scale
-  // shadows vanish on a monitor. Light: large, dark shadows on the grey
-  // canvas. Dark: a black shadow alone has nothing darker to fall onto, so a
-  // raised object is a lighter fill with a 1 px light edge on top, and the
-  // shadow only separates it underneath.
+  // Primary and its on-colour exactly as the scheme gives them.
+  const primary = r.primary;
+  const onPrimary = r.onPrimary;
+  const primaryHover = P(L ? 30 : 85);
+  // Selected rows: the primary container (an emphasised container role), which
+  // keeps a visible tint next to the zebra row; chips keep secondary-container.
+  // inverse-primary (tone 80 light / 40 dark) keeps a clear step from the zebra row.
+  // Light: inverse-primary (tone 80). Dark: primary-fixed-dim (tone 80, a fixed
+  // role) so the selected row is unmistakable against the tinted hover at ~40.
+  // Light: inverse-primary (tone 80, dark text). Dark: the primary container
+  // (tone 30); the row also carries a primary edge bar so it never relies on
+  // the tint alone.
+  const selected = hc ? N(L ? 80 : 42) : L ? r.inversePrimary : r.primaryContainer;
+
   const shadowLevel = (n) =>
     L
       ? {
-          // Light: a contact shadow plus a wide ambient one (owner: half of the doubled set).
           1: "0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18)",
           2: "0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24)",
           3: "0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32)",
         }[n]
       : {
-          // Dark: light does the lifting. A bright top edge, a thin light rim and a
-          // soft white glow below; no black shadow, there is nothing darker to cast on.
           1: "inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05)",
           2: "inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07)",
           3: "inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10)",
         }[n];
-  // Raised controls (inputs, selects, tab strips, chips): their own surface,
-  // lighter than the canvas in both modes, with a firm border.
-  const control = N(L ? 100 : 30);
-  const controlHover = N(L ? 96 : 35);
-  const controlBorder = NV(L ? 60 : 55);
+  const control = L ? r.surfaceContainerLowest : N(30);
+  const controlHover = L ? r.surfaceContainerLow : N(35);
+  const controlBorder = r.outline;
+
+  // Badges and dots: the tertiary role, Material's accent. On a light surface
+  // the tertiary itself (40, white text); on a dark surface its container in
+  // light mode (90, dark text) and the tertiary in dark mode (80, dark text).
+  const badgeOnLight = hc ? { bg: N(10), fg: N(100) } : { bg: r.tertiaryTone(40), fg: r.tertiaryTone(100) };
+  const badgeOnDark = hc ? { bg: N(100), fg: N(0) } : L ? { bg: r.tertiaryContainer, fg: r.onTertiaryContainer } : { bg: r.tertiary, fg: r.onTertiary };
+  const highlight = L ? badgeOnLight : badgeOnDark;
+  const primaryIsLight = !L; // Material's dark primary is tone 80
+  const onPrimaryBadge = hc ? (L ? { bg: N(100), fg: N(0) } : { bg: N(0), fg: N(100) }) : primaryIsLight ? { bg: r.tertiaryTone(30), fg: r.tertiaryTone(100) } : { bg: r.tertiaryContainer, fg: r.onTertiaryContainer };
+
   const t = {
     ...sem,
     ...grey,
@@ -205,13 +194,13 @@ function tokens(theme, isDark) {
     "surface-canvas": canvas,
     card: card,
     "surface-nested": nested,
-    "surface-lowest": N(L ? 100 : 18),
-    "surface-low": N(L ? 88 : 32),
-    "surface-container": N(L ? 90 : 22),
-    "surface-high": head,
+    "surface-lowest": r.surfaceContainerLowest,
+    "surface-low": nested,
+    "surface-container": r.surfaceContainer,
+    "surface-high": high,
     "surface-highest": highest,
-    "surface-dim": N(L ? 84 : 6),
-    "surface-bright": N(L ? 100 : 36),
+    "surface-dim": r.surfaceDim,
+    "surface-bright": r.surfaceBright,
     sidebar: sidebar,
     border: border,
     "border-strong": borderStrong,
@@ -219,64 +208,55 @@ function tokens(theme, isDark) {
     control: control,
     "control-hover": controlHover,
     "control-border": controlBorder,
+    "table-rule": r.outline,
     foreground: text,
     "muted-foreground": muted,
     "faint-foreground": faint,
-    "inverse-surface": N(L ? 20 : 92),
-    "inverse-foreground": N(L ? 95 : 15),
+    "inverse-surface": r.inverseSurface,
+    "inverse-foreground": r.inverseOnSurface,
 
     primary: primary,
     "primary-foreground": onPrimary,
-    // The primary as *text or an icon* on a surface (links, active icons): deep in
-    // light, light in dark. Fills keep using --primary.
-    "primary-text": ink ? PV(L ? 22 : 90) : PV(L ? 35 : 80),
-    // Table head: the primary fill with its on-colour (owner, 26 Oct).
-    "table-head": primary,
-    "table-head-foreground": onPrimary,
-    highlight: highlight,
-    "highlight-foreground": highlightFg,
-    "highlight-on-dark": badgeDark.bg,
-    "highlight-on-dark-foreground": badgeDark.fg,
-    "highlight-on-primary": onPrimaryBadge.bg,
-    "highlight-on-primary-foreground": onPrimaryBadge.fg,
-    "highlight-soft": hc ? N(L ? 90 : 25) : AC(L ? 90 : 30),
-    "on-highlight-soft": hc ? N(L ? 10 : 95) : AC(L ? 15 : 92),
     "primary-hover": primaryHover,
-    "primary-soft": primaryContainer,
-    "primary-container": primaryContainer,
-    "on-primary-container": onPrimaryContainer,
-    "secondary-container": secondaryContainer,
-    "on-secondary-container": onSecondaryContainer,
+    "primary-text": L ? r.primary : r.primaryTone(80),
+    "primary-soft": r.primaryContainer,
+    "primary-container": r.primaryContainer,
+    "on-primary-container": r.onPrimaryContainer,
+    "secondary-container": r.secondaryContainer,
+    "on-secondary-container": r.onSecondaryContainer,
     tertiary: r.tertiary,
     "on-tertiary": r.onTertiary,
     "tertiary-container": r.tertiaryContainer,
     "on-tertiary-container": r.onTertiaryContainer,
+    "table-head": primary,
+    "table-head-foreground": onPrimary,
+    highlight: highlight.bg,
+    "highlight-foreground": highlight.fg,
+    "highlight-on-dark": badgeOnDark.bg,
+    "highlight-on-dark-foreground": badgeOnDark.fg,
+    "highlight-on-primary": onPrimaryBadge.bg,
+    "highlight-on-primary-foreground": onPrimaryBadge.fg,
+    "highlight-soft": r.tertiaryContainer,
+    "on-highlight-soft": r.onTertiaryContainer,
     ring: primary,
     "selection-ring": primary,
     "selection-row": selected,
     "state-hover": `color-mix(in srgb, ${text} 8%, transparent)`,
     "state-focus": `color-mix(in srgb, ${text} 12%, transparent)`,
-    // Hover must read against BOTH row colours (card 100/22, zebra 94/27), so it
-    // is a fixed step beyond the zebra row, not a thin state layer over the card.
-    // Hovered row: the primary at 50 % over the row (owner, 26 Oct).
-    // Ink themes in dark have a near-white primary, so 50 % would wash the row out;
-    // they use a lighter hand.
-    "surface-hover": `color-mix(in srgb, ${primary} ${ink && !L ? 28 : 50}%, transparent)`,
-    // Row separators: twice the earlier darkness (light NV70 → 40, dark NV45 → 68).
-    "table-rule": NV(L ? 40 : 68),
+    "surface-hover": `color-mix(in srgb, ${primary} ${L ? 50 : 28}%, transparent)`,
     "direction-in": sem["blue-solid"],
     "direction-out": grey["grey-solid"],
 
     "card-foreground": text,
     popover: popover,
     "popover-foreground": text,
-    secondary: secondaryContainer,
-    "secondary-foreground": onSecondaryContainer,
+    secondary: r.secondaryContainer,
+    "secondary-foreground": r.onSecondaryContainer,
     muted: nested,
-    accent: head,
+    accent: high,
     "accent-foreground": text,
-    destructive: sem["red-solid"],
-    "destructive-foreground": "#ffffff",
+    destructive: r.error,
+    "destructive-foreground": r.onError,
     success: sem["green-solid"],
     "success-foreground": "#ffffff",
     warning: sem["amber-solid"],
@@ -286,24 +266,24 @@ function tokens(theme, isDark) {
 
     "sidebar-foreground": sidebarText,
     "sidebar-muted": sidebarMuted,
-    "sidebar-primary": ink ? PV(L ? 45 : 88) : PV(L ? 40 : 44),
-    "sidebar-primary-foreground": ink && !L ? N(12) : "#ffffff",
+    "sidebar-primary": sidebarActive,
+    "sidebar-primary-foreground": sidebarActiveText,
     "sidebar-accent": sidebarHover,
     "sidebar-accent-foreground": sidebarText,
     "sidebar-border": sidebarBorder,
-    "sidebar-ring": PV(70),
+    "sidebar-ring": L ? r.inversePrimary : r.primary,
 
     "pill-ring": hc ? "currentColor" : `color-mix(in srgb, ${text} 10%, transparent)`,
-    "status-neutral-bg": hc ? "transparent" : secondaryContainer,
-    "status-neutral-fg": hc ? text : onSecondaryContainer,
+    "status-neutral-bg": hc ? "transparent" : r.secondaryContainer,
+    "status-neutral-fg": hc ? text : r.onSecondaryContainer,
     "status-amber-bg": hc ? "transparent" : sem["amber-soft"],
     "status-amber-fg": sem["amber-text"],
     "status-green-bg": hc ? "transparent" : sem["green-soft"],
     "status-green-fg": sem["green-text"],
     "status-green-muted-bg": "transparent",
     "status-green-muted-fg": sem["green-text"],
-    "status-red-bg": sem["red-solid"],
-    "status-red-fg": "#ffffff",
+    "status-red-bg": r.error,
+    "status-red-fg": r.onError,
     "status-red-muted-bg": hc ? "transparent" : grey["grey-soft"],
     "status-red-muted-fg": sem["red-text"],
     "status-blue-bg": hc ? "transparent" : sem["blue-soft"],
@@ -314,8 +294,8 @@ function tokens(theme, isDark) {
     "heat-2": tone(HEAT, L ? 84 : 26),
     "heat-3": tone(HEAT, L ? 75 : 32),
     "heat-4": tone(HEAT, L ? 66 : 38),
-    "heat-5": tone(HEAT, L ? 57 : 43),
-    "heat-text": L ? N(10) : N(98),
+    "heat-5": tone(HEAT, L ? 60 : 40),
+    "heat-text": r.onSurface,
 
     "chart-1": primary,
     "chart-2": sem["amber-solid"],

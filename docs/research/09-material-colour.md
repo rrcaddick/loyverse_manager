@@ -34,31 +34,29 @@ than Material's tone-90 pastels: fill 82 with text 20 in light, fill 32 with
 text 92 in dark; solids 38 / 42 with white text. The calendar heat ramp is
 amber 92 → 57 (light) and 20 → 43 (dark), ink text throughout.
 
-## The highlight (accent) role
+## Every colour from the seed (no hand-picked hues)
 
-"Accent" is not a tone of the primary. Material's name for it is the tertiary
-role, a hue away from the primary; its default tertiary is deliberately
-quiet, so the app defines it explicitly at chroma 60 on a hue that stays
-clear of the four meaning colours. It carries count badges and notification
-dots only. Two forms, chosen by the surface under the badge: on a light
-surface a deep fill (tone 45) with white text; on a dark surface (the
-sidebar, the primary-filled tab, every dark-mode surface) a light fill
-(tone 72) with dark text.
+After the owner's objection to invented accent hues, the generator derives
+everything from each theme's primary colour through Material's own scheme:
 
-| Theme | Highlight hue |
+| App use | Material role |
 | --- | --- |
-| Graphite | raspberry 352 |
-| Fynbos | teal 190 |
-| Indigo | magenta 340 |
-| Lagoon | magenta 350 |
-| Cocoa | teal 200 |
-| High contrast | inverse neutral |
+| button, table head, active tab / chip / nav item | primary / on-primary |
+| primary as text | primary (light) · primary tone 80 (dark) |
+| selected row | inverse-primary (light) · primary-container (dark) with a primary edge bar |
+| chips, neutral pill | secondary-container / on-secondary-container |
+| count badges, dots (the accent) | tertiary / on-tertiary; on dark surfaces in light mode tertiary-container / on-tertiary-container |
+| navigation column | inverse-surface + inverse-on-surface (light) · primary-container + on-primary-container (dark); active item inverse-primary (light) · primary (dark) |
+| red (cancel, error) | error / on-error / error-container |
+| green, amber, blue (meaning) | custom colours harmonised to the seed with Blend.harmonize, container tone 90 / 30, text tone 30 / 80 |
+| heat ramp | the harmonised amber palette |
+| borders, row rules | outline-variant / outline |
 
-Tokens: `--highlight`, `--highlight-on-dark`, `--highlight-on-primary`, each
-with a `-foreground`; `--highlight-soft` / `--on-highlight-soft` for tinted
-uses. The table head is the primary fill; the active tab, chip and sidebar
-item are the primary fill; the secondary accent (selected row, primary
-container) is a quiet tint of the primary hue at chroma 36.
+Scheme variants: Vibrant for the coloured themes (keeps chroma), Neutral for
+Graphite, Monochrome at contrast 1.0 for High contrast. The surface ladder
+(canvas 90 / 8, card 100 / 22, zebra 88 / 32, table head = primary) is the
+owner's calibration choice drawn from the scheme's neutral palette; hover is
+the primary at 50 % (light) / 28 % (dark) over the row, the owner's choice.
 
 ## Themes
 

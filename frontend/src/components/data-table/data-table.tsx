@@ -235,7 +235,7 @@ export function DataTable<TData, TValue = unknown>({
                       striped && "even:bg-nested",
                       interactive &&
                         "cursor-pointer outline-none hover:bg-surface-hover even:hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset",
-                      active && "bg-selection-row even:bg-selection-row",
+                      active && "bg-selection-row shadow-[inset_3px_0_0_var(--primary)] even:bg-selection-row",
                       rowClassName?.(row.original),
                     )}
                   >
