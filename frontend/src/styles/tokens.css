@@ -144,9 +144,9 @@
   --paper-50: #e7e1dd;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -281,9 +281,9 @@
   --paper-50: #191715;
   --paper-0: #373431;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 
@@ -419,9 +419,9 @@
   --paper-50: #eae0e7;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -555,9 +555,9 @@
   --paper-50: #1b161b;
   --paper-0: #383339;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 
@@ -693,9 +693,9 @@
   --paper-50: #e4e1e9;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -829,9 +829,9 @@
   --paper-50: #17171d;
   --paper-0: #35343a;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 
@@ -967,9 +967,9 @@
   --paper-50: #dee3e5;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -1103,9 +1103,9 @@
   --paper-50: #13191a;
   --paper-0: #303637;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 
@@ -1241,9 +1241,9 @@
   --paper-50: #f0dfd6;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -1377,9 +1377,9 @@
   --paper-50: #1e1611;
   --paper-0: #3c332d;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 
@@ -1515,9 +1515,9 @@
   --paper-50: #e2e2e2;
   --paper-0: #ffffff;
   --radius: 0.5rem;
-  --shadow-card: 0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34);
-  --shadow-overlay: 0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24);
+  --shadow-overlay: 0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32);
   color-scheme: light;
 }
 
@@ -1651,9 +1651,9 @@
   --paper-50: #181818;
   --paper-0: #353535;
   --radius: 0.5rem;
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08);
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12);
-  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07);
+  --shadow-overlay: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10);
   color-scheme: dark;
 }
 

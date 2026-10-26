@@ -165,17 +165,17 @@ function tokens(theme, isDark) {
   const shadowLevel = (n) =>
     L
       ? {
-          // Light: a contact shadow plus a wide ambient one, sized to pop on a monitor.
-          1: "0 2px 4px rgb(0 0 0 / 0.16), 0 8px 24px -4px rgb(0 0 0 / 0.28)",
-          2: "0 4px 8px rgb(0 0 0 / 0.18), 0 16px 40px -8px rgb(0 0 0 / 0.34)",
-          3: "0 12px 24px -6px rgb(0 0 0 / 0.30), 0 32px 72px -16px rgb(0 0 0 / 0.42)",
+          // Light: a contact shadow plus a wide ambient one (owner: half of the doubled set).
+          1: "0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18)",
+          2: "0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24)",
+          3: "0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32)",
         }[n]
       : {
           // Dark: light does the lifting. A bright top edge, a thin light rim and a
           // soft white glow below; no black shadow, there is nothing darker to cast on.
-          1: "inset 0 1px 0 rgb(255 255 255 / 0.16), 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 18px rgb(255 255 255 / 0.08)",
-          2: "inset 0 1px 0 rgb(255 255 255 / 0.20), 0 0 0 1px rgb(255 255 255 / 0.09), 0 10px 30px rgb(255 255 255 / 0.12)",
-          3: "inset 0 1px 0 rgb(255 255 255 / 0.24), 0 0 0 1px rgb(255 255 255 / 0.12), 0 18px 52px rgb(255 255 255 / 0.16)",
+          1: "inset 0 1px 0 rgb(255 255 255 / 0.12), 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px rgb(255 255 255 / 0.05)",
+          2: "inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(255 255 255 / 0.07)",
+          3: "inset 0 1px 0 rgb(255 255 255 / 0.18), 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(255 255 255 / 0.10)",
         }[n];
   // Raised controls (inputs, selects, tab strips, chips): their own surface,
   // lighter than the canvas in both modes, with a firm border.
