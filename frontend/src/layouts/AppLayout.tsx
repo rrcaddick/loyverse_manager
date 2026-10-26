@@ -20,6 +20,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useShortcut } from "@/hooks/use-keyboard";
+import { useMediaBelow } from "@/hooks/use-media-below";
 import { SidebarForceContext, type SidebarForceContextValue } from "@/hooks/use-sidebar-collapsed";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,8 @@ interface LayoutHandle {
   layout?: "full" | "page";
   /** Collapse the sidebar to the icon rail on this route. */
   collapseSidebar?: boolean;
+  /** Collapse it only while the viewport is narrower than this many px (wide tables). */
+  collapseSidebarBelow?: number;
 }
 
 export function AppLayout() {
@@ -63,7 +66,8 @@ export function AppLayout() {
   // A hand-made override while forced; it is keyed on the route so moving
   // between forced routes starts collapsed again.
   const [override, setOverride] = useState<{ key: string; open: boolean } | null>(null);
-  const routeForced = handle.collapseSidebar === true || /^\/calendar(\/|$)/.test(location.pathname);
+  const narrow = useMediaBelow(handle.collapseSidebarBelow);
+  const routeForced = handle.collapseSidebar === true || narrow || /^\/calendar(\/|$)/.test(location.pathname);
   const forced = routeForced || forcedCount > 0;
   const forceKey = `${location.pathname}:${forced}`;
 
