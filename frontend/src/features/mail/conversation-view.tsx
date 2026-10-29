@@ -222,8 +222,23 @@ function ConversationInner({ bookingId, thrid, partyKey, markDone, shortcuts = t
       const target = el.querySelector<HTMLElement>(`[data-message-key="msg-${focusMessageId}"]`);
       if (target) {
         focusedRef.current = focusMessageId;
-        target.scrollIntoView({ block: "start" });
-        return;
+        const align = () => target.scrollIntoView({ block: "start" });
+        align();
+        // The email body is an iframe that sizes itself once it has loaded, so the page
+        // grows under us for a moment (and the last message has nothing below it to
+        // scroll against until then). Keep the message at the top until the layout
+        // settles, or until the reader scrolls.
+        const observer = new ResizeObserver(() => align());
+        const stop = () => {
+          observer.disconnect();
+          window.clearTimeout(timer);
+          for (const type of ["wheel", "touchmove", "keydown"] as const) window.removeEventListener(type, stop);
+        };
+        observer.observe(el);
+        if (target.parentElement) observer.observe(target.parentElement);
+        const timer = window.setTimeout(stop, 2500);
+        for (const type of ["wheel", "touchmove", "keydown"] as const) window.addEventListener(type, stop, { passive: true });
+        return stop;
       }
     }
     el.scrollTop = el.scrollHeight;
