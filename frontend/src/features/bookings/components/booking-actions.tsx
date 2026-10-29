@@ -17,6 +17,7 @@ import type { BookingDetail } from "../types";
 import { BookingActionsContext, type BookingActionsValue } from "../use-booking-actions";
 import { ArrivalsDialog } from "./arrivals-dialog";
 import { BookingFormDialog, type EditFocus } from "./booking-form-dialog";
+import { FindPaymentDialog, type FindPaymentPrefill } from "./find-payment-dialog";
 import { HoldDialog } from "./hold-dialog";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 import { SendDialog } from "./send-dialog";
@@ -27,6 +28,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
   const [editOpen, setEditOpen] = useState(false);
   const [editFocus, setEditFocus] = useState<EditFocus>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [findPayment, setFindPayment] = useState<{ open: boolean; prefill?: FindPaymentPrefill }>({ open: false });
   const [arrivalsOpen, setArrivalsOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<BookingStatus | null>(null);
@@ -75,6 +77,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
       send: (action) => setSending(action),
       openEdit,
       openPayment: () => setPaymentOpen(true),
+      openFindPayment: (prefill) => setFindPayment({ open: true, prefill }),
       openArrivals: () => setArrivalsOpen(true),
       openHold: () => setHoldOpen(true),
       changeStatus,
@@ -90,6 +93,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
       <SendDialog booking={booking} action={sending} onClose={() => setSending(null)} />
       <BookingFormDialog open={editOpen} onOpenChange={setEditOpen} booking={booking} focus={editFocus} />
       <RecordPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} booking={booking} />
+      <FindPaymentDialog booking={booking} open={findPayment.open} prefill={findPayment.prefill} onOpenChange={(open) => setFindPayment((s) => ({ ...s, open }))} />
       <ArrivalsDialog open={arrivalsOpen} onOpenChange={setArrivalsOpen} booking={booking} />
       <HoldDialog booking={booking} open={holdOpen} onOpenChange={setHoldOpen} />
       <StatusDialog booking={booking} target={statusTarget} open={statusOpen} onOpenChange={setStatusOpen} />

@@ -4,9 +4,8 @@
  * and a pricing footer (tier, day type, overrides with their reasons).
  */
 
-import { Banknote, Landmark, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Banknote, Landmark, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MoneyLadder, type MoneyRow } from "@/components/money-ladder";
@@ -25,11 +24,13 @@ import { useBookingActions } from "../use-booking-actions";
 
 const money = (n: number) => formatMoney(n, { compact: true });
 
-export function MoneyCard({ booking }: { booking: BookingDetail }) {
+/** `expanded`: the Payments tab keeps the payment rows open and adds Find payment. */
+export function MoneyCard({ booking, expanded = false }: { booking: BookingDetail; expanded?: boolean }) {
   const f = booking.finance;
   const actions = useBookingActions();
   const settings = useSettings();
-  const [open, setOpen] = useState(false);
+  const [toggled, setToggled] = useState(false);
+  const open = expanded || toggled;
   const tier = settings.data?.price_tiers.find((t) => t.code === booking.price_tier_code);
   const ended = booking.status === "cancelled" || booking.status === "lapsed" || booking.status === "no_show";
   const tentative = isTentative(booking.status);
@@ -71,7 +72,7 @@ export function MoneyCard({ booking }: { booking: BookingDetail }) {
       amount: f.paid_total,
       note: booking.payments.length ? pluralise(booking.payments.length, "payment") : "no payments yet",
       tone: f.paid_total > 0 ? "green" : "neutral",
-      onClick: () => setOpen((v) => !v),
+      onClick: expanded ? undefined : () => setToggled((v) => !v),
     },
     {
       key: "balance",
@@ -107,6 +108,12 @@ export function MoneyCard({ booking }: { booking: BookingDetail }) {
           <Button variant="ghost" size="sm" onClick={() => actions.openEdit("pricing")}>
             Edit pricing
           </Button>
+          {expanded ? (
+            <Button size="sm" onClick={() => actions.openFindPayment()}>
+              <Search data-icon="inline-start" />
+              Find payment
+            </Button>
+          ) : null}
           <Button variant="ghost" size="sm" onClick={actions.openPayment}>
             <Plus data-icon="inline-start" />
             Record payment
@@ -142,7 +149,7 @@ function PaymentsPanel({ booking }: { booking: BookingDetail }) {
       {booking.payments.length === 0 ? (
         <p className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
           <Banknote aria-hidden="true" className="size-4" />
-          No payments recorded. Bank transfers are matched on the Bank page; cash and card are recorded here or at the gate.
+          No payments yet. Find payment matches a bank credit; cash and card are recorded here or at the gate.
         </p>
       ) : (
         <ul className="divide-y divide-border">
@@ -154,10 +161,10 @@ function PaymentsPanel({ booking }: { booking: BookingDetail }) {
                 {p.reference ?? ""}
                 {p.note ? (p.reference ? ` · ${p.note}` : p.note) : ""}
                 {p.bank_transaction_id ? (
-                  <Link to={`/bank?tx=${p.bank_transaction_id}`} className="ml-2 inline-flex items-center gap-1 text-blue-text underline-offset-3 hover:underline">
+                  <span className="ml-2 inline-flex items-center gap-1 text-blue-text">
                     <Landmark aria-hidden="true" className="size-3" />
-                    Bank #{p.bank_transaction_id}
-                  </Link>
+                    Bank credit #{p.bank_transaction_id}
+                  </span>
                 ) : null}
                 <span className="text-faint-foreground"> · {p.recorded_by_name ?? (p.bank_transaction_id ? "bank match" : "system")}</span>
               </span>
@@ -165,13 +172,13 @@ function PaymentsPanel({ booking }: { booking: BookingDetail }) {
               {p.bank_transaction_id ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span tabIndex={0} className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-selection-ring" aria-label="Matched from the bank; unmatch it on the Bank page">
+                    <span tabIndex={0} className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-selection-ring" aria-label="Matched from the bank feed">
                       <Button variant="ghost" size="icon-sm" disabled>
                         <Trash2 />
                       </Button>
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent>Matched from the bank — unmatch it on the Bank page instead</TooltipContent>
+                  <TooltipContent>Matched from the bank feed; it stays with the booking</TooltipContent>
                 </Tooltip>
               ) : (
                 <Button variant="ghost" size="icon-sm" aria-label={`Delete payment of ${money(p.amount)}`} onClick={() => deleting.show(p)}>

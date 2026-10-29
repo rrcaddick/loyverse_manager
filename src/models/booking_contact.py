@@ -24,8 +24,8 @@ def upsert(booking_id: int, email: str, *, name: str | None = None, mobile: str 
     if existing:
         if name or mobile:
             execute(
-                "UPDATE booking_contacts SET name = COALESCE(%s, name), mobile = COALESCE(%s, mobile) WHERE id = %s",
-                (name, mobile, existing["id"]),
+                "UPDATE booking_contacts SET name = COALESCE(%s, name), mobile = COALESCE(%s, mobile), role = IF(%s = 'primary', 'primary', role) WHERE id = %s",
+                (name, mobile, role, existing["id"]),
             )
         return False
     execute(
@@ -38,6 +38,26 @@ def upsert(booking_id: int, email: str, *, name: str | None = None, mobile: str 
     if others:
         execute("UPDATE booking_contacts SET shared = 1 WHERE email = %s", (address,))
     return True
+
+
+def update(booking_id: int, contact_id: int, *, name: str | None = None, mobile: str | None = None,
+           on_site: bool | None = None) -> int:
+    """Edit a contact's name or mobile, or mark it as the one on site on the
+    day (which clears the flag on the booking's other contacts)."""
+    sets: list[str] = []
+    args: list = []
+    if name is not None:
+        sets.append("name = %s"); args.append(name.strip() or None)
+    if mobile is not None:
+        sets.append("mobile = %s"); args.append(mobile.strip() or None)
+    if on_site is not None:
+        if on_site:
+            execute("UPDATE booking_contacts SET on_site = 0 WHERE booking_id = %s", (int(booking_id),))
+        sets.append("on_site = %s"); args.append(1 if on_site else 0)
+    if not sets:
+        return 0
+    args.extend([int(booking_id), int(contact_id)])
+    return execute(f"UPDATE booking_contacts SET {', '.join(sets)} WHERE booking_id = %s AND id = %s", tuple(args))
 
 
 def delete(booking_id: int, contact_id: int) -> int:

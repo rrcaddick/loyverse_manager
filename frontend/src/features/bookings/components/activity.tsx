@@ -1,12 +1,11 @@
 /**
- * Activity: the booking's story, newest first, grouped by day (spec §6).
- *
- * Three weights: notes and emails are cards (avatar, text or subject +
- * snippet, "Open" → Conversation); money, status, document, ticket and
- * arrival events are one-liners with an icon and a coloured pill; field
- * edits collapse into "3 fields changed" and the sheet import's burst of
- * events into one "Imported from the booking sheet" line, both expandable.
- * Chips: All · Notes · Emails · Money · Changes. The composer sits on top.
+ * Activity: the booking's story, newest first, grouped by day. The blend the
+ * owner asked for (26 Oct 2026): notes are cards; every email, in either
+ * direction, is one line (who and the subject, opening the Conversation);
+ * a payment appears once, when it came in, never "paid" and then "matched";
+ * documents, tickets, status changes and field edits are one-liners, the
+ * edits collapsed into "3 fields changed" and the sheet import's burst into
+ * one line. Chips: All · Notes · Emails · Money · Changes. Composer on top.
  */
 
 import {
@@ -45,7 +44,7 @@ import { formatDate, formatDateTime, formatMoney, formatRelativeDay, formatTime,
 import { cn } from "@/lib/utils";
 
 import { documentPdfUrl, useAddNote } from "../api";
-import { DOCUMENT_KIND_LABELS, type BookingDetail, type BookingEmail, type BookingEvent, type DocumentKind } from "../types";
+import { DOCUMENT_KIND_LABELS, PAYMENT_KIND_LABELS, type BookingDetail, type BookingEmail, type BookingEvent, type DocumentKind, type Payment } from "../types";
 import { useBookingActions } from "../use-booking-actions";
 
 type Chip = "all" | "notes" | "emails" | "money" | "changes";
@@ -209,21 +208,36 @@ function fromEmail(m: BookingEmail): Entry {
     key: `email-${m.id}`,
     at: m.sent_at,
     chip: "emails",
-    weight: "card",
+    weight: "line",
     icon: failed ? MailWarning : inbound ? Inbox : Mail,
     tone: failed ? "red" : inbound ? "blue" : "neutral",
-    title: who,
-    avatar: who,
-    actor: who,
-    pill: failed ? { label: "Failed", tone: "red" } : m.kind ? { label: humanise(m.kind), tone: "neutral" } : inbound ? { label: "From", tone: "blue" } : { label: "Sent", tone: "green-muted" },
-    body: (
-      <div className="min-w-0">
-        <div className="truncate text-body font-medium text-foreground">{m.subject ?? "(no subject)"}</div>
-        {m.snippet ? <div className="line-clamp-2 text-sm text-muted-foreground">{m.snippet}</div> : null}
-        {failed && m.send_error ? <div className="text-sm text-red-text">{m.send_error}</div> : null}
-      </div>
+    title: (
+      <span className="min-w-0">
+        <span className="font-medium">{inbound ? who : "Sent"}</span>
+        <span className="text-muted-foreground">{inbound ? " wrote: " : ": "}</span>
+        <span className="truncate">{m.subject ?? "(no subject)"}</span>
+        {failed && m.send_error ? <span className="text-red-text"> · {m.send_error}</span> : null}
+      </span>
     ),
+    actor: who,
+    pill: failed ? { label: "Failed", tone: "red" } : m.kind ? { label: humanise(m.kind), tone: "neutral" } : inbound ? { label: "Received", tone: "blue" } : { label: "Sent", tone: "green-muted" },
     open: "?tab=conversation",
+  };
+}
+
+/** A payment shows once, on the day it came in. */
+function fromPayment(p: Payment): Entry {
+  const kind = PAYMENT_KIND_LABELS[p.kind] ?? p.kind;
+  return {
+    key: `payment-${p.id}`,
+    at: p.paid_on ? `${p.paid_on}T12:00:00` : p.created_at,
+    chip: "money",
+    weight: "line",
+    icon: p.bank_transaction_id ? Landmark : Banknote,
+    tone: "green",
+    title: `${money(p.amount)} ${kind} received${p.reference ? ` · ${p.reference}` : ""}${p.note ? ` · ${p.note}` : ""}`,
+    pill: { label: "Paid", tone: "green" },
+    actor: p.recorded_by_name ?? (p.bank_transaction_id ? "Bank feed" : "System"),
   };
 }
 
@@ -270,13 +284,19 @@ export function Activity({ booking }: { booking: BookingDetail }) {
 
   const entries = useMemo(() => {
     const emailIds = new Set(booking.emails.map((m) => m.id));
-    // Mail that is in the stream already shows as a card; its event is noise.
-    const events = booking.events.filter((e) => !((e.kind === "email_sent" || e.kind === "email_received") && typeof e.data?.email_message_id === "number" && emailIds.has(e.data.email_message_id)));
+    // Mail in the stream shows as its own line; the payments show once from
+    // the payment rows, so their recorded and matched events are noise.
+    const events = booking.events.filter(
+      (e) =>
+        !((e.kind === "email_sent" || e.kind === "email_received") && typeof e.data?.email_message_id === "number" && emailIds.has(e.data.email_message_id)) &&
+        e.kind !== "payment_recorded" &&
+        e.kind !== "payment_matched",
+    );
     const { entries: fromEvents } = collapseImport(events);
-    const all = [...fromEvents, ...booking.emails.map(fromEmail)];
+    const all = [...fromEvents, ...booking.emails.map(fromEmail), ...booking.payments.map(fromPayment)];
     all.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return all;
-  }, [booking.events, booking.emails]);
+  }, [booking.events, booking.emails, booking.payments]);
 
   const counts = useMemo(() => {
     const c: Record<Chip, number> = { all: entries.length, notes: 0, emails: 0, money: 0, changes: 0 };
@@ -382,7 +402,15 @@ function EntryLine({ entry }: { entry: Entry }) {
   const content = (
     <>
       <Icon aria-hidden="true" className={cn("size-4 shrink-0", ICON_TONE[entry.tone])} />
-      <span className="min-w-0 flex-1 text-body text-foreground">{entry.title}</span>
+      <span className="min-w-0 flex-1 truncate text-body text-foreground">
+        {entry.open ? (
+          <Link to={entry.open} className="underline-offset-3 hover:underline">
+            {entry.title}
+          </Link>
+        ) : (
+          entry.title
+        )}
+      </span>
       <span className="flex shrink-0 items-center gap-3 pl-7 sm:pl-0">
         {entry.pill ? <StatusPill tone={entry.pill.tone} label={entry.pill.label} size="sm" dot={false} /> : null}
         <span className="text-sm text-muted-foreground">{entry.actor}</span>

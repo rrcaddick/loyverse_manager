@@ -412,3 +412,13 @@ Schema: migrations 008 (email_threads, quote-split columns, `booking_reminders.s
 `bookings.customer_vat_number`, `bank_ignore_rules`). Documents: the deposit-stage
 document is a **Statement** (`FY1703-S`, not a tax invoice); the final document is the
 only **Tax invoice** (`INV1703`). A booking counts **visitors** only.
+
+
+### Contacts: on the day (29 Oct 2026)
+
+`booking_contacts.on_site` (migration 012) marks the one contact who is on
+site and in charge on the day. `PATCH /api/v1/bookings/:id/contacts/:cid`
+takes `{name?, mobile?, on_site?}`; setting `on_site: true` clears it on the
+booking's other contacts; returns `{items}`. `GET /api/v1/bookings/:id` now
+also carries `contacts` (the booking_contacts rows, primary first) and
+`pops` (the pending proof-of-payment candidates) for the record's tabs.

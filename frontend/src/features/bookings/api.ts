@@ -24,8 +24,11 @@ import type {
   BookingInput,
   BookingListItem,
   BookingListParams,
+  BookingContact,
   DocumentKind,
   InboxMessage,
+  PaymentSearchParams,
+  PaymentSearchResult,
   RecordPaymentInput,
   ReplyInput,
 } from "./types";
@@ -195,6 +198,74 @@ export function useReplyEmail(id: number) {
   return useDetailMutation<ReplyInput>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/emails/reply`, input), {
     silent: true,
   });
+}
+
+// ------------------------------------------------------- requests, contacts
+
+/** Accept a request: it becomes an enquiry on the calendar and, unless told otherwise, the proforma goes out. */
+export function useAcceptRequest(id: number) {
+  return useDetailMutation<{ send_proforma?: boolean }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/accept`, input), { silent: true });
+}
+
+export function useDeclineRequest(id: number) {
+  return useDetailMutation<{ reason?: string }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/decline`, input), { successMessage: "Request declined" });
+}
+
+/** The contact endpoints answer with the list; the detail is refetched for its counts. */
+function useContactsMutation<TVariables>(id: number, mutationFn: (variables: TVariables) => Promise<{ items: BookingContact[] }>, meta?: { silent?: boolean; successMessage?: string }) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn,
+    meta,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: bookingKeys.detail(id) });
+    },
+  });
+}
+
+export function useAddContact(id: number) {
+  return useContactsMutation<{ email: string; name?: string; mobile?: string }>(id, (input) => api.post<{ items: BookingContact[] }>(`/bookings/${id}/contacts`, input), { successMessage: "Contact added" });
+}
+
+export function useUpdateContact(id: number) {
+  return useContactsMutation<{ contactId: number; name?: string; mobile?: string; on_site?: boolean }>(
+    id,
+    ({ contactId, ...input }) => api.patch<{ items: BookingContact[] }>(`/bookings/${id}/contacts/${contactId}`, input),
+    { silent: true },
+  );
+}
+
+export function useDeleteContact(id: number) {
+  return useContactsMutation<number>(id, (contactId) => api.delete<{ items: BookingContact[] }>(`/bookings/${id}/contacts/${contactId}`), { successMessage: "Contact removed" });
+}
+
+// ----------------------------------------------------- payments: find, pops
+
+export function usePaymentSearch(id: number, params: PaymentSearchParams, enabled: boolean) {
+  return useQuery({
+    queryKey: ["bookings", id, "payment-search", params] as const,
+    queryFn: () => api.get<PaymentSearchResult>(`/bookings/${id}/payment-search`, { params: { ...params } }),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Record the bank credit as this booking's payment. */
+export function useAllocateCredit(id: number) {
+  return useDetailMutation<{ tx_id: number }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/payment-search/allocate`, input), { silent: true });
+}
+
+export function usePopAllocate(id: number) {
+  return useDetailMutation<{ popId: number; tx_id: number }>(id, ({ popId, tx_id }) => api.post<BookingDetail>(`/bookings/${id}/pops/${popId}/allocate`, { tx_id }), { silent: true });
+}
+
+export function usePopDismiss(id: number) {
+  return useDetailMutation<number>(id, (popId) => api.post<BookingDetail>(`/bookings/${id}/pops/${popId}/dismiss`, {}), { successMessage: "Proof of payment dismissed" });
+}
+
+/** The vehicle ticket PDF (legacy route, session-protected). */
+export function ticketPdfUrl(barcode: string, download = false): string {
+  return `/group-bookings/${download ? "download" : "ticket"}/${encodeURIComponent(barcode)}`;
 }
 
 // --------------------------------------------------------------- documents

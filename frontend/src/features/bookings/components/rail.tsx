@@ -185,7 +185,7 @@ function ContactCard({ booking }: { booking: BookingDetail }) {
 
 const DOC_SEND: Record<DocumentKind, ActionId> = { proforma: "send-proforma", invoice: "send-invoice", final_invoice: "send-final-invoice" };
 
-function DocumentsCard({ booking }: { booking: BookingDetail }) {
+export function DocumentsCard({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const [previewing, setPreviewing] = useState<DocumentKind | null>(null);
   const [allOpen, setAllOpen] = useState(false);
@@ -293,7 +293,7 @@ function DocumentsCard({ booking }: { booking: BookingDetail }) {
 
 // -------------------------------------------------------------------- hold
 
-function HoldCard({ booking }: { booking: BookingDetail }) {
+export function HoldCard({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const hold = holdState(booking);
   return (
@@ -337,7 +337,7 @@ function ReminderList({ booking }: { booking: BookingDetail }) {
 }
 
 /** Firm and ended bookings have no hold, but may still carry reminders (final details). */
-function RemindersCard({ booking }: { booking: BookingDetail }) {
+export function RemindersCard({ booking }: { booking: BookingDetail }) {
   return (
     <RailCard title="Reminders" icon={CalendarClock}>
       <div className="text-body">
@@ -349,7 +349,7 @@ function RemindersCard({ booking }: { booking: BookingDetail }) {
 
 // ---------------------------------------------------------- internal note
 
-function InternalNoteCard({ booking }: { booking: BookingDetail }) {
+export function InternalNoteCard({ booking }: { booking: BookingDetail }) {
   const update = useUpdateBooking(booking.id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(booking.internal_notes ?? "");
@@ -422,7 +422,7 @@ function InternalNoteCard({ booking }: { booking: BookingDetail }) {
 
 // ------------------------------------------------------------------ record
 
-function RecordCard({ booking }: { booking: BookingDetail }) {
+export function RecordCard({ booking }: { booking: BookingDetail }) {
   const sheetRow = booking.legacy_sheet_row?._row;
   return (
     <RailCard title="Record" icon={FileSpreadsheet} defaultOpen={false}>

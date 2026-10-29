@@ -556,6 +556,24 @@ def _apply_visitors_alias(data: dict) -> dict:
     return out
 
 
+def _mirror_primary_contact(booking_id: int) -> None:
+    """Keep the booking's primary contact as a booking_contacts row (role
+    primary) so the record lists one set of people and "on site" can land on
+    any of them (migration 013 backfilled the existing bookings)."""
+    from src.models import booking_contact
+
+    booking = booking_model.get(booking_id)
+    email = (booking or {}).get("contact_email")
+    if not booking or not email or "@" not in email:
+        return
+    try:
+        booking_contact.upsert(
+            booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"), role="primary", source="booking"
+        )
+    except Exception:  # noqa: BLE001 - never let the mirror break a save
+        logger.exception("Could not mirror the primary contact for booking %s", booking_id)
+
+
 def create_booking(
     data: Mapping[str, Any],
     source: str,
@@ -642,6 +660,7 @@ def create_booking(
         raise BookingError(f"Could not create booking: {exc.args[-1]}") from exc
 
     logger.info(f"Created booking {fields['reference']} (id {booking_id}, source {source})")
+    _mirror_primary_contact(booking_id)
     return booking_model.get(booking_id)
 
 
@@ -735,6 +754,7 @@ def update_booking(booking_id: int, data: Mapping[str, Any], actor: int | None) 
                 conn=conn,
             )
     logger.info(f"Updated booking {current['reference']}: {', '.join(diff)}")
+    _mirror_primary_contact(booking_id)
     return booking_model.get(booking_id)
 
 
@@ -1184,6 +1204,19 @@ def mark_reminder_sent(booking_id: int, kind: str) -> int:
     )
 
 
+def _list_contacts(booking_id: int) -> list[dict]:
+    from src.models import booking_contact
+
+    return [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]
+
+
+def _pending_pops(booking_id: int) -> list[dict]:
+    from src.models import pop as pop_model
+    from src.services import pop
+
+    return [pop.serialize(r) for r in pop_model.list_for_booking(booking_id) if r.get("status") == "pending"]
+
+
 def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dict:
     """Everything the booking page shows, JSON-safe. Shape documented in
     docs/handoff/bookings.md."""
@@ -1206,6 +1239,9 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
             "documents": list_documents(booking_id),
             "emails": list_emails(booking_id),
             "reminders": list_reminders(booking_id),
+            # The record's Contacts and Payments tabs (UI round two).
+            "contacts": _list_contacts(booking_id),
+            "pops": _pending_pops(booking_id),
         }
     )
     return detail

@@ -805,6 +805,25 @@ def add_contact(booking_id: int):
     return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]}, 201)
 
 
+@bp.patch("/<int:booking_id>/contacts/<int:contact_id>")
+def update_contact(booking_id: int, contact_id: int):
+    """Edit a contact's name or mobile, or set ``on_site`` (the person in
+    charge on the day; only one per booking, so setting it clears the rest)."""
+    from src.models import booking_contact
+
+    _booking_or_404(booking_id)
+    data = _json_body()
+    on_site = data.get("on_site")
+    if on_site is not None and not isinstance(on_site, bool):
+        raise ApiError("validation_error", "on_site must be true or false", 422, {"on_site": "true or false"})
+    changed = booking_contact.update(
+        booking_id, contact_id, name=data.get("name"), mobile=data.get("mobile"), on_site=on_site
+    )
+    if not changed and on_site is None and not any(k in data for k in ("name", "mobile")):
+        raise ApiError("validation_error", "Nothing to change", 422, {"contact": "Send name, mobile or on_site"})
+    return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]})
+
+
 @bp.delete("/<int:booking_id>/contacts/<int:contact_id>")
 def delete_contact(booking_id: int, contact_id: int):
     from src.models import booking_contact

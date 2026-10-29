@@ -11,6 +11,7 @@ import type { BookingStatus } from "@/types/api";
 
 import type { ActionId } from "./actions";
 import type { EditFocus } from "./components/booking-form-dialog";
+import type { FindPaymentPrefill } from "./components/find-payment-dialog";
 import type { StepVerb } from "./next-step";
 
 export interface BookingActionsValue {
@@ -18,6 +19,8 @@ export interface BookingActionsValue {
   send: (action: ActionId) => void;
   openEdit: (focus?: EditFocus) => void;
   openPayment: () => void;
+  /** The Find payment search (bank credits by reference, amount, date). */
+  openFindPayment: (prefill?: FindPaymentPrefill) => void;
   openArrivals: () => void;
   openHold: () => void;
   changeStatus: (target: BookingStatus) => void;

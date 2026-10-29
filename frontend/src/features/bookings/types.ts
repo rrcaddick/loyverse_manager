@@ -240,6 +240,71 @@ export interface ActionResult {
   [key: string]: unknown;
 }
 
+/** A row of booking_contacts: the primary contact mirrored, plus cc'd and learned addresses. */
+export interface BookingContact {
+  id: number;
+  booking_id: number;
+  email: string;
+  name: string | null;
+  mobile: string | null;
+  role: "primary" | "cc" | "learned";
+  shared: boolean | number;
+  /** The one person on site and in charge on the day. */
+  on_site: boolean | number;
+  source: string | null;
+  created_at: string;
+}
+
+/** A proof of payment found on an inbound mail (pop_candidates). */
+export interface PopCandidate {
+  id: number;
+  booking_id: number | null;
+  email_message_id: number;
+  attachment_id: number | null;
+  document_id: number | null;
+  status: "pending" | "allocated" | "dismissed";
+  parsed: boolean | number;
+  text_signal: boolean | number;
+  bank_name: string | null;
+  reference: string | null;
+  amount: number | null;
+  paid_on: string | null;
+  bank_transaction_id: number | null;
+  payment_id: number | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+/** A bank credit from GET /bookings/:id/payment-search, with why it matched. */
+export interface BankCredit {
+  id: number;
+  booking_date: string;
+  value_date: string | null;
+  amount: number;
+  description: string | null;
+  end_to_end_id: string | null;
+  match_status: string | null;
+  /** The booking a payment on this credit belongs to, if any. */
+  booking_id: number | null;
+  why: string[];
+}
+
+export interface PaymentSearchParams {
+  reference?: string;
+  amount?: string;
+  tolerance?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface PaymentSearchResult {
+  items: BankCredit[];
+  total: number;
+  expected: Record<string, number>;
+  window: { from: string; to: string };
+  payments: Payment[];
+}
+
 /** GET /bookings/:id and every mutation/action response. */
 export interface BookingDetail extends BookingRow {
   status_label: string;
@@ -254,6 +319,10 @@ export interface BookingDetail extends BookingRow {
   documents: BookingDocument[];
   emails: BookingEmail[];
   reminders: BookingReminder[];
+  /** booking_contacts, primary first (UI round two). */
+  contacts: BookingContact[];
+  /** Pending proofs of payment waiting to be verified. */
+  pops: PopCandidate[];
   action?: string;
   action_result?: ActionResult;
 }

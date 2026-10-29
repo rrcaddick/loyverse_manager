@@ -1,11 +1,9 @@
 /**
- * /bookings/:id — the booking record (spec §6).
- *
- * Header (group name, status pill, facts line, one primary button, Edit, ⋯)
- * then two tabs: Booking — next-step strip, money ladder, questions (when
- * any), activity timeline, with the rail (details, contact, documents, hold
- * & reminders, internal note, record) beside it — and Conversation, which
- * mounts the Mail agent's ConversationView. Keys: E edit, N note.
+ * /bookings/:id — the booking record (UI round two, owner's plan of 29 Oct
+ * 2026). Header (group name, status, facts, one primary button, Edit, ⋯),
+ * then the request banner (a request) or the due sends (everything else),
+ * then six tabs: Overview · Conversation · Payments · Documents · Activity ·
+ * Contacts. Keys: E edit, N note (on Activity).
  */
 
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
@@ -22,12 +20,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBooking } from "@/features/bookings/api";
 import { Activity } from "@/features/bookings/components/activity";
 import { BookingActionsProvider } from "@/features/bookings/components/booking-actions";
-import { useBookingActions } from "@/features/bookings/use-booking-actions";
-import { MoneyCard } from "@/features/bookings/components/money-card";
-import { QuestionsCard } from "@/features/bookings/components/questions-card";
-import { Rail } from "@/features/bookings/components/rail";
-import { NextStepCard, RecordHeader } from "@/features/bookings/components/record-header";
+import { ContactsTab } from "@/features/bookings/components/record/contacts-tab";
+import { DocumentsTab } from "@/features/bookings/components/record/documents-tab";
+import { DueSends } from "@/features/bookings/components/record/due-sends";
+import { OverviewTab } from "@/features/bookings/components/record/overview-tab";
+import { PaymentsTab } from "@/features/bookings/components/record/payments-tab";
+import { RequestBanner } from "@/features/bookings/components/record/request-banner";
+import { RecordHeader } from "@/features/bookings/components/record-header";
 import type { BookingDetail } from "@/features/bookings/types";
+import { useBookingActions } from "@/features/bookings/use-booking-actions";
 import { useBookingConversation } from "@/features/mail/api";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useShortcut } from "@/hooks/use-keyboard";
@@ -35,7 +36,8 @@ import { errorMessage, isApiError } from "@/lib/api";
 
 const ConversationView = lazy(() => import("@/features/mail/conversation-view").then((m) => ({ default: m.ConversationView })));
 
-type Tab = "booking" | "conversation";
+const TABS = ["overview", "conversation", "payments", "documents", "activity", "contacts"] as const;
+type Tab = (typeof TABS)[number];
 
 export default function BookingDetailPage() {
   const { id: raw } = useParams<{ id: string }>();
@@ -106,22 +108,16 @@ export default function BookingDetailPage() {
 
 function Record({ booking }: { booking: BookingDetail }) {
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get("tab") === "conversation" ? "conversation" : "booking";
+  const raw = params.get("tab");
+  const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : "overview";
   const actions = useBookingActions();
-  // v3: shares ["mail","booking-conversation",id] with the Conversation tab's ConversationView.
   const conversation = useBookingConversation(booking.id);
-
-  useShortcut("e", () => actions.openEdit());
-  useShortcut("n", () => {
-    if (tab !== "booking") setTab("booking");
-    window.setTimeout(actions.focusNote, tab === "booking" ? 0 : 150);
-  });
 
   function setTab(next: Tab) {
     setParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        if (next === "booking") p.delete("tab");
+        if (next === "overview") p.delete("tab");
         else p.set("tab", next);
         return p;
       },
@@ -129,9 +125,16 @@ function Record({ booking }: { booking: BookingDetail }) {
     );
   }
 
+  useShortcut("e", () => actions.openEdit());
+  useShortcut("n", () => {
+    if (tab !== "activity") setTab("activity");
+    window.setTimeout(actions.focusNote, tab === "activity" ? 0 : 150);
+  });
+
   return (
     <>
       <RecordHeader booking={booking} />
+      {booking.status === "requested" ? <RequestBanner booking={booking} /> : <DueSends booking={booking} onPayments={() => setTab("payments")} />}
 
       <SegmentedTabs
         aria-label="Booking record tabs"
@@ -139,32 +142,25 @@ function Record({ booking }: { booking: BookingDetail }) {
         value={tab}
         onChange={setTab}
         items={[
-          { value: "booking", label: "Booking" },
-          // v3: the badge is what the person is still waiting on, not the email count.
+          { value: "overview", label: "Overview" },
           { value: "conversation", label: "Conversation", count: conversation.data?.unanswered_count ?? 0 },
+          { value: "payments", label: "Payments", count: booking.payments.length + booking.pops.length },
+          { value: "documents", label: "Documents", count: booking.documents.length },
+          { value: "activity", label: "Activity" },
+          { value: "contacts", label: "Contacts", count: Math.max(booking.contacts.length, 1) },
         ]}
       />
 
-      {tab === "booking" ? (
-        <div className="grid gap-card-gap xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-          <div className="flex min-w-0 flex-col gap-card-gap xl:col-start-1">
-            <NextStepCard booking={booking} />
-            <MoneyCard booking={booking} />
-            {booking.questions.length > 0 ? <QuestionsCard booking={booking} /> : null}
-          </div>
-          {/* Phones: strip, money, rail accordions, then activity last (research note 04). */}
-          <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
-            <Rail booking={booking} />
-          </div>
-          <div className="min-w-0 xl:col-start-1">
-            <Activity booking={booking} />
-          </div>
-        </div>
-      ) : (
+      {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} /> : null}
+      {tab === "conversation" ? (
         <Suspense fallback={<PageSkeleton rows={6} />}>
           <ConversationView bookingId={booking.id} />
         </Suspense>
-      )}
+      ) : null}
+      {tab === "payments" ? <PaymentsTab booking={booking} /> : null}
+      {tab === "documents" ? <DocumentsTab booking={booking} /> : null}
+      {tab === "activity" ? <Activity booking={booking} /> : null}
+      {tab === "contacts" ? <ContactsTab booking={booking} /> : null}
     </>
   );
 }
