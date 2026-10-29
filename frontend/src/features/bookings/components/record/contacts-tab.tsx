@@ -1,48 +1,121 @@
 /**
- * Contacts: everyone on the booking, several per booking, one marked as on
- * site and in charge on the day (owner's note, 26 Oct 2026). The primary
- * contact is the booking's own; the rest were cc'd or wrote in, or were added
- * here.
+ * Contacts (owner's notes, 29 Oct 2026): the bookings-style table. Several
+ * contacts per booking; any number of them primary (every primary receives
+ * the WhatsApp ticket); one on site and in charge on the day; an edit dialog
+ * per row. Changing a primary contact's number sends the ticket to the new
+ * number when one has gone out already.
  */
 
-import { Plus, Trash2, UserCheck, Users } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { DataTable } from "@/components/data-table";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { errorMessage } from "@/lib/api";
 import { formatPhone } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 import { useAddContact, useDeleteContact, useUpdateContact } from "../../api";
+import { primaryContact } from "../../contacts";
 import type { BookingContact, BookingDetail } from "../../types";
-import { useBookingActions } from "../../use-booking-actions";
-import { CONTACT_ROLE_LABELS, primaryContact } from "../../contacts";
 
 export function ContactsTab({ booking }: { booking: BookingDetail }) {
-  const actions = useBookingActions();
   const update = useUpdateContact(booking.id);
-  const remove = useDeleteContact(booking.id);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<BookingContact | null>(null);
   const primary = primaryContact(booking);
-  const rows: BookingContact[] = [primary, ...booking.contacts.filter((c) => c.role !== "primary")];
+  const rows: BookingContact[] = booking.contacts.some((c) => c.role === "primary") ? booking.contacts : [primary, ...booking.contacts];
 
-  async function markOnSite(contact: BookingContact) {
+  async function change(contact: BookingContact, patch: { role?: "primary" | "cc"; on_site?: boolean }) {
     if (contact.id === 0) {
-      toast.info("Save the booking once (Edit) so its contact can be marked.");
+      toast.info("Save the booking once (Edit) so its contact can be changed here.");
       return;
     }
     try {
-      await update.mutateAsync({ contactId: contact.id, on_site: !contact.on_site });
+      await update.mutateAsync({ contactId: contact.id, ...patch });
     } catch (err) {
       toast.error(errorMessage(err));
     }
   }
+
+  const columns: ColumnDef<BookingContact>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => <span className="text-body font-medium text-foreground">{row.original.name || <span className="text-muted-foreground">No name</span>}</span>,
+      meta: { className: "min-w-40" },
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) =>
+        row.original.email ? (
+          <a href={`mailto:${row.original.email}`} className="text-body text-foreground underline-offset-3 hover:underline">
+            {row.original.email}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">No email</span>
+        ),
+      meta: { className: "min-w-48" },
+    },
+    {
+      accessorKey: "mobile",
+      header: "Mobile",
+      cell: ({ row }) =>
+        row.original.mobile ? (
+          <a href={`tel:+${row.original.mobile}`} className="text-body tabular text-foreground underline-offset-3 hover:underline">
+            {formatPhone(row.original.mobile)}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">No mobile</span>
+        ),
+      meta: { className: "whitespace-nowrap" },
+    },
+    {
+      id: "primary",
+      header: "Primary",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Checkbox aria-label={`${row.original.name || row.original.email} is a primary contact`} checked={row.original.role === "primary"} disabled={update.isPending} onCheckedChange={(v) => change(row.original, { role: v === true ? "primary" : "cc" })} />
+      ),
+      meta: { align: "center", className: "w-24" },
+    },
+    {
+      id: "on_site",
+      header: "On site",
+      enableSorting: false,
+      cell: ({ row }) => <Checkbox aria-label={`${row.original.name || row.original.email} is on site on the day`} checked={!!row.original.on_site} disabled={update.isPending} onCheckedChange={(v) => change(row.original, { on_site: v === true })} />,
+      meta: { align: "center", className: "w-24" },
+    },
+    {
+      id: "source",
+      header: "Added",
+      enableSorting: false,
+      cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.source === "booking" ? "With the booking" : row.original.role === "learned" ? "Wrote in" : row.original.source === "manual" ? "By hand" : "Cc'd"}</span>,
+      meta: { className: "whitespace-nowrap" },
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="icon-sm" aria-label={`Edit ${row.original.name || row.original.email}`} disabled={row.original.id === 0} onClick={() => setEditing(row.original)}>
+            <Pencil />
+          </Button>
+        </div>
+      ),
+      meta: { align: "right", className: "w-16" },
+    },
+  ];
 
   return (
     <Section
@@ -52,120 +125,128 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
           Contacts
         </span>
       }
-      description="Mail from any of these addresses lands on this booking. Mark the one who is on site and in charge on the day."
+      description="Mail from any of these addresses lands on this booking. Every primary contact receives the WhatsApp ticket."
       actions={
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => actions.openEdit("contact")}>
-            Edit primary
-          </Button>
-          <Button size="sm" variant={adding ? "secondary" : "outline"} onClick={() => setAdding((v) => !v)}>
-            <Plus data-icon="inline-start" />
-            Add contact
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setAdding(true)}>
+          <Plus data-icon="inline-start" />
+          Add contact
+        </Button>
       }
+      flush
     >
-      <div className="flex flex-col gap-4">
-        {adding ? <AddContactForm booking={booking} onDone={() => setAdding(false)} /> : null}
-        <ul className="divide-y divide-border">
-          {rows.map((c) => (
-            <li key={`${c.id}-${c.email}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
-              <div className="min-w-0 flex-1 basis-56">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate text-body font-medium text-foreground">{c.name || c.email}</span>
-                  <span className="text-sm text-muted-foreground">{CONTACT_ROLE_LABELS[c.role]}</span>
-                  {c.shared ? <StatusPill tone="blue" label="Also on other bookings" size="sm" dot={false} /> : null}
-                </div>
-                <div className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
-                  {c.email ? (
-                    <a href={`mailto:${c.email}`} className="truncate underline-offset-3 hover:underline">
-                      {c.email}
-                    </a>
-                  ) : (
-                    <span>no email</span>
-                  )}
-                  {c.mobile ? (
-                    <a href={`tel:+${c.mobile}`} className="tabular underline-offset-3 hover:underline">
-                      {formatPhone(c.mobile)}
-                    </a>
-                  ) : null}
-                </div>
-              </div>
-              <Button
-                variant={c.on_site ? "secondary" : "ghost"}
-                size="sm"
-                className={cn(c.on_site && "ring-1 ring-border")}
-                aria-pressed={!!c.on_site}
-                disabled={update.isPending}
-                onClick={() => markOnSite(c)}
-              >
-                <UserCheck data-icon="inline-start" className={cn(c.on_site && "text-green-text")} />
-                {c.on_site ? "On the day" : "Mark on the day"}
-              </Button>
-              {c.role === "primary" ? (
-                <span className="w-9" aria-hidden="true" />
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Remove ${c.name || c.email}`}
-                  disabled={remove.isPending}
-                  onClick={async () => {
-                    try {
-                      await remove.mutateAsync(c.id);
-                    } catch (err) {
-                      toast.error(errorMessage(err));
-                    }
-                  }}
-                >
-                  <Trash2 />
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <DataTable columns={columns} data={rows} getRowId={(c) => `${c.id}-${c.email}`} pagination={false} maxHeight="60dvh" className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-4 [&_th:first-child]:pl-5 [&_th:last-child]:pr-4" />
+      {booking.contacts.some((c) => c.on_site) ? null : (
+        <p className="px-5 py-3 text-sm text-muted-foreground">
+          <StatusPill tone="amber" label="Nobody on site yet" size="sm" dot={false} /> <span className="ml-1">Tick On site for the person in charge on the day.</span>
+        </p>
+      )}
+      <ContactDialog booking={booking} contact={editing} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />
+      <ContactDialog booking={booking} contact={null} open={adding} onOpenChange={setAdding} />
     </Section>
   );
 }
 
-function AddContactForm({ booking, onDone }: { booking: BookingDetail; onDone: () => void }) {
+/** Add (contact null) or edit a contact. Removing is here too, for all but the primary with the booking. */
+function ContactDialog({ booking, contact, open, onOpenChange }: { booking: BookingDetail; contact: BookingContact | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">{open ? <ContactForm key={contact?.id ?? "new"} booking={booking} contact={contact} onDone={() => onOpenChange(false)} /> : null}</DialogContent>
+    </Dialog>
+  );
+}
+
+function ContactForm({ booking, contact, onDone }: { booking: BookingDetail; contact: BookingContact | null; onDone: () => void }) {
   const add = useAddContact(booking.id);
-  const [form, setForm] = useState({ email: "", name: "", mobile: "" });
+  const update = useUpdateContact(booking.id);
+  const remove = useDeleteContact(booking.id);
+  const [form, setForm] = useState({ name: contact?.name ?? "", email: contact?.email ?? "", mobile: contact?.mobile ?? "" });
+  const busy = add.isPending || update.isPending || remove.isPending;
+  const isBookingContact = !!contact && contact.email === (booking.contact_email ?? "").toLowerCase();
+
+  async function save() {
+    try {
+      if (contact) {
+        const patch: { name?: string; email?: string; mobile?: string } = {};
+        if (form.name.trim() !== (contact.name ?? "")) patch.name = form.name.trim();
+        if (form.email.trim().toLowerCase() !== contact.email) patch.email = form.email.trim().toLowerCase();
+        if (form.mobile.trim() !== (contact.mobile ?? "")) patch.mobile = form.mobile.trim();
+        if (Object.keys(patch).length === 0) {
+          onDone();
+          return;
+        }
+        const result = await update.mutateAsync({ contactId: contact.id, ...patch });
+        if (result.whatsapp) {
+          if (result.whatsapp.success === false) toast.error(`Saved, but the ticket could not be sent to the new number: ${result.whatsapp.error ?? "unknown error"}`);
+          else toast.success(`Saved · ticket sent to ${formatPhone(result.whatsapp.to ?? patch.mobile ?? "")}`);
+        } else {
+          toast.success("Contact saved");
+        }
+      } else {
+        await add.mutateAsync({ email: form.email.trim().toLowerCase(), name: form.name.trim() || undefined, mobile: form.mobile.trim() || undefined });
+      }
+      onDone();
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not save the contact"));
+    }
+  }
+
   return (
     <form
-      className="grid gap-3 rounded-lg bg-nested p-3 sm:grid-cols-[1fr_1fr_10rem_auto] sm:items-end"
-      onSubmit={async (e) => {
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
         e.preventDefault();
-        try {
-          await add.mutateAsync({ email: form.email.trim(), name: form.name.trim() || undefined, mobile: form.mobile.trim() || undefined });
-          onDone();
-        } catch (err) {
-          toast.error(errorMessage(err, "Could not add the contact"));
-        }
+        void save();
       }}
     >
-      <div className="grid gap-1">
-        <Label htmlFor="c-email">Email</Label>
-        <Input id="c-email" type="email" required autoFocus value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+      <DialogHeader>
+        <DialogTitle className="text-section">{contact ? "Edit contact" : "Add contact"}</DialogTitle>
+        <DialogDescription>{contact?.role === "primary" && booking.ticket_sent_at ? "A new mobile number receives the vehicle ticket straight away." : "Mail from this address lands on the booking."}</DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-3">
+        <div className="grid gap-1">
+          <Label htmlFor="ct-name">Name</Label>
+          <Input id="ct-name" value={form.name} autoFocus={!contact} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </div>
+        <div className="grid gap-1">
+          <Label htmlFor="ct-email">Email</Label>
+          <Input id="ct-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        </div>
+        <div className="grid gap-1">
+          <Label htmlFor="ct-mobile">Mobile</Label>
+          <Input id="ct-mobile" inputMode="tel" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} placeholder="082 123 4567" />
+        </div>
       </div>
-      <div className="grid gap-1">
-        <Label htmlFor="c-name">Name</Label>
-        <Input id="c-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </div>
-      <div className="grid gap-1">
-        <Label htmlFor="c-mobile">Mobile</Label>
-        <Input id="c-mobile" inputMode="tel" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
-      </div>
-      <div className="flex gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={add.isPending}>
-          {add.isPending ? <Spinner data-icon="inline-start" /> : null}
-          Add
-        </Button>
-      </div>
+      <DialogFooter className="flex-row items-center justify-between sm:justify-between">
+        {contact && !isBookingContact ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-red-text"
+            disabled={busy}
+            onClick={async () => {
+              try {
+                await remove.mutateAsync(contact.id);
+                onDone();
+              } catch (err) {
+                toast.error(errorMessage(err));
+              }
+            }}
+          >
+            Remove
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? <Spinner data-icon="inline-start" /> : null}
+            {contact ? "Save" : "Add"}
+          </Button>
+        </div>
+      </DialogFooter>
     </form>
   );
 }

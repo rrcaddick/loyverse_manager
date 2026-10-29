@@ -83,7 +83,7 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
           <span className="text-muted-foreground"> · {relativeTo(booking.visit_date)}</span>
           {booking.alternative_date ? <span className="block text-sm text-muted-foreground">or {formatDate(booking.alternative_date)}</span> : null}
         </Field>
-        <Field label="Arrival">{booking.arrival_time ?? <span className="text-muted-foreground">not given</span>}</Field>
+        <Field label="Arrival">{booking.arrival_time ?? <span className="text-muted-foreground">Not given</span>}</Field>
         <Field label="Visitors" numeric>
           {formatNumber(booking.people_booked)}
           {booking.adults || booking.children ? (
@@ -124,7 +124,7 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 
 // ----------------------------------------------------------- quick actions
 
-const QUICK: ActionId[] = ["send-proforma", "send-ticket-email", "send-ticket-whatsapp", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers", "confirm"];
+const QUICK: ActionId[] = ["send-proforma", "send-ticket", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers", "confirm"];
 
 /** One row across the top: every send the state allows, the next step filled, Cancel last. */
 function QuickActionsRow({ booking }: { booking: BookingDetail }) {

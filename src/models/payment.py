@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from src.models.base import execute, query, query_one, serialize_row
 
-KINDS = ("eft", "cash", "card", "other")
+KINDS = ("eft", "cash", "card", "cash_deposit", "other")
 
 
 def insert(

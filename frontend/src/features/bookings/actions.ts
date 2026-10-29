@@ -17,6 +17,7 @@ export type ActionId =
   | "send-proforma"
   | "send-invoice"
   | "send-final-invoice"
+  | "send-ticket"
   | "send-ticket-email"
   | "send-ticket-whatsapp"
   | "send-payment-confirmation"
@@ -43,6 +44,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   "send-proforma": "Send proforma",
   "send-invoice": "Send statement",
   "send-final-invoice": "Send tax invoice",
+  "send-ticket": "Send vehicle ticket",
   "send-ticket-email": "Email vehicle ticket",
   "send-ticket-whatsapp": "WhatsApp vehicle ticket",
   "send-payment-confirmation": "Send payment confirmation",
@@ -81,6 +83,8 @@ export function availability(b: BookingDetail, action: ActionId): Availability {
     case "send-final-invoice":
       if (b.arrived_count === null) return hiddenUnless(b, FIRM_STATUSES) ?? { enabled: false, reason: "Record the arrivals first — the tax invoice bills the people who came" };
       return requireEmail(b) ?? OK;
+    case "send-ticket":
+      return hiddenUnless(b, FIRM_STATUSES) ?? (b.contact_email || b.contact_mobile || b.contacts.some((c) => c.role === "primary" && c.mobile) ? OK : { enabled: false, reason: "Add an email address or a mobile number first" });
     case "send-ticket-email":
       return hiddenUnless(b, FIRM_STATUSES) ?? requireEmail(b) ?? OK;
     case "send-ticket-whatsapp":

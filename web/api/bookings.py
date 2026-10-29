@@ -582,17 +582,42 @@ def act_send_ticket_email(booking: dict, data: dict, actor: int | None) -> dict:
 
 def act_send_ticket_whatsapp(booking: dict, data: dict, actor: int | None) -> dict:
     _require_status(booking, FIRM_STATUSES, "Sending the vehicle ticket")
-    if not booking.get("contact_mobile"):
+    if not ticket_service.ticket_numbers(booking["id"]):
         raise ApiError(
             "validation_error",
-            "The booking has no contact mobile number",
+            "The booking has no mobile number",
             422,
             {"contact_mobile": "Add a mobile number before sending"},
         )
     try:
-        return ticket_service.send_ticket_whatsapp(booking["id"], actor)
+        return ticket_service.send_ticket_whatsapp_all(booking["id"], actor)
     except ticket_service.TicketError as exc:
         raise ApiError("send_failed", str(exc), 502)
+
+
+def act_send_ticket(booking: dict, data: dict, actor: int | None) -> dict:
+    """The vehicle ticket both ways in one click: the PDF by email when there
+    is an address, the image on WhatsApp to every primary number. Either
+    channel may be missing; both missing is an error."""
+    _require_status(booking, FIRM_STATUSES, "Sending the vehicle ticket")
+    numbers = ticket_service.ticket_numbers(booking["id"])
+    if not booking.get("contact_email") and not numbers:
+        raise ApiError("validation_error", "No email address or mobile number to send to", 422, {"contact_email": "Add an email address or a mobile number first"})
+    result: dict = {"email": None, "whatsapp": None, "errors": []}
+    if booking.get("contact_email"):
+        try:
+            result["email"] = act_send_ticket_email(booking, data, actor)
+        except ApiError as exc:
+            result["errors"].append(f"Email: {exc.message}")
+    if numbers:
+        try:
+            result["whatsapp"] = ticket_service.send_ticket_whatsapp_all(booking["id"], actor)
+        except ticket_service.TicketError as exc:
+            result["errors"].append(f"WhatsApp: {exc}")
+    if result["email"] is None and result["whatsapp"] is None:
+        raise ApiError("send_failed", "; ".join(result["errors"]) or "Nothing was sent", 502)
+    result["success"] = True
+    return result
 
 
 def act_send_payment_confirmation(booking: dict, data: dict, actor: int | None) -> dict:
@@ -691,6 +716,7 @@ ACTIONS: dict[str, Callable[[dict, dict, int | None], dict]] = {
     "send-final-invoice": act_send_final_invoice,
     "send-ticket-email": act_send_ticket_email,
     "send-ticket-whatsapp": act_send_ticket_whatsapp,
+    "send-ticket": act_send_ticket,
     "send-payment-confirmation": act_send_payment_confirmation,
     "send-reminder": act_send_reminder,
     "send-expiry": act_send_expiry,
@@ -801,7 +827,8 @@ def add_contact(booking_id: int):
     email = str(data.get("email") or "").strip().lower()
     if "@" not in email:
         raise ApiError("validation_error", "Enter an email address", 422, {"email": "Enter a valid email address"})
-    booking_contact.upsert(booking_id, email, name=data.get("name"), mobile=data.get("mobile"), role="cc", source="manual")
+    mobile = booking_service.normalise_mobile(data.get("mobile")) if data.get("mobile") else None
+    booking_contact.upsert(booking_id, email, name=data.get("name"), mobile=mobile, role="cc", source="manual")
     return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]}, 201)
 
 
@@ -811,17 +838,51 @@ def update_contact(booking_id: int, contact_id: int):
     charge on the day; only one per booking, so setting it clears the rest)."""
     from src.models import booking_contact
 
-    _booking_or_404(booking_id)
+    booking = _booking_or_404(booking_id)
     data = _json_body()
     on_site = data.get("on_site")
     if on_site is not None and not isinstance(on_site, bool):
         raise ApiError("validation_error", "on_site must be true or false", 422, {"on_site": "true or false"})
+    role = data.get("role")
+    if role is not None and role not in ("primary", "cc"):
+        raise ApiError("validation_error", "role must be primary or cc", 422, {"role": "primary or cc"})
+    email = data.get("email")
+    if email is not None and "@" not in str(email):
+        raise ApiError("validation_error", "Enter a valid email address", 422, {"email": "Enter a valid email address"})
+    before = next((c for c in booking_contact.list_for_booking(booking_id) if int(c["id"]) == contact_id), None)
+    if before is None:
+        raise ApiError("not_found", "No such contact on this booking", 404)
+    mobile = data.get("mobile")
+    if mobile:
+        mobile = booking_service.normalise_mobile(mobile)
+        if not mobile:
+            raise ApiError("validation_error", "Enter a valid South African mobile number", 422, {"mobile": "Enter a valid mobile number"})
     changed = booking_contact.update(
-        booking_id, contact_id, name=data.get("name"), mobile=data.get("mobile"), on_site=on_site
+        booking_id, contact_id, name=data.get("name"), mobile=mobile, on_site=on_site, role=role, email=email
     )
-    if not changed and on_site is None and not any(k in data for k in ("name", "mobile")):
-        raise ApiError("validation_error", "Nothing to change", 422, {"contact": "Send name, mobile or on_site"})
-    return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]})
+    if not changed and not any(k in data for k in ("name", "mobile", "on_site", "role", "email")):
+        raise ApiError("validation_error", "Nothing to change", 422, {"contact": "Send name, mobile, email, role or on_site"})
+    after = next((c for c in booking_contact.list_for_booking(booking_id) if int(c["id"]) == contact_id), before)
+    # The mirrored primary contact is the booking's own contact: keep them in step.
+    if before.get("email") == (booking.get("contact_email") or "").lower():
+        sync = {}
+        if "name" in data and after.get("name"):
+            sync["contact_name"] = after["name"]
+        if "mobile" in data:
+            sync["contact_mobile"] = after.get("mobile")
+        if "email" in data and after.get("email"):
+            sync["contact_email"] = after["email"]
+        if sync:
+            booking_service.update_booking(booking_id, sync, current_user_id())
+    # A new number on a primary contact gets the ticket again, if one has gone out.
+    whatsapp = None
+    new_mobile = after.get("mobile")
+    if "mobile" in data and new_mobile and new_mobile != before.get("mobile") and after.get("role") == "primary" and booking.get("ticket_sent_at"):
+        try:
+            whatsapp = ticket_service.send_ticket_whatsapp(booking_id, current_user_id(), mobile=str(new_mobile))
+        except ticket_service.TicketError as exc:
+            whatsapp = {"success": False, "error": str(exc), "to": str(new_mobile)}
+    return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)], "whatsapp": whatsapp})
 
 
 @bp.delete("/<int:booking_id>/contacts/<int:contact_id>")

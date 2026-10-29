@@ -135,6 +135,15 @@ class MatchResult:
 
 # ------------------------------------------------------------------ parsing ---
 
+
+_CASH_DEPOSIT = re.compile(r"\bCASH\s*DEP", re.I)
+
+
+def payment_kind_for(description: str | None) -> str:
+    """A credit whose narrative says CASH DEP(OSIT) was cash paid in at the
+    bank, not an EFT (owner, 29 Oct 2026)."""
+    return "cash_deposit" if description and _CASH_DEPOSIT.search(description) else "eft"
+
 def parse_reference_numbers(*texts: str | None) -> tuple[list[int], list[int]]:
     """``(prefixed, bare)`` document numbers found in the texts, de-duplicated.
 
@@ -928,11 +937,12 @@ def _record_payment(
     tx_id: int,
 ) -> dict:
     service = _booking_service()
+    kind = payment_kind_for(reference)
     if service is not None:
         try:
             return service.record_payment(
                 booking_id,
-                "eft",
+                kind,
                 amount,
                 paid_on,
                 reference,
@@ -946,9 +956,9 @@ def _record_payment(
     payment_id = execute(
         """
         INSERT INTO payments (booking_id, kind, amount, paid_on, reference, bank_transaction_id, note, recorded_by)
-        VALUES (%s, 'eft', %s, %s, %s, %s, 'Matched from FNB', %s)
+        VALUES (%s, %s, %s, %s, %s, %s, 'Matched from FNB', %s)
         """,
-        (booking_id, amount, paid_on, reference, tx_id, actor),
+        (booking_id, kind, amount, paid_on, reference, tx_id, actor),
     )
     return serialize_row(query_one("SELECT * FROM payments WHERE id = %s", (payment_id,))) or {}
 

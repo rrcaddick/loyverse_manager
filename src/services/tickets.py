@@ -53,8 +53,38 @@ def ticket_image_url(barcode: str) -> str:
     return url_for("groups.get_ticket_image", barcode=barcode, token=token, _external=True)
 
 
-def send_ticket_whatsapp(booking_id: int, actor: int | None) -> dict:
-    """Send the ``group_vehicle_ticket_jpeg`` template to the booking's mobile.
+def ticket_numbers(booking_id: int) -> list[str]:
+    """Every number the vehicle ticket goes to: the booking's contact mobile and
+    each primary contact's mobile, without duplicates (owner, 29 Oct 2026)."""
+    from src.models import booking_contact
+
+    row = booking_model.get(booking_id) or {}
+    numbers: list[str] = []
+    for n in [row.get("contact_mobile"), *(c.get("mobile") for c in booking_contact.list_for_booking(booking_id) if c.get("role") == "primary")]:
+        if n and str(n) not in numbers:
+            numbers.append(str(n))
+    return numbers
+
+
+def send_ticket_whatsapp_all(booking_id: int, actor: int | None) -> dict:
+    """The ticket to every primary number; one failure does not stop the rest."""
+    sent: list[dict] = []
+    failed: list[dict] = []
+    for number in ticket_numbers(booking_id):
+        try:
+            sent.append({"to": number, **send_ticket_whatsapp(booking_id, actor, mobile=number)})
+        except TicketError as exc:
+            failed.append({"to": number, "error": str(exc)})
+    if not sent and failed:
+        raise TicketError("; ".join(f"+{f['to']}: {f['error']}" for f in failed))
+    if not sent:
+        raise TicketError("The booking has no mobile number to send to")
+    return {"success": True, "sent": sent, "failed": failed}
+
+
+def send_ticket_whatsapp(booking_id: int, actor: int | None, mobile: str | None = None) -> dict:
+    """Send the ``group_vehicle_ticket_jpeg`` template to ``mobile`` (default
+    the booking's contact mobile).
 
     On success stamps ``ticket_sent_at`` and writes a ``ticket_sent`` event.
     Returns the Chatwoot result dict (conversation_id, message_id, ...).
@@ -62,7 +92,7 @@ def send_ticket_whatsapp(booking_id: int, actor: int | None) -> dict:
     row = booking_model.get(booking_id)
     if row is None:
         raise TicketError("Booking not found")
-    mobile = row.get("contact_mobile")
+    mobile = mobile or row.get("contact_mobile")
     if not mobile:
         raise TicketError("The booking has no contact mobile number")
 

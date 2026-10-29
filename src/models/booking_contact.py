@@ -41,15 +41,19 @@ def upsert(booking_id: int, email: str, *, name: str | None = None, mobile: str 
 
 
 def update(booking_id: int, contact_id: int, *, name: str | None = None, mobile: str | None = None,
-           on_site: bool | None = None) -> int:
-    """Edit a contact's name or mobile, or mark it as the one on site on the
-    day (which clears the flag on the booking's other contacts)."""
+           on_site: bool | None = None, role: str | None = None, email: str | None = None) -> int:
+    """Edit a contact's name, mobile, email or role, or mark it as the one on
+    site on the day (which clears the flag on the booking's other contacts)."""
     sets: list[str] = []
     args: list = []
     if name is not None:
         sets.append("name = %s"); args.append(name.strip() or None)
     if mobile is not None:
         sets.append("mobile = %s"); args.append(mobile.strip() or None)
+    if email is not None:
+        sets.append("email = %s"); args.append(email.strip().lower())
+    if role is not None:
+        sets.append("role = %s"); args.append(role)
     if on_site is not None:
         if on_site:
             execute("UPDATE booking_contacts SET on_site = 0 WHERE booking_id = %s", (int(booking_id),))

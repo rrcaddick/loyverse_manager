@@ -44,20 +44,27 @@ it lands.
     "Use this payment" records it; opened from a proof it allocates the
     proof too. The "Record payment" verb is "Find payment" everywhere (the
     header's primary button, the ⋯ menu, the next-step strip).
-  - *Documents* (`documents-tab.tsx`): proforma, statement, tax invoice
-    (number, version, issued, emailed to whom; View, Download, Send or
-    Resend; Preview before issue) and the vehicle ticket (barcode, emailed
-    and WhatsApp stamps, View and Download from the legacy ticket routes,
-    Email and WhatsApp). All versions collapsible. Reminders, lapse and
-    cancellation notices are not here.
+  - *Documents* (`documents-tab.tsx`): one table (Document · Status ·
+    Sent · Send status · Actions) for the proforma, statement, tax invoice
+    and vehicle ticket. Status is Not issued / Not sent / Sent / Re-sent;
+    Sent is the last send's time; Send status is Delivered or Failed (the
+    error on hover), and for the ticket which channels went. Actions are
+    Preview (the PDF, saved from the viewer) and Send or Re-send. The ticket
+    has **one send** that emails the PDF and WhatsApps the image to every
+    primary contact (`send-ticket`, backend `act_send_ticket`,
+    `tickets.send_ticket_whatsapp_all`).
   - *Activity* (`activity.tsx` reworked): notes as cards; every email in
     either direction one line ("Zara Dollie wrote: Re: …" / "Sent: …")
     linking to Conversation; a payment once, on the day it came in, from
     the payment rows (the recorded and matched events are dropped);
     documents, tickets, status changes and collapsed field edits as lines.
-  - *Contacts* (`contacts-tab.tsx`): the primary contact and everyone cc'd
-    or who wrote in, "Mark on the day" (one per booking), add by email,
-    remove.
+  - *Contacts* (`contacts-tab.tsx`): the Bookings-style table (Name,
+    Email, Mobile, Primary ☐, On site ☐, Added, edit icon), growing with its
+    rows up to 60 % of the viewport then scrolling. Any number of primaries
+    (each receives the WhatsApp ticket); one on site. The edit dialog takes
+    name, email and mobile and removes a contact; a new number on a primary
+    contact gets the ticket again at once when one has gone out. Edits to
+    the booking's own contact keep the booking's fields in step.
 - **Backend**: `booking_contacts.on_site` (migration 012) with
   `PATCH /bookings/:id/contacts/:cid {name?, mobile?, on_site?}`; the
   primary contact is mirrored into booking_contacts on create and update
@@ -67,3 +74,10 @@ it lands.
 Not done here, for the next screens: the old `rail.tsx` and `money-card.tsx`
 still back parts of the record (the rail cards are imported individually);
 they go when nothing else uses them.
+
+Second pass the same evening (owner's review): the header keeps only Edit
+and a short ⋯ menu (Add note, the lapse notice, status changes not on a
+tab); the Payments tiles carry their state as pills top right and the money
+state with Find payment sits in the "Payments received" header; copy rules
+applied (no implementation talk in descriptions, labels capitalised,
+actions on one right edge).

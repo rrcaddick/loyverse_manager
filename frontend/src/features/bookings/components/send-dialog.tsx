@@ -70,6 +70,18 @@ function spec(booking: BookingDetail, action: ActionId): SendSpec {
         successVerb: "Tax invoice sent",
         variables: () => ({ action: "send-final-invoice" }),
       };
+    case "send-ticket": {
+      const numbers = Array.from(new Set([booking.contact_mobile, ...booking.contacts.filter((c) => c.role === "primary").map((c) => c.mobile)].filter((n): n is string => !!n)));
+      return {
+        title: "Send the vehicle ticket?",
+        confirmLabel: "Send ticket",
+        to: [email ? `${email} (email)` : null, numbers.length ? `${numbers.map((n) => formatPhone(n)).join(", ")} (WhatsApp)` : null].filter(Boolean).join(" and ") || "Nobody yet",
+        attachment: `Vehicle entry ticket (barcode ${booking.barcode ?? "—"}): the PDF by email, the image on WhatsApp`,
+        effect: "Goes to the email address and to every primary contact's WhatsApp.",
+        successVerb: "Vehicle ticket sent",
+        variables: () => ({ action: "send-ticket" }),
+      };
+    }
     case "send-ticket-email":
       return {
         title: "Email the vehicle ticket?",

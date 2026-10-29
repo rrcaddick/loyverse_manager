@@ -212,7 +212,7 @@ export function useDeclineRequest(id: number) {
 }
 
 /** The contact endpoints answer with the list; the detail is refetched for its counts. */
-function useContactsMutation<TVariables>(id: number, mutationFn: (variables: TVariables) => Promise<{ items: BookingContact[] }>, meta?: { silent?: boolean; successMessage?: string }) {
+function useContactsMutation<TVariables, TResult extends { items: BookingContact[] } = { items: BookingContact[] }>(id: number, mutationFn: (variables: TVariables) => Promise<TResult>, meta?: { silent?: boolean; successMessage?: string }) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn,
@@ -227,10 +227,20 @@ export function useAddContact(id: number) {
   return useContactsMutation<{ email: string; name?: string; mobile?: string }>(id, (input) => api.post<{ items: BookingContact[] }>(`/bookings/${id}/contacts`, input), { successMessage: "Contact added" });
 }
 
+export interface ContactUpdate {
+  contactId: number;
+  name?: string;
+  mobile?: string;
+  email?: string;
+  role?: "primary" | "cc";
+  on_site?: boolean;
+}
+
+/** A new number on a primary contact gets the ticket again; the result rides along as `whatsapp`. */
 export function useUpdateContact(id: number) {
-  return useContactsMutation<{ contactId: number; name?: string; mobile?: string; on_site?: boolean }>(
+  return useContactsMutation<ContactUpdate, { items: BookingContact[]; whatsapp?: { success?: boolean; error?: string; to?: string } | null }>(
     id,
-    ({ contactId, ...input }) => api.patch<{ items: BookingContact[] }>(`/bookings/${id}/contacts/${contactId}`, input),
+    ({ contactId, ...input }) => api.patch(`/bookings/${id}/contacts/${contactId}`, input),
     { silent: true },
   );
 }

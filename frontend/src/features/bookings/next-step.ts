@@ -133,14 +133,14 @@ export function nextStep(b: BookingDetail): NextStep {
         title: `Visiting today — ${pluralise(b.people_booked, "visitor")}${b.arrival_time ? ` from ${b.arrival_time}` : ""}`,
         detail: join(ticketSent ? "ticket sent" : "ticket not sent", `paid ${money(f.paid_total)}`, balance),
         primary: recordArrivals,
-        secondary: ticketSent ? [] : [sendOr(b, "send-ticket-email")],
+        secondary: ticketSent ? [] : [send("send-ticket", "Send ticket")],
       };
     }
     if (!ticketSent) {
       const email = !!b.contact_email;
       const mobile = !!b.contact_mobile;
-      const primary: StepVerb = email ? send("send-ticket-email", "Send ticket") : mobile ? send("send-ticket-whatsapp", "WhatsApp ticket") : addContact;
-      const secondary: StepVerb[] = email && mobile ? [send("send-ticket-whatsapp")] : [];
+      const primary: StepVerb = email || mobile ? send("send-ticket", "Send ticket") : addContact;
+      const secondary: StepVerb[] = [];
       return {
         urgency: "amber",
         icon: Ticket,

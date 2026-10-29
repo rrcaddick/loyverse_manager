@@ -34,6 +34,8 @@ export interface BigNumberProps {
   value: ReactNode;
   /** The second line: "200 confirmed", "R 7 790 paid", "oldest 3 d". */
   detail?: ReactNode;
+  /** A pill at the top right instead of a second line (keeps the tile short). */
+  badge?: ReactNode;
   tone?: NumberTone;
   icon?: LucideIcon;
   /** Makes the whole tile a link. */
@@ -47,12 +49,13 @@ export interface BigNumberProps {
   "aria-label"?: string;
 }
 
-export function BigNumber({ label, value, detail, tone = "neutral", icon: Icon, to, onClick, loading, size = "md", className, ...rest }: BigNumberProps) {
+export function BigNumber({ label, value, detail, badge, tone = "neutral", icon: Icon, to, onClick, loading, size = "md", className, ...rest }: BigNumberProps) {
   const interactive = !!to || !!onClick;
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
         <span className="text-label truncate text-muted-foreground uppercase">{label}</span>
+        {badge ? <span className="shrink-0">{badge}</span> : null}
         {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /> : null}
         {interactive && !Icon ? <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-faint-foreground" /> : null}
       </div>
@@ -61,7 +64,7 @@ export function BigNumber({ label, value, detail, tone = "neutral", icon: Icon, 
       ) : (
         <div className={cn("mt-1 tabular", size === "lg" ? "text-4xl font-semibold tracking-tight" : "text-display", TONE_TEXT[tone])}>{value}</div>
       )}
-      <div className="mt-1 min-h-5 text-sm text-muted-foreground">{loading ? <Skeleton className="h-4 w-32" /> : detail}</div>
+      {detail !== undefined || loading ? <div className="mt-1 min-h-5 text-sm text-muted-foreground">{loading ? <Skeleton className="h-4 w-32" /> : detail}</div> : null}
     </>
   );
   const classes = cn(

@@ -7,7 +7,7 @@
 import type { BookingStatus } from "@/types/api";
 
 export type BookingSource = "form" | "email" | "import" | "manual";
-export type PaymentKind = "eft" | "cash" | "card" | "other";
+export type PaymentKind = "eft" | "cash" | "card" | "cash_deposit" | "other";
 export type ArrivalSource = "loyverse" | "manual";
 export type DocumentKind = "proforma" | "invoice" | "final_invoice";
 export type ReminderKind = "still_interested" | "deposit_reminder" | "final_details" | "lapse";
@@ -508,7 +508,8 @@ export type BookingAction =
   | "send-reminder"
   | "send-expiry"
   | "send-answers"
-  | "confirm";
+  | "confirm"
+  | "send-ticket";
 
 export const TENTATIVE_STATUSES: BookingStatus[] = ["enquiry", "proforma_sent"];
 export const FIRM_STATUSES: BookingStatus[] = ["confirmed", "completed"];
@@ -519,6 +520,7 @@ export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = {
   cash: "Cash",
   card: "Card",
   other: "Other",
+  cash_deposit: "Cash deposit",
 };
 
 export const SOURCE_LABELS: Record<BookingSource, string> = {

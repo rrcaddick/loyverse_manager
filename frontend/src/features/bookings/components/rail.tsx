@@ -101,7 +101,7 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
               </span>
             ),
           },
-          { label: "Arrival", value: booking.arrival_time ?? <span className="text-muted-foreground">not given</span> },
+          { label: "Arrival", value: booking.arrival_time ?? <span className="text-muted-foreground">Not given</span> },
           { label: "Visitors", value: formatNumber(booking.people_booked), numeric: true },
           {
             label: "Vehicles",

@@ -1,11 +1,9 @@
 /**
- * The record header (spec §6): reference eyebrow, group name at 24 px with
- * the status pill, one 15 px facts line, and on the right ONE computed
- * primary button (from next-step.ts), Edit and the ⋯ overflow in three
- * groups — Send, Record, Status. Impossible actions are hidden; blocked ones
- * are disabled with the reason beneath.
- *
- * `NextStepCard` renders the same rule's strip under the header.
+ * The record header: reference eyebrow, group name at 24 px with the status
+ * pill, one 15 px facts line, and on the right Edit and a short ⋯ menu with
+ * only what the tabs do not already offer (status changes, the lapse notice,
+ * a note). The computed next step lives on the Needs attention tab
+ * (`NextStepCard`), the sends on Overview's quick actions.
  */
 
 import { AlertTriangle, FileSpreadsheet, MoreHorizontal, Pencil } from "lucide-react";
@@ -23,9 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,10 +28,10 @@ import { formatDateShort, formatPhone, humanise, pluralise } from "@/lib/format"
 import { cn } from "@/lib/utils";
 import type { BookingStatus } from "@/types/api";
 
-import { ACTION_LABELS, REMINDER_COPY, STATUS_CHANGE_COPY, availability, type ActionId, type Availability } from "../actions";
+import { ACTION_LABELS, STATUS_CHANGE_COPY, availability, type ActionId, type Availability } from "../actions";
 import { relativeTo, useGroupTypeLabel } from "../lib";
 import { nextStep, type StepVerb } from "../next-step";
-import type { BookingDetail, EmailReminderKind } from "../types";
+import type { BookingDetail } from "../types";
 import { useBookingActions } from "../use-booking-actions";
 
 /** A StepVerb as a button; `primary` is the one filled verb. */
@@ -76,7 +71,6 @@ export function NextStepCard({ booking }: { booking: BookingDetail }) {
 export function RecordHeader({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const groupType = useGroupTypeLabel();
-  const step = nextStep(booking);
 
   return (
     <header className="flex flex-col gap-3">
@@ -129,7 +123,7 @@ export function RecordHeader({ booking }: { booking: BookingDetail }) {
                 <Dot />
                 <button type="button" onClick={() => actions.openEdit("contact")} className="inline-flex items-center gap-1 font-medium text-amber-text underline-offset-3 hover:underline">
                   <AlertTriangle aria-hidden="true" className="size-3.5" />
-                  no email
+                  No email
                 </button>
               </>
             )}
@@ -137,7 +131,6 @@ export function RecordHeader({ booking }: { booking: BookingDetail }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {step.primary ? <VerbButton verb={step.primary} primary /> : null}
           <Button variant="outline" onClick={() => actions.openEdit()}>
             <Pencil data-icon="inline-start" />
             Edit
@@ -159,21 +152,20 @@ function Dot() {
 
 // ---------------------------------------------------------------- overflow
 
-const SEND_ORDER: ActionId[] = ["send-proforma", "send-invoice", "send-final-invoice", "send-ticket-email", "send-ticket-whatsapp"];
-const SEND_TAIL: ActionId[] = ["send-answers", "send-payment-confirmation", "send-acknowledgement"];
-const REMINDERS: EmailReminderKind[] = ["still_interested", "deposit_reminder", "final_details"];
-
+/** Only what no tab offers: the lapse notice, a note, the other status changes. */
 function OverflowMenu({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const a = (id: ActionId) => availability(booking, id);
-  const reminders = REMINDERS.filter((k) => !a(`reminder:${k}`).hidden);
-  const sendTop = SEND_ORDER.filter((id) => !a(id).hidden);
-  const sendTail = SEND_TAIL.filter((id) => !a(id).hidden);
-  const canArrivals = !a("record-arrivals").hidden;
-  const confirmable = !a("confirm").hidden;
-  const transitions = booking.allowed_transitions.filter((t) => !(t === "confirmed" && confirmable));
   const expiry = !a("send-expiry").hidden;
-
+  const confirmable = !a("confirm").hidden;
+  const transitions = booking.allowed_transitions.filter((t) => t !== "cancelled" && !(t === "confirmed" && confirmable));
+  if (!expiry && transitions.length === 0) {
+    return (
+      <Button variant="outline" size="icon" aria-label="More actions" onClick={actions.focusNote}>
+        <MoreHorizontal />
+      </Button>
+    );
+  }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -183,43 +175,19 @@ function OverflowMenu({ booking }: { booking: BookingDetail }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-label text-muted-foreground uppercase">Send</DropdownMenuLabel>
-          {sendTop.map((id) => (
-            <MenuAction key={id} availability={a(id)} label={ACTION_LABELS[id]} onSelect={() => actions.send(id)} />
-          ))}
-          {reminders.length ? (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Reminder…</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-72">
-                {reminders.map((kind) => (
-                  <MenuAction key={kind} availability={a(`reminder:${kind}`)} label={REMINDER_COPY[kind].label} description={REMINDER_COPY[kind].description} onSelect={() => actions.send(`reminder:${kind}`)} />
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ) : null}
-          {sendTail.map((id) => (
-            <MenuAction key={id} availability={a(id)} label={ACTION_LABELS[id]} onSelect={() => actions.send(id)} />
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-label text-muted-foreground uppercase">Record</DropdownMenuLabel>
-          <MenuAction availability={{ enabled: true }} label="Find payment" description="Search the bank feed for this booking's credit" onSelect={() => actions.openFindPayment()} />
-          {canArrivals ? <MenuAction availability={a("record-arrivals")} label="Record arrivals" onSelect={actions.openArrivals} /> : null}
           <MenuAction availability={{ enabled: true }} label="Add note" onSelect={actions.focusNote} />
+          {expiry ? <MenuAction availability={a("send-expiry")} label={ACTION_LABELS["send-expiry"]} description="Emails the customer that the hold lapsed and marks the booking lapsed." destructive onSelect={() => actions.send("send-expiry")} /> : null}
         </DropdownMenuGroup>
-        {transitions.length || confirmable || expiry ? (
+        {transitions.length ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex items-center justify-between gap-2 text-label text-muted-foreground uppercase">
                 Status <StatusPill status={booking.status} size="sm" />
               </DropdownMenuLabel>
-              {confirmable ? <MenuAction availability={a("confirm")} label={ACTION_LABELS.confirm} description={STATUS_CHANGE_COPY.confirmed?.description} onSelect={() => actions.send("confirm")} /> : null}
               {transitions.map((target) => (
                 <StatusItem key={target} target={target} onSelect={() => actions.changeStatus(target)} />
               ))}
-              {expiry ? <MenuAction availability={a("send-expiry")} label={ACTION_LABELS["send-expiry"]} description="Emails the customer that the hold lapsed and marks the booking lapsed." destructive onSelect={() => actions.send("send-expiry")} /> : null}
             </DropdownMenuGroup>
           </>
         ) : null}

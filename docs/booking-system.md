@@ -422,3 +422,17 @@ takes `{name?, mobile?, on_site?}`; setting `on_site: true` clears it on the
 booking's other contacts; returns `{items}`. `GET /api/v1/bookings/:id` now
 also carries `contacts` (the booking_contacts rows, primary first) and
 `pops` (the pending proof-of-payment candidates) for the record's tabs.
+
+### Ticket send, contact edits, cash deposits (29 Oct 2026, evening)
+
+`POST /api/v1/bookings/:id/actions/send-ticket` sends the vehicle ticket by
+email (when there is an address) and on WhatsApp to every primary contact's
+mobile; the result carries `email`, `whatsapp {sent, failed}` and `errors`.
+`PATCH …/contacts/:cid` accepts `{name?, email?, mobile?, role?: primary|cc,
+on_site?}`; the mobile is normalised; editing the booking's own contact
+updates `contact_name`/`contact_email`/`contact_mobile`; a new mobile on a
+primary contact resends the ticket to it when `ticket_sent_at` is set, and
+the response carries that result as `whatsapp`. `payments.kind` gains
+`cash_deposit` (migration 014). `GET …/payment-search` returns only credits
+not on any booking and no larger than the outstanding balance plus R 1 000.
+
