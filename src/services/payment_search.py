@@ -41,7 +41,8 @@ def expected_amounts(booking: dict) -> dict[str, Decimal]:
     except Exception:  # noqa: BLE001
         fin = {}
     out: dict[str, Decimal] = {}
-    for key, label in (("deposit_outstanding", "deposit"), ("deposit_due", "deposit"), ("due", "balance"), ("total", "total")):
+    # booking_finance keys: deposit_outstanding / deposit_due, balance_due, total_amount.
+    for key, label in (("deposit_outstanding", "deposit"), ("deposit_due", "deposit"), ("balance_due", "balance"), ("total_amount", "total")):
         v = _d(fin.get(key)) if isinstance(fin, dict) else None
         if v and v > 0 and label not in out:
             out[label] = v

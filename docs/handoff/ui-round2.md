@@ -128,3 +128,11 @@ its Added column. Contact updates track in-flight requests per contact, so
 a second click before the first answer keeps the later state and a failure
 rolls back only that row.
 
+Fixes (29 Oct, night): an email opened from Activity is brought to the top
+of the Conversation thread and held there while its body iframe sizes
+itself; the Conversation tab shows messages and notes only (events stay on
+Activity); email attachments open in a new tab for viewing; Find payment
+read the finance figures under the wrong names (`due`, `total` instead of
+`balance_due`, `total_amount`), so its cap was R1 000 and nothing larger
+ever showed; covered by `tests/payments/test_payment_search.py`.
+
