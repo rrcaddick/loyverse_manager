@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 
 interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLButtonElement> {
   column: Column<TData, TValue>;
-  title: string;
+  /** Text, or spans that swap by container width (the Bookings list narrows its headers). */
+  title: React.ReactNode;
   align?: "left" | "right" | "center";
 }
 

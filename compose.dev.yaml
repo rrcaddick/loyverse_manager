@@ -14,8 +14,12 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-8010}:8000"
     volumes:
-      # The built React app, so `pnpm build` shows on :8010 with no image rebuild.
-      - ./web/static/app:/app/web/static/app:ro
+      # The code and the built React app, so an edit (after `docker compose
+      # restart web`) or a `pnpm build` shows on :8010 with no image rebuild.
+      - ./src:/app/src:ro
+      - ./web:/app/web:ro
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
     environment:
       ENV: dev
       SESSION_COOKIE_SECURE: "false"
@@ -23,6 +27,11 @@ services:
   worker:
     environment:
       ENV: dev
+    volumes:
+      - ./src:/app/src:ro
+      - ./web:/app/web:ro
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
   scheduler:
     environment:
       ENV: dev

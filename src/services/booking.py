@@ -1239,30 +1239,31 @@ def decline_request(booking_id: int, reason: str | None, actor: int | None) -> d
 # ------------------------------------------------------- latest action ---
 
 EMAIL_ACTION_LABELS = {
-    "proforma": "Proforma sent",
-    "invoice": "Statement sent",
-    "final_invoice": "Tax invoice sent",
-    "ticket": "Ticket emailed",
-    "payment_confirmation": "Payment confirmation sent",
-    "deposit_reminder": "Deposit reminder sent",
-    "still_interested": "Follow-up sent",
-    "final_details": "Final details sent",
-    "expiry": "Lapse notice sent",
-    "answers": "Answers sent",
-    "acknowledgement": "Request acknowledged",
-    "bounce_back": "Form link sent",
-    "convert_enquiry": "Form link sent",
-    "reply": "Response sent",
+    # The owner's wording (sheet of 29 Oct 2026): Title Case, past tense.
+    "proforma": "Proforma Sent",
+    "invoice": "Statement Sent",
+    "final_invoice": "Invoice Sent",
+    "ticket": "Ticket Sent",
+    "payment_confirmation": "Payment Confirmed",
+    "deposit_reminder": "Deposit Reminder Sent",
+    "still_interested": "Follow-up Sent",
+    "final_details": "Final Details Sent",
+    "expiry": "Lapse Notice Sent",
+    "answers": "Answers Sent",
+    "acknowledgement": "Request Acknowledged",
+    "bounce_back": "Form Link Sent",
+    "convert_enquiry": "Form Link Sent",
+    "reply": "Response Sent",
 }
 STATUS_ACTION_LABELS = {
-    "requested": "Request received",
-    "enquiry": "Request accepted",
-    "proforma_sent": "Proforma sent",
+    "requested": "Request Received",
+    "enquiry": "Request Accepted",
+    "proforma_sent": "Proforma Sent",
     "confirmed": "Confirmed",
-    "completed": "Visit completed",
+    "completed": "Visit Completed",
     "cancelled": "Cancelled",
     "lapsed": "Lapsed",
-    "no_show": "No show",
+    "no_show": "No Show",
     "declined": "Declined",
 }
 
@@ -1289,7 +1290,7 @@ def latest_actions(booking_ids: list[int] | tuple[int, ...]) -> dict[int, dict]:
         SELECT booking_id, 'event', CASE WHEN summary LIKE 'Imported%%' THEN 'import' ELSE NULL END, kind, created_at,
                JSON_UNQUOTE(JSON_EXTRACT(data, '$.to'))
         FROM booking_events
-        WHERE booking_id IN ({marks}) AND kind IN ('status_changed', 'created', 'ticket_sent', 'whatsapp_sent', 'arrivals_recorded')
+        WHERE booking_id IN ({marks}) AND kind IN ('status_changed', 'created', 'ticket_sent', 'whatsapp_sent')
         """,
         (*ids, *ids, *ids),
     )
@@ -1320,19 +1321,18 @@ def _action_label(r: dict) -> tuple[str | None, str]:
     kind = r.get("kind") or ""
     if src == "email":
         if r.get("direction") == "inbound":
-            return "Customer reply", "customer"
-        return EMAIL_ACTION_LABELS.get(kind, "Response sent"), "us"
+            return "Customer Reply", "customer"
+        return EMAIL_ACTION_LABELS.get(kind, "Response Sent"), "us"
     if src == "payment":
-        return ("Cash received" if kind == "cash" else "Payment received"), "customer"
+        return ("Cash Received" if kind == "cash" else "Payment Received"), "customer"
     if kind == "status_changed":
         to = r.get("name") or ""
         if to in ("proforma_sent",):
             return None, "us"  # the email row says it better
-        return STATUS_ACTION_LABELS.get(to, "Status changed"), "us"
+        return STATUS_ACTION_LABELS.get(to, "Status Changed"), "us"
     if kind == "created":
         return "Added", "us"
     if kind in ("ticket_sent", "whatsapp_sent"):
-        return "Ticket sent on WhatsApp", "us"
-    if kind == "arrivals_recorded":
-        return "Arrivals recorded", "system"
+        return "Ticket Sent", "us"
+    # Arrivals are not an action: the gate records them live on the day.
     return None, "system"

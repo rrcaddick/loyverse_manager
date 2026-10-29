@@ -7,7 +7,7 @@
  */
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router";
 
 import { Logo, LogoEmblem } from "@/components/brand/Logo";
@@ -45,15 +45,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const [params] = useSearchParams();
   const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
-  const collapsedNow = state === "collapsed" && !isMobile;
-  // The brand swaps halfway through the drawer's 200 ms width transition, so
-  // neither image is drawn at the wrong width while it moves (owner's note).
-  const [collapsed, setCollapsed] = useState(collapsedNow);
-  useEffect(() => {
-    if (collapsed === collapsedNow) return;
-    const timer = window.setTimeout(() => setCollapsed(collapsedNow), 100);
-    return () => window.clearTimeout(timer);
-  }, [collapsed, collapsedNow]);
+  const collapsed = state === "collapsed" && !isMobile;
   const counts = useNavCounts();
   const onWork = pathname === "/work" || pathname.startsWith("/work/");
   // Open on Work, otherwise remember the last toggle (the render-time sync
@@ -169,9 +161,9 @@ export function AppSidebar() {
                 type="button"
                 aria-label="Open navigation"
                 onClick={toggleSidebar}
-                className="block w-full overflow-hidden rounded-md text-sidebar-foreground outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="block w-full rounded-md text-sidebar-foreground outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
-                <LogoEmblem className="mx-auto block w-13" />
+                <LogoEmblem className="w-full" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">Open navigation</TooltipContent>
@@ -182,8 +174,8 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild size="lg" className="h-auto flex-col items-stretch gap-2 px-2 py-2">
                   <NavLink to={homeFor(user.role)} aria-label={`${APP_NAME} home`}>
-                    <Logo className="w-52 shrink-0 self-center text-sidebar-foreground" />
-                    <span className="w-52 shrink-0 self-center text-center text-sm font-semibold tracking-wide whitespace-nowrap text-sidebar-foreground uppercase">{APP_NAME}</span>
+                    <Logo className="w-full text-sidebar-foreground" />
+                    <span className="text-center text-sm font-semibold tracking-wide text-sidebar-foreground uppercase">{APP_NAME}</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

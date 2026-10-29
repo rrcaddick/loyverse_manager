@@ -148,3 +148,26 @@ so the nine Pending columns fit at 1440 px (narrower screens scroll the
 table sideways until the labels are condensed). The browser's own clear
 button on search fields is hidden, so only the app's X shows.
 
+**Responsive list (29 Oct, afternoon).** The Bookings table never scrolls
+sideways. The card is a named container (`@container/table`) and
+`list-columns.tsx` reflows at two container widths, trading row height for
+width: full (≥ 76 rem) is the column set above; compact (< 76 rem) folds the
+contextual columns away (Count, Arrived and Reason into the Group cell,
+Deposit due by into the Date cell as two short lines) and stacks the two
+Status pills; stacked (< 56 rem) also folds the reference into the Group
+cell (header reads "Booking"), drops the year from the date, puts paid and
+due on their own lines in Payment (the total stays in the tooltip) and lets
+the action pill truncate. Base classes are the full layout; the
+`@max-[…]/table:` variants are the narrower levels. Verified at nineteen
+widths from 768 to 1920 px across every bucket with zero overflow; below md
+the list is cards. The drawer brand swap is back to the plain immediate
+swap at the owner's request.
+
+**Last-action labels** are the owner's wording from his sheet of 29 Oct
+(`src/services/booking.py`): Title Case, "Invoice Sent", "Payment
+Confirmed", both ticket sends "Ticket Sent", and arrivals are no longer an
+action (the gate records them live). The action pill is 10.5 rem, sized to
+"Request Acknowledged". `compose.dev.yaml` now bind-mounts `src`, `web`,
+`config` and `scripts` into the web and worker containers, so a backend
+edit needs only `docker compose restart web worker`.
+

@@ -34,11 +34,12 @@ export function PaymentBar({ booking: b, className }: { booking: Money; classNam
   const title = `Paid ${money(paid)} of ${money(total)}${depositPct !== null ? ` · deposit ${money(b.deposit_due)}` : ""}`;
 
   return (
-    <div className={cn("grid min-w-44 gap-1", className)} title={title}>
-      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+    <div className={cn("grid gap-1", className)} title={title}>
+      {/* In the list's stacked level the amount due takes its own line. */}
+      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap @max-[56rem]/table:flex-col @max-[56rem]/table:items-start @max-[56rem]/table:gap-0">
         <span className={cn("text-body leading-5 tabular", paid > 0 ? "text-green-text" : "text-muted-foreground")}>
           {money(paid)}
-          <span className="text-sm text-muted-foreground"> of {money(total)}</span>
+          <span className="text-sm text-muted-foreground @max-[56rem]/table:hidden"> of {money(total)}</span>
         </span>
         <span className={cn("text-sm leading-5 tabular", due.tone)}>{due.text}</span>
       </div>
