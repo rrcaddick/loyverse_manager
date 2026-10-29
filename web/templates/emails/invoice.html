@@ -12,7 +12,7 @@
   ("Visit date", booking.visit_date_long),
   ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
   ("Total", finance.total_display),
-], "Statement " ~ document.number) }}
+], "Invoice " ~ document.number) }}
 {% if finance.due > 0 %}
 <p>The balance is payable at the gate on the day by card or cash, or by EFT beforehand using reference <span class="strong">{{ booking.reference }}</span>.</p>
 {% endif %}

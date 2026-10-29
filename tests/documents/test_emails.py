@@ -33,10 +33,10 @@ def _ctx(kind: str, payments: list[dict]) -> dict:
 EXPECTED = {
     "acknowledgement": ["Thanks for your booking request", "FY1703", "67 visitors", "Nothing is paid now"],
     "proforma": ["Deposit due", "R3 800.00", "Bank details", "62871182764", "31 October 2026", "<ol", "Attached:</span> FY1703 Proforma.pdf"],
-    "invoice": ["Your date is confirmed", "FY1703-S", "R2 565.00", "deposit receipt and statement", "Attached:</span> FY1703-S Statement.pdf"],
-    "final_invoice": ["Thank you for visiting", "61 visitors", "R1 995.00", "Final invoice INV1703", "Attached:</span> INV1703 Tax invoice.pdf"],
+    "invoice": ["Your date is confirmed", "FY1703-S", "R2 565.00", "deposit receipt and statement", "Attached:</span> FY1703-S Invoice.pdf"],
+    "final_invoice": ["Thank you for visiting", "61 visitors", "R1 995.00", "Final invoice INV1703", "Attached:</span> INV1703 Final invoice.pdf"],
     "ticket": ["driver of each vehicle", "barcode", "farmyardpark.co.za", "Attached:</span> Vehicle ticket FY1703.pdf"],
-    "payment_confirmation": ["R3 800.00", "2 October 2026", "confirmed", "deposit receipt and statement is attached", "Attached:</span> FY1703-S Statement.pdf"],
+    "payment_confirmation": ["R3 800.00", "2 October 2026", "confirmed", "deposit receipt and statement is attached", "Attached:</span> FY1703-S Invoice.pdf"],
     "still_interested": ["Still planning to visit?", "R3 800.00", "Attached:</span> FY1703 Proforma.pdf"],
     "deposit_reminder": ["14 days", "R3 800.00", "31 October 2026", "Attached:</span> FY1703 Proforma.pdf"],
     "final_details": ["3 days", "sent earlier", "R2 565.00"],

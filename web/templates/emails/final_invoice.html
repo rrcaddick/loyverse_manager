@@ -10,7 +10,7 @@
   ("Visitors", (finance.arrived_count|plural("visitor") ~ (" (" ~ finance.people_booked ~ " booked)" if finance.arrived_count != finance.people_booked else "")) if finance.uses_arrivals else booking.people_booked|plural("visitor")),
   ("Total", finance.total_display),
   ("Paid", finance.paid_display),
-], "Tax invoice " ~ document.number) }}
+], "Final invoice " ~ document.number) }}
 {% if finance.due > 0 %}
 <p>There is an outstanding balance of <span class="strong">{{ finance.due_display }}</span>. Please settle it by EFT using reference <span class="strong">{{ booking.reference }}</span> and send proof of payment to <a href="mailto:{{ company.pop_email }}">{{ company.pop_email }}</a>.</p>
 {{ bank_details(company, booking.reference) }}
