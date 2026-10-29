@@ -128,20 +128,45 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 const EMAIL_ACTIONS: ActionId[] = ["send-proforma", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers"];
 const WHATSAPP_ACTIONS: ActionId[] = ["send-ticket"];
 
-/** The brands' own marks and colours (simple-icons), filled, so the channel is read at a glance. */
-function BrandMark({ path, title }: { path: string; title: string }) {
+/** The brand's mark on a small white chip, so it reads on any button colour. Gmail #EA4335, WhatsApp #25D366 (simple-icons). */
+function BrandMark({ path, title, colour }: { path: string; title: string; colour: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0 fill-current">
-      <title>{title}</title>
-      <path d={path} />
-    </svg>
+    <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm bg-white">
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3.5" style={{ fill: colour }}>
+        <title>{title}</title>
+        <path d={path} />
+      </svg>
+    </span>
   );
 }
 const CHANNEL = {
-  // Literal classes (Tailwind reads them at build time): Gmail #EA4335, WhatsApp #25D366 (simple-icons).
-  email: { mark: <BrandMark path={siGmail.path} title="Gmail" />, className: "border-transparent bg-[#EA4335] text-white hover:bg-[#d33b2c]" },
-  whatsapp: { mark: <BrandMark path={siWhatsapp.path} title="WhatsApp" />, className: "border-transparent bg-[#25D366] text-white hover:bg-[#1fb857]" },
+  email: { mark: <BrandMark path={siGmail.path} title="Gmail" colour="#EA4335" /> },
+  whatsapp: { mark: <BrandMark path={siWhatsapp.path} title="WhatsApp" colour="#25D366" /> },
 } as const;
+
+/** Amber while nothing has gone out, green once it has (and the verb becomes Re-send). */
+const SENT_STYLE = "border-transparent bg-green-solid text-white hover:bg-green-solid/90";
+const UNSENT_STYLE = "border-transparent bg-amber-solid text-white hover:bg-amber-solid/90";
+
+const EMAIL_KIND: Partial<Record<ActionId, string>> = {
+  "send-proforma": "proforma",
+  "send-invoice": "invoice",
+  "send-final-invoice": "final_invoice",
+  "send-payment-confirmation": "payment_confirmation",
+  "send-answers": "answers",
+  "reminder:still_interested": "still_interested",
+  "reminder:deposit_reminder": "deposit_reminder",
+  "reminder:final_details": "final_details",
+};
+
+function sentBefore(b: BookingDetail, id: ActionId): boolean {
+  if (id === "send-ticket") return !!(b.ticket_sent_at || b.ticket_emailed_at);
+  if (id === "send-proforma" && b.proforma_sent_at) return true;
+  if (id === "send-invoice" && b.invoice_sent_at) return true;
+  if (id === "send-final-invoice" && b.final_invoice_sent_at) return true;
+  const kind = EMAIL_KIND[id];
+  return !!kind && b.emails.some((m) => m.direction === "outbound" && m.kind === kind && m.send_status !== "failed");
+}
 
 /** One row across the top, grouped by channel: email, then WhatsApp, then our own actions. */
 function QuickActionsRow({ booking }: { booking: BookingDetail }) {
@@ -156,11 +181,13 @@ function QuickActionsRow({ booking }: { booking: BookingDetail }) {
 
   const channelButton = (id: ActionId, channel: keyof typeof CHANNEL) => {
     const av = availability(booking, id);
+    const sent = sentBefore(booking, id);
+    const label = sent ? ACTION_LABELS[id].replace(/^Send /, "Re-send ") : ACTION_LABELS[id];
     return (
       <Gated key={id} availability={av}>
-        <Button variant="outline" size="sm" className={cn("gap-2 font-medium", CHANNEL[channel].className)} disabled={!av.enabled} onClick={() => actions.send(id)}>
+        <Button variant="outline" size="sm" className={cn("gap-2 font-medium", sent ? SENT_STYLE : UNSENT_STYLE)} disabled={!av.enabled} onClick={() => actions.send(id)}>
           {CHANNEL[channel].mark}
-          {ACTION_LABELS[id]}
+          {label}
         </Button>
       </Gated>
     );

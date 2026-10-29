@@ -52,22 +52,22 @@ function spec(booking: BookingDetail, action: ActionId): SendSpec {
       };
     case "send-invoice":
       return {
-        title: "Send the statement?",
-        confirmLabel: "Send statement",
+        title: "Send the invoice?",
+        confirmLabel: "Send invoice",
         to: email,
         attachment: `A deposit receipt and statement issued now: ${money(booking.finance.total_amount)} total, ${money(booking.finance.paid_total)} received, ${money(booking.finance.balance_due)} balance`,
-        effect: "Records when the statement was sent. This is not a tax invoice.",
-        successVerb: "Statement sent",
+        effect: "Records when the invoice was sent. This is not a final invoice.",
+        successVerb: "Invoice sent",
         variables: () => ({ action: "send-invoice" }),
       };
     case "send-final-invoice":
       return {
-        title: "Send the tax invoice?",
-        confirmLabel: "Send tax invoice",
+        title: "Send the final invoice?",
+        confirmLabel: "Send final invoice",
         to: email,
-        attachment: `The tax invoice issued now, billed on ${formatNumber(booking.arrived_count ?? 0)} arrivals${booking.finance.final_amount !== null ? ` (${money(booking.finance.final_amount)})` : ""}`,
-        effect: "Records when the tax invoice was sent. It is issued once, after the visit.",
-        successVerb: "Tax invoice sent",
+        attachment: `The final invoice issued now, billed on ${formatNumber(booking.arrived_count ?? 0)} arrivals${booking.finance.final_amount !== null ? ` (${money(booking.finance.final_amount)})` : ""}`,
+        effect: "Records when the final invoice was sent. It is issued once, after the visit.",
+        successVerb: "Final invoice sent",
         variables: () => ({ action: "send-final-invoice" }),
       };
     case "send-ticket": {

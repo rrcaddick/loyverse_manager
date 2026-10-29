@@ -6,7 +6,7 @@
  * and is found by the search; cash on the day comes from Loyverse later.
  */
 
-import { Banknote, FileCheck, Landmark, Mail, Search } from "lucide-react";
+import { Banknote, FileCheck, Mail, Search } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -15,6 +15,8 @@ import { BigNumber, BigNumberRow } from "@/components/big-number";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/api";
 import { formatDate, formatDateShort, formatMoney, formatNumber } from "@/lib/format";
 
@@ -67,16 +69,15 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
   const state = moneyState(booking);
   const [selected, setSelected] = useState<Payment | null>(null);
   const rows = [...booking.payments].sort((a, b) => ((a.paid_on ?? a.created_at) < (b.paid_on ?? b.created_at) ? 1 : -1));
+  const th = "h-thead text-label text-table-head-foreground uppercase";
   return (
-    <Section
-      title={
-        <span className="inline-flex items-center gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-section flex items-center gap-2 text-foreground">
           <Banknote aria-hidden="true" className="size-4 text-muted-foreground" />
           Payments received
-          {rows.length ? <span className="text-sm font-normal text-muted-foreground">{rows.length}</span> : null}
-        </span>
-      }
-      actions={
+          {rows.length ? <span className="text-sm font-normal tabular text-muted-foreground">({rows.length})</span> : null}
+        </h2>
         <div className="flex items-center gap-4">
           <StatusPill tone={state.tone} label={state.label} className="h-9 px-3.5 text-body" />
           <Button onClick={() => actions.openFindPayment()}>
@@ -84,31 +85,44 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
             Find payment
           </Button>
         </div>
-      }
-    >
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing received yet.</p>
-      ) : (
-        <ul className="-mx-5 divide-y divide-border">
-          {rows.map((p) => (
-            <li key={p.id}>
-              <button type="button" onClick={() => setSelected(p)} className="flex w-full items-center gap-x-4 px-5 py-2.5 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset">
-                {p.bank_transaction_id ? <Landmark aria-hidden="true" className="size-4 shrink-0 text-green-text" /> : <Banknote aria-hidden="true" className="size-4 shrink-0 text-green-text" />}
-                <span className="w-28 shrink-0 text-body tabular text-foreground">{p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)}</span>
-                <span className="w-24 shrink-0 text-body font-medium tabular text-green-text">{money(p.amount)}</span>
-                <span className="w-28 shrink-0 text-sm text-muted-foreground">{PAYMENT_KIND_LABELS[p.kind] ?? p.kind}</span>
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={[p.reference, p.note].filter(Boolean).join(" · ") || undefined}>
-                  {p.reference ?? ""}
-                  {p.note ? (p.reference ? ` · ${p.note}` : p.note) : ""}
-                </span>
-                <span className="w-24 shrink-0 text-right text-sm text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : (p.recorded_by_name ?? "System")}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      </div>
+      <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
+        <Table>
+          <TableHeader className="bg-table-head text-table-head-foreground">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className={cn(th, "pl-5")}>Date</TableHead>
+              <TableHead className={cn(th, "text-right")}>Amount</TableHead>
+              <TableHead className={th}>Kind</TableHead>
+              <TableHead className={th}>Reference</TableHead>
+              <TableHead className={cn(th, "pr-5")}>Source</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="py-6 pl-5 text-sm text-muted-foreground">
+                  Nothing received yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((p) => (
+                <TableRow key={p.id} tabIndex={0} onClick={() => setSelected(p)} onKeyDown={(e) => (e.key === "Enter" || e.key === " " ? (e.preventDefault(), setSelected(p)) : undefined)} className="cursor-pointer outline-none even:bg-nested hover:bg-surface-hover even:hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset">
+                  <TableCell className="py-2.5 pl-5 text-body tabular text-foreground">{p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)}</TableCell>
+                  <TableCell className="py-2.5 text-right text-body font-medium tabular text-green-text">{money(p.amount)}</TableCell>
+                  <TableCell className="py-2.5 text-body text-foreground">{PAYMENT_KIND_LABELS[p.kind] ?? p.kind}</TableCell>
+                  <TableCell className="max-w-[28rem] truncate py-2.5 text-body text-foreground" title={[p.reference, p.note].filter(Boolean).join(" · ") || undefined}>
+                    {p.reference ?? ""}
+                    {p.note ? (p.reference ? ` · ${p.note}` : p.note) : ""}
+                  </TableCell>
+                  <TableCell className="py-2.5 pr-5 text-body text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : (p.recorded_by_name ?? "System")}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
       <PaymentDialog booking={booking} payment={selected} open={selected !== null} onOpenChange={(o) => !o && setSelected(null)} />
-    </Section>
+    </div>
   );
 }
 

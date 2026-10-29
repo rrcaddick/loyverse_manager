@@ -1,6 +1,6 @@
 /**
  * Documents (owner's notes, 29 Oct 2026): one table for the proforma, the
- * statement, the tax invoice and the vehicle ticket, each with its status
+ * invoice, the final invoice and the vehicle ticket, each with its status
  * (Not issued · Not sent · Sent · Re-sent), when it was sent, whether the
  * send succeeded, and the actions: Preview (the PDF, which can be saved from
  * the viewer) and Send or Re-send. The ticket goes by email and WhatsApp in

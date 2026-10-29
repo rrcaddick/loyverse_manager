@@ -49,7 +49,7 @@ export function VerbButton({ verb, primary = false, size, className }: { verb: S
   );
 }
 
-export function NextStepCard({ booking }: { booking: BookingDetail }) {
+export function NextStepCard({ booking, verbSize, verbClassName }: { booking: BookingDetail; verbSize?: "sm" | "default"; verbClassName?: string }) {
   const step = nextStep(booking);
   return (
     <NextStepStrip
@@ -59,8 +59,8 @@ export function NextStepCard({ booking }: { booking: BookingDetail }) {
       icon={step.icon}
       title={step.title}
       detail={step.detail}
-      primary={step.primary ? <VerbButton verb={step.primary} primary /> : undefined}
-      secondary={step.secondary.length ? step.secondary.map((v, i) => <VerbButton key={`${v.kind}-${i}`} verb={v} />) : undefined}
+      primary={step.primary ? <VerbButton verb={step.primary} primary size={verbSize} className={verbClassName} /> : undefined}
+      secondary={step.secondary.length ? step.secondary.map((v, i) => <VerbButton key={`${v.kind}-${i}`} verb={v} size={verbSize} className={verbClassName} />) : undefined}
     />
   );
 }

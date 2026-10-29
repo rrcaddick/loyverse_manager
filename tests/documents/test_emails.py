@@ -34,7 +34,7 @@ EXPECTED = {
     "acknowledgement": ["Thanks for your booking request", "FY1703", "67 visitors", "Nothing is paid now"],
     "proforma": ["Deposit due", "R3 800.00", "Bank details", "62871182764", "31 October 2026", "<ol", "Attached:</span> FY1703 Proforma.pdf"],
     "invoice": ["Your date is confirmed", "FY1703-S", "R2 565.00", "deposit receipt and statement", "Attached:</span> FY1703-S Statement.pdf"],
-    "final_invoice": ["Thank you for visiting", "61 visitors", "R1 995.00", "Tax invoice INV1703", "Attached:</span> INV1703 Tax invoice.pdf"],
+    "final_invoice": ["Thank you for visiting", "61 visitors", "R1 995.00", "Final invoice INV1703", "Attached:</span> INV1703 Tax invoice.pdf"],
     "ticket": ["driver of each vehicle", "barcode", "farmyardpark.co.za", "Attached:</span> Vehicle ticket FY1703.pdf"],
     "payment_confirmation": ["R3 800.00", "2 October 2026", "confirmed", "deposit receipt and statement is attached", "Attached:</span> FY1703-S Statement.pdf"],
     "still_interested": ["Still planning to visit?", "R3 800.00", "Attached:</span> FY1703 Proforma.pdf"],
@@ -51,8 +51,8 @@ EXPECTED = {
 SUBJECTS = {
     "acknowledgement": "Request received FY1703 – Sat 7 Nov",
     "proforma": "Proforma FY1703 – R3 800 deposit by 31 Oct",
-    "invoice": "Statement FY1703-S – R2 565 balance on 7 Nov",
-    "final_invoice": "Tax invoice INV1703 – R1 995 due",
+    "invoice": "Invoice FY1703-S – R2 565 balance on 7 Nov",
+    "final_invoice": "Final invoice INV1703 – R1 995 due",
     "ticket": "Vehicle ticket FY1703 – Sat 7 Nov",
     "payment_confirmation": "Payment received: R3 800.00 – FY1703",
     "still_interested": "Still planning to visit on 7 Nov? – FY1703",
@@ -146,7 +146,7 @@ def test_waived_deposit_copy(settings, booking):
 
 def test_subject_uses_document_number_when_given(settings, booking):
     r = render_email("invoice", booking, settings, document={"number": "FY1790-S", "total": 1, "paid": 0, "due": 1})
-    assert r.subject.startswith("Statement FY1790-S – ")
+    assert r.subject.startswith("Invoice FY1790-S – ")
 
 
 def test_subjects_follow_the_money(settings, booking, payments):
@@ -155,10 +155,10 @@ def test_subjects_follow_the_money(settings, booking, payments):
     no_hold = dict(booking, hold_expires_on=None)
     assert _plain(render_email("proforma", no_hold, settings).subject) == "Proforma FY1703 – R3 800 deposit secures 7 Nov"
     paid = [{"id": 1, "kind": "eft", "amount": 6365, "paid_on": "2026-10-02", "reference": "FY1703"}]
-    assert render_email("invoice", booking, settings, payments=paid).subject == "Statement FY1703-S – paid in full"
-    assert _plain(render_email("final_invoice", booking, settings, payments=paid).subject) == "Tax invoice INV1703 – R570 credit"
+    assert render_email("invoice", booking, settings, payments=paid).subject == "Invoice FY1703-S – paid in full"
+    assert _plain(render_email("final_invoice", booking, settings, payments=paid).subject) == "Final invoice INV1703 – R570 credit"
     settled = [{"id": 1, "kind": "eft", "amount": 5795, "paid_on": "2026-10-02", "reference": "FY1703"}]
-    assert render_email("final_invoice", booking, settings, payments=settled).subject == "Tax invoice INV1703 – paid in full"
+    assert render_email("final_invoice", booking, settings, payments=settled).subject == "Final invoice INV1703 – paid in full"
     r = render_email("payment_confirmation", booking, settings, payments=payments, payment={"amount": "1250.5", "paid_on": "2026-10-02"})
     assert _plain(r.subject) == "Payment received: R1 250.50 – FY1703"
 

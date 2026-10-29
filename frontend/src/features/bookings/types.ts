@@ -535,8 +535,8 @@ export const SOURCE_LABELS: Record<BookingSource, string> = {
 /** Labels per docs/handoff/backend-v2-misc.md §2: the deposit-stage document is a statement; the tax invoice is final. */
 export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
   proforma: "Proforma",
-  invoice: "Statement",
-  final_invoice: "Tax invoice",
+  invoice: "Invoice",
+  final_invoice: "Final invoice",
 };
 
 export const REMINDER_KIND_LABELS: Record<ReminderKind, string> = {

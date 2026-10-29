@@ -1280,8 +1280,8 @@ def decline_request(booking_id: int, reason: str | None, actor: int | None) -> d
 EMAIL_ACTION_LABELS = {
     # The owner's wording (sheet of 29 Oct 2026): Title Case, past tense.
     "proforma": "Proforma Sent",
-    "invoice": "Statement Sent",
-    "final_invoice": "Invoice Sent",
+    "invoice": "Invoice Sent",
+    "final_invoice": "Final Invoice Sent",
     "ticket": "Ticket Sent",
     "payment_confirmation": "Payment Confirmed",
     "deposit_reminder": "Deposit Reminder Sent",

@@ -242,6 +242,8 @@ export interface ContactUpdate {
  * number on a primary contact gets the ticket again; the result rides along
  * as `whatsapp`.
  */
+const contactUpdatesInFlight = new Map<number, number>();
+
 export function useUpdateContact(id: number) {
   const qc = useQueryClient();
   const key = bookingKeys.detail(id);
@@ -249,8 +251,10 @@ export function useUpdateContact(id: number) {
     mutationFn: ({ contactId, ...input }: ContactUpdate) => api.patch<{ items: BookingContact[]; whatsapp?: { success?: boolean; error?: string; to?: string } | null }>(`/bookings/${id}/contacts/${contactId}`, input),
     meta: { silent: true },
     onMutate: async ({ contactId, role, on_site, name, mobile, email }) => {
+      contactUpdatesInFlight.set(contactId, (contactUpdatesInFlight.get(contactId) ?? 0) + 1);
       await qc.cancelQueries({ queryKey: key });
       const before = qc.getQueryData<BookingDetail>(key);
+      const prevRow = before?.contacts.find((c) => c.id === contactId);
       if (before) {
         const contacts = before.contacts.map((c) => {
           if (c.id !== contactId) return on_site === true ? { ...c, on_site: 0 } : c;
@@ -258,17 +262,27 @@ export function useUpdateContact(id: number) {
         });
         qc.setQueryData<BookingDetail>(key, { ...before, contacts });
       }
-      return { before };
+      return { contactId, prevRow };
     },
     onError: (_err, _vars, context) => {
-      if (context?.before) qc.setQueryData(key, context.before);
+      // Roll back this row only, so another click's optimistic state survives.
+      const current = qc.getQueryData<BookingDetail>(key);
+      if (current && context?.prevRow) qc.setQueryData<BookingDetail>(key, { ...current, contacts: current.contacts.map((c) => (c.id === context.contactId ? context.prevRow! : c)) });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, { contactId }) => {
+      // A later click on the same contact is still in flight: its answer, not this one, is the truth.
+      if ((contactUpdatesInFlight.get(contactId) ?? 0) > 1) return;
       const current = qc.getQueryData<BookingDetail>(key);
       if (current) qc.setQueryData<BookingDetail>(key, { ...current, contacts: result.items });
     },
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: key });
+    onSettled: (_result, _err, { contactId }) => {
+      const left = (contactUpdatesInFlight.get(contactId) ?? 1) - 1;
+      if (left <= 0) {
+        contactUpdatesInFlight.delete(contactId);
+        if (contactUpdatesInFlight.size === 0) void qc.invalidateQueries({ queryKey: key });
+      } else {
+        contactUpdatesInFlight.set(contactId, left);
+      }
     },
   });
 }

@@ -168,8 +168,8 @@ export function splitSnippet(snippet: string | null | undefined): { ours: boolea
 
 const KIND_LABELS: Record<string, string> = {
   proforma: "Proforma",
-  invoice: "Statement",
-  final_invoice: "Tax invoice",
+  invoice: "Invoice",
+  final_invoice: "Final invoice",
   payment_confirmation: "Payment confirmation",
   deposit_reminder: "Reminder",
   still_interested: "Reminder",

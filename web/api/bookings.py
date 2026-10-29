@@ -53,7 +53,7 @@ STATUS_ALIASES = {
     "tentative": list(TENTATIVE_STATUSES),
     "firm": list(FIRM_STATUSES),
 }
-DOCUMENT_LABELS = {"proforma": "Proforma", "invoice": "Statement", "final_invoice": "Tax invoice"}
+DOCUMENT_LABELS = {"proforma": "Proforma", "invoice": "Invoice", "final_invoice": "Final invoice"}
 PDF = "application/pdf"
 # Emails need an absolute https logo URL (the templates fall back to a wordmark).
 LOGO_URL = f"{PUBLIC_BASE_URL}/static/brand/logo-black-600.png"
@@ -572,10 +572,8 @@ def act_send_proforma(booking: dict, data: dict, actor: int | None) -> dict:
 
 def act_send_invoice(booking: dict, data: dict, actor: int | None) -> dict:
     finance = booking_service.booking_finance(booking)
-    if finance["paid_total"] <= 0:
-        raise ApiError(
-            "invalid_state", "An invoice can only be sent once a payment has been received", 409
-        )
+    if not (finance.get("deposit_covered") and finance["paid_total"] > 0):
+        raise ApiError("invalid_state", "The invoice goes out once the deposit has been paid", 409)
     doc = _issue(booking, "invoice", actor)
     result = _send(
         "invoice",
@@ -590,8 +588,9 @@ def act_send_invoice(booking: dict, data: dict, actor: int | None) -> dict:
 
 
 def act_send_final_invoice(booking: dict, data: dict, actor: int | None) -> dict:
-    if booking.get("arrived_count") is None:
-        raise ApiError("invalid_state", "Record the arrivals before sending the final invoice", 409)
+    """The invoice of the day: on the arrived numbers when Loyverse has them,
+    on the booked numbers otherwise (owner, 29 Oct 2026)."""
+    _require_status(booking, FIRM_STATUSES, "Sending the final invoice")
     doc = _issue(booking, "final_invoice", actor)
     result = _send(
         "final_invoice",

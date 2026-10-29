@@ -42,8 +42,8 @@ export interface Availability {
 /** Menu and button labels: verb + object, the same words everywhere. */
 export const ACTION_LABELS: Record<ActionId, string> = {
   "send-proforma": "Send proforma",
-  "send-invoice": "Send statement",
-  "send-final-invoice": "Send tax invoice",
+  "send-invoice": "Send invoice",
+  "send-final-invoice": "Send final invoice",
   "send-ticket": "Send vehicle ticket",
   "send-ticket-email": "Email vehicle ticket",
   "send-ticket-whatsapp": "WhatsApp vehicle ticket",
@@ -63,6 +63,13 @@ export const NO_EMAIL = "Add an email address first";
 const NO_MOBILE = "Add a mobile number first";
 const OK: Availability = { enabled: true };
 
+/** Whole days from today to an ISO date (negative once it has passed). */
+function daysUntil(iso: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(`${iso}T00:00:00`).getTime() - today.getTime()) / 86_400_000);
+}
+
 function requireEmail(b: BookingDetail): Availability | null {
   return b.contact_email ? null : { enabled: false, reason: NO_EMAIL };
 }
@@ -78,11 +85,12 @@ export function availability(b: BookingDetail, action: ActionId): Availability {
     case "send-acknowledgement":
       return hiddenUnless(b, ["enquiry"]) ?? requireEmail(b) ?? OK;
     case "send-invoice":
-      if (b.finance.paid_total <= 0) return { enabled: false, reason: "Record a payment first — the statement shows money received" };
+      // After the deposit: the invoice on the booked numbers, 80 % of the balance due before the visit.
+      if (!(b.finance.deposit_covered && b.finance.paid_total > 0)) return hiddenUnless(b, FIRM_STATUSES) ?? { enabled: false, reason: "The invoice goes out once the deposit has been paid" };
       return requireEmail(b) ?? OK;
     case "send-final-invoice":
-      if (b.arrived_count === null) return hiddenUnless(b, FIRM_STATUSES) ?? { enabled: false, reason: "Record the arrivals first — the tax invoice bills the people who came" };
-      return requireEmail(b) ?? OK;
+      // On the day: the invoice on the arrived numbers when Loyverse has them.
+      return hiddenUnless(b, FIRM_STATUSES) ?? (daysUntil(b.visit_date) > 0 ? { enabled: false, reason: "The final invoice goes out on the day of the visit" } : null) ?? requireEmail(b) ?? OK;
     case "send-ticket":
       return hiddenUnless(b, FIRM_STATUSES) ?? (b.contact_email || b.contact_mobile || b.contacts.some((c) => c.role === "primary" && c.mobile) ? OK : { enabled: false, reason: "Add an email address or a mobile number first" });
     case "send-ticket-email":

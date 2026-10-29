@@ -88,7 +88,7 @@ export function nextStep(b: BookingDetail): NextStep {
     };
   }
 
-  // ---- completed: the tax invoice closes the file
+  // ---- completed: the final invoice closes the file
   if (b.status === "completed") {
     const arrived = b.arrived_count ?? 0;
     const arrivedLine = `Arrived ${formatNumber(arrived)} of ${formatNumber(b.people_booked)}`;
@@ -96,7 +96,7 @@ export function nextStep(b: BookingDetail): NextStep {
       return {
         urgency: "amber",
         icon: FileText,
-        title: `${arrivedLine} — send the tax invoice`,
+        title: `${arrivedLine} — send the final invoice`,
         detail: join(f.final_amount !== null ? `Final ${money(f.final_amount)}` : null, `paid ${money(f.paid_total)}`, f.balance_due > 0 ? `balance ${money(f.balance_due)}` : f.balance_due < 0 ? `credit ${money(-f.balance_due)}` : "paid in full"),
         primary: sendOr(b, "send-final-invoice"),
         secondary: f.balance_due > 0 ? [recordPayment] : [],
@@ -105,8 +105,8 @@ export function nextStep(b: BookingDetail): NextStep {
     return {
       urgency: f.balance_due > 0 ? "amber" : "green",
       icon: f.balance_due > 0 ? Wallet : CheckCircle2,
-      title: f.balance_due > 0 ? `Tax invoice sent — ${money(f.balance_due)} still owed` : "Done — tax invoice sent, paid in full",
-      detail: join(arrivedLine, `tax invoice ${formatDate(b.final_invoice_sent_at)}`, `paid ${money(f.paid_total)}`),
+      title: f.balance_due > 0 ? `Final invoice sent — ${money(f.balance_due)} still owed` : "Done — final invoice sent, paid in full",
+      detail: join(arrivedLine, `final invoice ${formatDate(b.final_invoice_sent_at)}`, `paid ${money(f.paid_total)}`),
       primary: f.balance_due > 0 ? recordPayment : null,
       secondary: f.balance_due > 0 ? [send("send-payment-confirmation")] : [],
     };

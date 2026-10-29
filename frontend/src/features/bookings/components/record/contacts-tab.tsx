@@ -105,13 +105,6 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
       meta: { align: "center", className: "w-24" },
     },
     {
-      id: "source",
-      header: "Added",
-      enableSorting: false,
-      cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.source === "booking" ? "With the booking" : row.original.role === "learned" ? "Wrote in" : row.original.source === "manual" ? "By hand" : "Cc'd"}</span>,
-      meta: { className: "whitespace-nowrap" },
-    },
-    {
       id: "actions",
       header: "",
       enableSorting: false,

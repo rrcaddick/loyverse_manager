@@ -113,3 +113,18 @@ booking's own contact is always primary, and a row no longer duplicates
 after a toggle. The payment dialog has no Close button; every dialog's X is
 a step larger.
 
+Fifth pass (29 Oct, late): the two invoices. The **invoice** goes out once
+the deposit has been paid, on the booked numbers, with 80 % of the balance
+due before the visit (the 80 % wording is for the document template, still
+to do); the **final invoice** goes out on the day, on the arrived numbers
+when Loyverse has them, otherwise the booked ones, and no longer waits for
+arrivals to be recorded. Both list payments to date. UI labels are Invoice
+and Final invoice everywhere (the PDF heading keeps "Tax invoice", the
+wording SARS expects). Quick actions are amber until something has gone
+out and green after, when the verb becomes Re-send; the brand marks sit on
+small white chips. Needs attention's buttons, the next step's included, are
+one size. Payments received is the standard table. The contacts table lost
+its Added column. Contact updates track in-flight requests per contact, so
+a second click before the first answer keeps the later state and a failure
+rolls back only that row.
+

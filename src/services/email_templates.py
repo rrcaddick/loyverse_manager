@@ -125,16 +125,16 @@ def _subject(
         number = number or document_number(booking, "invoice", settings)
         due = D(f.get("due"))
         if due > 0:
-            return f"Statement {number}{DASH}{money_short(due)} balance on {day}"
-        return f"Statement {number}{DASH}paid in full"
+            return f"Invoice {number}{DASH}{money_short(due)} balance on {day}"
+        return f"Invoice {number}{DASH}paid in full"
     if kind == "final_invoice":
         number = number or document_number(booking, "final_invoice", settings)
         due = D(f.get("due"))
         if due > 0:
-            return f"Tax invoice {number}{DASH}{money_short(due)} due"
+            return f"Final invoice {number}{DASH}{money_short(due)} due"
         if due < 0:
-            return f"Tax invoice {number}{DASH}{money_short(-due)} credit"
-        return f"Tax invoice {number}{DASH}paid in full"
+            return f"Final invoice {number}{DASH}{money_short(-due)} credit"
+        return f"Final invoice {number}{DASH}paid in full"
     if kind == "payment_confirmation":
         amount = money((ctx.get("payment") or {}).get("amount"))
         return f"Payment received: {amount}{DASH}{ref}"
@@ -177,7 +177,7 @@ def _preheader(kind: str, c: dict) -> str:
             if f and D(f.get("due")) > 0
             else "Deposit received, date confirmed. Paid in full."
         ),
-        "final_invoice": "Thank you for visiting. Your tax invoice is attached.",
+        "final_invoice": "Thank you for visiting. Your final invoice is attached.",
         "ticket": "Your vehicle entry ticket is attached. Please share it with each driver.",
         "payment_confirmation": f"We have received {p.get('amount_display', 'your payment')}. Thank you.",
         "still_interested": "We sent a proforma and would love to know if you would like to go ahead.",

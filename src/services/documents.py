@@ -46,8 +46,8 @@ KINDS = document_model.KINDS
 # Short labels: the UI, file names and event summaries ("Statement FY1703-S issued").
 KIND_LABELS = {
     "proforma": "Proforma",
-    "invoice": "Statement",
-    "final_invoice": "Tax invoice",
+    "invoice": "Invoice",
+    "final_invoice": "Final invoice",
 }
 # What the document itself is headed. "Tax invoice" is the wording SARS
 # expects on a VAT invoice; the proforma and the statement are explicitly not one.

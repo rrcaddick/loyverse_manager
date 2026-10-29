@@ -94,11 +94,11 @@ def test_document_numbers(settings, booking):
 
 
 def test_labels_titles_and_filenames():
-    assert d.KIND_LABELS == {"proforma": "Proforma", "invoice": "Statement", "final_invoice": "Tax invoice"}
+    assert d.KIND_LABELS == {"proforma": "Proforma", "invoice": "Invoice", "final_invoice": "Final invoice"}
     assert d.KIND_TITLES == {"proforma": "Proforma invoice", "invoice": "Statement of account", "final_invoice": "Tax invoice"}
     assert d.document_filename({"number": "FY1703", "kind": "proforma"}) == "FY1703 Proforma.pdf"
-    assert d.document_filename({"number": "FY1703-S", "kind": "invoice"}) == "FY1703-S Statement.pdf"
-    assert d.document_filename({"number": "INV1703", "kind": "final_invoice"}) == "INV1703 Tax invoice.pdf"
+    assert d.document_filename({"number": "FY1703-S", "kind": "invoice"}) == "FY1703-S Invoice.pdf"
+    assert d.document_filename({"number": "INV1703", "kind": "final_invoice"}) == "INV1703 Final invoice.pdf"
     assert _plain(d.money_short(3800)) == "R3 800" and _plain(d.money_short("3800.50")) == "R3 800.50"
     assert d.date_day_month("2026-11-07") == "7 Nov" and d.date_weekday_short("2026-11-07") == "Sat 7 Nov"
 

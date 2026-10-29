@@ -103,7 +103,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
 
   return (
     <div className="flex flex-col gap-3">
-      {booking.status === "requested" ? <RequestBanner booking={booking} /> : step.primary ? <NextStepCard booking={booking} /> : null}
+      {booking.status === "requested" ? <RequestBanner booking={booking} /> : step.primary ? <NextStepCard booking={booking} verbSize="sm" verbClassName="min-w-32" /> : null}
       {items.map((e) => (
         <NextStepStrip key={e.key} urgency={e.urgency} icon={e.icon} title={e.title} detail={e.detail} primary={e.action} />
       ))}
