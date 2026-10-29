@@ -77,12 +77,12 @@ export default function BookingsPage() {
   return (
     <>
       {/* No title row: the nav says where you are and the buckets are the
-          header. The filters snap to dropdowns the moment either would need
-          a second line: the range chips below 64 rem of control width, the
-          buckets below 37.75 rem (card screens). New booking sits on the
-          buckets row while there is room, else on the search row; on card
-          screens it ends the pager row, or floats as a round plus once the
-          buckets are a dropdown (owner's notes, 29 Oct 2026). */}
+          header. On card screens both filters snap to dropdowns the moment
+          either would need a second line (below 37.75 rem, the buckets' own
+          width). New booking sits on the buckets row while there is room,
+          else on the search row; on card screens it ends the pager row, or
+          floats as a round plus once the filters are dropdowns (owner's
+          notes, 29 Oct 2026). */}
       <header className={cn("@container/header flex flex-wrap items-center gap-3", layout === "cards" ? "justify-center" : "justify-between")}>
         <h1 className="sr-only">Bookings</h1>
         <SegmentedTabs
@@ -251,11 +251,12 @@ interface ToolbarProps {
   onChange: (patch: Partial<ListState>, resetPage?: boolean) => void;
   total: number | null;
   /**
-   * table: one row — search, the range chips (a dropdown below 64 rem), the
-   * pager, and New booking below 48 rem (the buckets fill their row then).
-   * cards: the search with the range dropdown, then the pager with New
-   * booking at its end; below 37.75 rem the ranges live in the header with
-   * the buckets and New booking floats as a round plus.
+   * table: one row while it fits; below 64 rem the pager joins the search on
+   * the first row and the range chips centre on the second; below 48 rem the
+   * buckets fill their row, so New booking joins the search row too.
+   * cards: the search, the chips centred, then the pager with New booking at
+   * its end; below 37.75 rem (the buckets' own width) both filters become
+   * dropdowns in the header and New booking floats as a round plus.
    */
   layout?: ToolbarLayout;
   onCreate: () => void;
@@ -334,20 +335,32 @@ function Toolbar({ state, onChange, total, layout = "table", onCreate }: Toolbar
     </Button>
   );
 
+  const chips = (
+    <div
+      role="group"
+      aria-label="Date range"
+      className={cn(
+        "flex flex-wrap items-center gap-1",
+        layout === "table"
+          ? "order-2 @max-[64rem]/toolbar:order-3 @max-[64rem]/toolbar:w-full @max-[64rem]/toolbar:justify-center"
+          : "w-full justify-center @max-[37.75rem]/toolbar:hidden",
+      )}
+    >
+      {RANGE_OPTIONS.map((o) => (
+        <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
+          {o.label}
+        </Button>
+      ))}
+      {clear}
+    </div>
+  );
+
   if (layout === "table") {
     return (
-      <div className="@container/toolbar flex w-full items-center gap-2">
+      <div className="@container/toolbar flex w-full flex-wrap items-center gap-2">
         {search}
-        <div role="group" aria-label="Date range" className="flex items-center gap-1 whitespace-nowrap @max-[64rem]/toolbar:hidden">
-          {RANGE_OPTIONS.map((o) => (
-            <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
-              {o.label}
-            </Button>
-          ))}
-        </div>
-        <RangeSelect value={state.range} onChange={(range) => onChange({ range })} className="hidden @max-[64rem]/toolbar:flex" />
-        {clear}
-        <div className="ml-auto flex items-center gap-0.5">
+        {chips}
+        <div className="order-3 ml-auto flex items-center gap-0.5 @max-[64rem]/toolbar:order-2">
           {pager}
           {create("ml-2 hidden @max-[48rem]/toolbar:inline-flex")}
         </div>
@@ -356,11 +369,8 @@ function Toolbar({ state, onChange, total, layout = "table", onCreate }: Toolbar
   }
   return (
     <div className="@container/toolbar flex w-full flex-col gap-2">
-      <div className="flex items-center gap-2">
-        {search}
-        <RangeSelect value={state.range} onChange={(range) => onChange({ range })} className="@max-[37.75rem]/toolbar:hidden" />
-        {clear}
-      </div>
+      {search}
+      {chips}
       <div className="flex items-center gap-0.5">
         {pager}
         {create("ml-auto @max-[37.75rem]/toolbar:hidden")}
