@@ -117,12 +117,21 @@ function tokens(theme, isDark) {
   const highest = r.surfaceContainerHighest;
   const sidebar = L ? r.surfaceContainerHighest : r.surfaceContainerLow;
   const popover = L ? r.surfaceContainerLowest : r.surfaceContainerHighest;
+  // Elevation from the build the owner approved (8aaac35): desktop-scale
+  // shadows in light; in dark a lighter fill with a 1 px light edge on top
+  // and the shadow only separating it underneath.
   const shadowLevel = (n) =>
-    ({
-      1: "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15)",
-      2: "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15)",
-      3: "0 1px 3px 0 rgb(0 0 0 / 0.30), 0 4px 8px 3px rgb(0 0 0 / 0.15)",
-    })[n];
+    L
+      ? {
+          1: "0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px -2px rgb(0 0 0 / 0.18)",
+          2: "0 2px 4px rgb(0 0 0 / 0.14), 0 8px 20px -6px rgb(0 0 0 / 0.24)",
+          3: "0 8px 16px -4px rgb(0 0 0 / 0.22), 0 20px 48px -12px rgb(0 0 0 / 0.32)",
+        }[n]
+      : {
+          1: "inset 0 1px 0 rgb(255 255 255 / 0.10), 0 1px 2px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.50)",
+          2: "inset 0 1px 0 rgb(255 255 255 / 0.14), 0 2px 4px rgb(0 0 0 / 0.55), 0 8px 20px -6px rgb(0 0 0 / 0.60)",
+          3: "inset 0 1px 0 rgb(255 255 255 / 0.18), 0 8px 16px -4px rgb(0 0 0 / 0.60), 0 20px 48px -12px rgb(0 0 0 / 0.75)",
+        }[n];
   const t = {
     ...sem,
     ...grey,
