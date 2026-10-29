@@ -59,7 +59,8 @@ function AttachmentChips({ message }: { message: MessageItem }) {
       {message.attachments.map((a) => (
         <li key={a.id}>
           <a
-            href={a.url}
+            // Opens in a new tab for viewing (PDFs and images render); the browser still saves what it cannot show.
+            href={`${a.url}?inline=1`}
             target="_blank"
             rel="noopener"
             className="inline-flex h-7 max-w-64 items-center gap-1.5 rounded-md bg-nested px-2 text-sm text-foreground ring-1 ring-border hover:bg-muted"
