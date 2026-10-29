@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLButtonElement> {
+interface DataTableColumnHeaderProps<TData, TValue> extends Omit<React.HTMLAttributes<HTMLButtonElement>, "title"> {
   column: Column<TData, TValue>;
   /** Text, or spans that swap by container width (the Bookings list narrows its headers). */
   title: React.ReactNode;
