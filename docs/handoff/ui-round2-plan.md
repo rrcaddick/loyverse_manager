@@ -165,7 +165,8 @@ the top level.
   a plain accordion toggle, no chevron, every count pill on one right edge.
   A row goes straight to where the work is done (the booking or enquiry),
   no side panel. The Work page itself still needs the round-two treatment.
-- **Every send is a manual click for now.** Reminders, lapse notices,
+- **Every send is a manual click for now, with one exception: accepting a
+  request sends the proforma by itself.** Reminders, lapse notices,
   cancellations, payment confirmations, tickets: nothing goes out by itself
   until the owner's mother trusts the system, likely a few weeks, after
   which sending rules automate them. Each due send is therefore a Work item
