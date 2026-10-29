@@ -68,8 +68,8 @@ def test_issue_versions_events_and_bytes(test_booking_id):
     assert [e["summary"] for e in events] == [
         "Proforma FY9902 issued (v1)",
         "Proforma FY9902 issued (v2)",
-        "Statement FY9902-S issued (v1)",
-        "Tax invoice INV9902 issued (v1)",
+        "Invoice FY9902-S issued (v1)",
+        "Final invoice INV9902 issued (v1)",
     ]
     assert all(e["kind"] == "document_issued" for e in events)
 
