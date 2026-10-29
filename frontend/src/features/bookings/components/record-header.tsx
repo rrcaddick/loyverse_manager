@@ -204,7 +204,7 @@ function OverflowMenu({ booking }: { booking: BookingDetail }) {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-label text-muted-foreground uppercase">Record</DropdownMenuLabel>
-          <MenuAction availability={{ enabled: true }} label="Record payment" onSelect={actions.openPayment} />
+          <MenuAction availability={{ enabled: true }} label="Find payment" description="Search the bank feed for this booking's credit" onSelect={() => actions.openFindPayment()} />
           {canArrivals ? <MenuAction availability={a("record-arrivals")} label="Record arrivals" onSelect={actions.openArrivals} /> : null}
           <MenuAction availability={{ enabled: true }} label="Add note" onSelect={actions.focusNote} />
         </DropdownMenuGroup>

@@ -1,9 +1,9 @@
 /**
  * /bookings/:id — the booking record (UI round two, owner's plan of 29 Oct
  * 2026). Header (group name, status, facts, one primary button, Edit, ⋯),
- * then the request banner (a request) or the due sends (everything else),
- * then six tabs: Overview · Conversation · Payments · Documents · Activity ·
- * Contacts. Keys: E edit, N note (on Activity).
+ * then seven tabs: Overview · Needs attention (with its count; a request
+ * opens on it) · Conversation · Payments · Documents · Activity · Contacts.
+ * Keys: E edit, N note (on Activity).
  */
 
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
@@ -20,12 +20,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useBooking } from "@/features/bookings/api";
 import { Activity } from "@/features/bookings/components/activity";
 import { BookingActionsProvider } from "@/features/bookings/components/booking-actions";
+import { attentionCount } from "@/features/bookings/attention";
+import { AttentionTab } from "@/features/bookings/components/record/attention";
 import { ContactsTab } from "@/features/bookings/components/record/contacts-tab";
 import { DocumentsTab } from "@/features/bookings/components/record/documents-tab";
-import { DueSends } from "@/features/bookings/components/record/due-sends";
 import { OverviewTab } from "@/features/bookings/components/record/overview-tab";
 import { PaymentsTab } from "@/features/bookings/components/record/payments-tab";
-import { RequestBanner } from "@/features/bookings/components/record/request-banner";
 import { RecordHeader } from "@/features/bookings/components/record-header";
 import type { BookingDetail } from "@/features/bookings/types";
 import { useBookingActions } from "@/features/bookings/use-booking-actions";
@@ -36,7 +36,7 @@ import { errorMessage, isApiError } from "@/lib/api";
 
 const ConversationView = lazy(() => import("@/features/mail/conversation-view").then((m) => ({ default: m.ConversationView })));
 
-const TABS = ["overview", "conversation", "payments", "documents", "activity", "contacts"] as const;
+const TABS = ["overview", "attention", "conversation", "payments", "documents", "activity", "contacts"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function BookingDetailPage() {
@@ -109,7 +109,8 @@ export default function BookingDetailPage() {
 function Record({ booking }: { booking: BookingDetail }) {
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab");
-  const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : "overview";
+  const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : booking.status === "requested" ? "attention" : "overview";
+  const attention = attentionCount(booking);
   const actions = useBookingActions();
   const conversation = useBookingConversation(booking.id);
 
@@ -134,7 +135,6 @@ function Record({ booking }: { booking: BookingDetail }) {
   return (
     <>
       <RecordHeader booking={booking} />
-      {booking.status === "requested" ? <RequestBanner booking={booking} /> : <DueSends booking={booking} onPayments={() => setTab("payments")} />}
 
       <SegmentedTabs
         aria-label="Booking record tabs"
@@ -143,6 +143,7 @@ function Record({ booking }: { booking: BookingDetail }) {
         onChange={setTab}
         items={[
           { value: "overview", label: "Overview" },
+          { value: "attention", label: "Needs attention", count: attention },
           { value: "conversation", label: "Conversation", count: conversation.data?.unanswered_count ?? 0 },
           { value: "payments", label: "Payments", count: booking.payments.length + booking.pops.length },
           { value: "documents", label: "Documents", count: booking.documents.length },
@@ -152,6 +153,7 @@ function Record({ booking }: { booking: BookingDetail }) {
       />
 
       {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} /> : null}
+      {tab === "attention" ? <AttentionTab booking={booking} onPayments={() => setTab("payments")} /> : null}
       {tab === "conversation" ? (
         <Suspense fallback={<PageSkeleton rows={6} />}>
           <ConversationView bookingId={booking.id} />

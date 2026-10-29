@@ -1,8 +1,9 @@
 /**
- * Overview (owner's plan, 29 Oct 2026): the details as the large card, the
- * contacts card and the quick actions on the right, nothing about money
- * (that is the Payments tab). Questions, the internal note, the hold and
- * the collapsed record footer keep their places.
+ * Overview (owner's notes, 29 Oct 2026): the quick actions as one row across
+ * the top, not a card; the contacts card top left; the details as the large
+ * card on the right. Nothing about money beyond the price per visitor, which
+ * is just a number here (the Payments tab has the rest). Questions, the
+ * internal note, the hold and the collapsed record footer keep their places.
  */
 
 import { CalendarDays, Pencil, UserCheck, Users, Zap } from "lucide-react";
@@ -12,7 +13,7 @@ import { Link } from "react-router";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatDateLong, formatNumber, formatPhone, pluralise } from "@/lib/format";
+import { formatDate, formatDateLong, formatMoney, formatNumber, formatPhone, pluralise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { ACTION_LABELS, availability, type ActionId } from "../../actions";
@@ -27,17 +28,19 @@ import { Gated } from "../record-header";
 
 export function OverviewTab({ booking, onContacts }: { booking: BookingDetail; onContacts: () => void }) {
   return (
-    <div className="grid gap-card-gap xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-      <div className="flex min-w-0 flex-col gap-card-gap">
-        <DetailsCard booking={booking} />
-        {booking.questions.length > 0 ? <QuestionsCard booking={booking} /> : null}
-        <InternalNoteCard booking={booking} />
-      </div>
-      <div className="flex min-w-0 flex-col gap-card-gap">
-        <QuickActionsCard booking={booking} />
-        <ContactsCard booking={booking} onManage={onContacts} />
-        {isTentative(booking.status) ? <HoldCard booking={booking} /> : booking.reminders.length > 0 ? <RemindersCard booking={booking} /> : null}
-        <RecordCard booking={booking} />
+    <div className="flex flex-col gap-card-gap">
+      <QuickActionsRow booking={booking} />
+      <div className="grid gap-card-gap xl:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)]">
+        <div className="flex min-w-0 flex-col gap-card-gap">
+          <ContactsCard booking={booking} onManage={onContacts} />
+          {isTentative(booking.status) ? <HoldCard booking={booking} /> : booking.reminders.length > 0 ? <RemindersCard booking={booking} /> : null}
+          <RecordCard booking={booking} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-card-gap">
+          <DetailsCard booking={booking} />
+          {booking.questions.length > 0 ? <QuestionsCard booking={booking} /> : null}
+          <InternalNoteCard booking={booking} />
+        </div>
       </div>
     </div>
   );
@@ -96,6 +99,10 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
           <span className="text-muted-foreground"> · {pluralise(booking.gazebos, "gazebo")}</span>
         </Field>
         <Field label="Kind of group">{groupType(booking.group_type)}</Field>
+        <Field label="Price per visitor" numeric>
+          {formatMoney(booking.price_per_person, { compact: true })}
+          {booking.price_overridden && booking.price_override_reason ? <span className="text-muted-foreground"> · {booking.price_override_reason}</span> : null}
+        </Field>
         <Field label="Area">{booking.area ?? <span className="text-muted-foreground">—</span>}</Field>
         {booking.customer_notes ? (
           <Field label="From the customer" wide>
@@ -119,43 +126,33 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 
 const QUICK: ActionId[] = ["send-proforma", "send-ticket-email", "send-ticket-whatsapp", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers", "confirm"];
 
-function QuickActionsCard({ booking }: { booking: BookingDetail }) {
+/** One row across the top: every send the state allows, the next step filled, Cancel last. */
+function QuickActionsRow({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const step = nextStep(booking);
-  const primary = step.primary?.kind === "send" ? step.primary.action : step.primary?.kind === "record-payment" ? "find-payment" : null;
+  const primary = step.primary?.kind === "send" ? step.primary.action : null;
   const ids = QUICK.filter((id) => !availability(booking, id).hidden);
   const canCancel = booking.allowed_transitions.includes("cancelled");
+  if (ids.length === 0 && !canCancel) return null;
   return (
-    <Section
-      title={
-        <span className="inline-flex items-center gap-2">
-          <Zap aria-hidden="true" className="size-4 text-muted-foreground" />
-          Quick actions
-        </span>
-      }
-      description="Every send is a click here until sending rules take over."
-    >
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant={primary === "find-payment" ? "default" : "outline"} size="sm" className="h-auto min-h-9 justify-start whitespace-normal text-left" onClick={() => actions.openFindPayment()}>
-          Find payment
+    <div role="group" aria-label="Quick actions" className="flex flex-wrap items-center gap-2">
+      <Zap aria-hidden="true" className="size-4 text-muted-foreground" />
+      {ids.map((id) => {
+        const av = availability(booking, id);
+        return (
+          <Gated key={id} availability={av}>
+            <Button variant={primary === id ? "default" : "outline"} size="sm" disabled={!av.enabled} onClick={() => actions.send(id)}>
+              {ACTION_LABELS[id]}
+            </Button>
+          </Gated>
+        );
+      })}
+      {canCancel ? (
+        <Button variant="outline" size="sm" className="text-red-text" onClick={() => actions.changeStatus("cancelled")}>
+          Cancel booking
         </Button>
-        {ids.map((id) => {
-          const av = availability(booking, id);
-          return (
-            <Gated key={id} availability={av}>
-              <Button variant={primary === id ? "default" : "outline"} size="sm" className="h-auto min-h-9 w-full justify-start whitespace-normal text-left" disabled={!av.enabled} onClick={() => actions.send(id)}>
-                {ACTION_LABELS[id]}
-              </Button>
-            </Gated>
-          );
-        })}
-        {canCancel ? (
-          <Button variant="outline" size="sm" className="h-auto min-h-9 justify-start whitespace-normal text-left text-red-text" onClick={() => actions.changeStatus("cancelled")}>
-            Cancel booking
-          </Button>
-        ) : null}
-      </div>
-    </Section>
+      ) : null}
+    </div>
   );
 }
 

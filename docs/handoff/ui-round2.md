@@ -11,29 +11,39 @@ it lands.
 - **Header** as before (reference line, group name and status pill, facts
   line, the one computed primary button, Edit, the ⋯ menu in Send / Record /
   Status groups).
-- **Under the header**: a request shows the review banner
-  (`request-banner.tsx`: Accept with a "send the proforma now" checkbox,
-  default on, the one automatic send; Decline with a reason). Every other
-  booking shows the due sends (`due-sends.tsx`): the computed next step,
-  then any reminder that has fallen due with its Send button, then any
-  proof of payment waiting. Nothing goes out by itself.
-- **Six tabs**, `?tab=` in the URL (overview is the default and unset):
-  - *Overview* (`overview-tab.tsx`): Details as the large card (visit,
-    arrival, visitors, vehicles and gazebos, kind, area, the customer's
-    notes, source, reference and barcode), questions when any, the internal
-    note; on the right Quick actions (Find payment, then every send the
-    state allows, the next step filled, blocked ones explained on hover,
-    Cancel booking last), the Contacts card (primary first, the on-the-day
-    marker, Manage → the tab), Hold & reminders, the collapsed Record
-    footer. Nothing about money.
+- **Nothing under the header any more** (owner, 29 Oct, second pass): what
+  the booking is waiting on us for is its own tab, **Needs attention**, with
+  a count badge (`attention.ts` for the count, `record/attention.tsx` for
+  the tab): a request's review banner (Accept with "send the proforma now",
+  the one automatic send; Decline with a reason), the computed next step,
+  reminders that have fallen due with their Send buttons, proofs of payment
+  waiting. A request opens on this tab.
+- **Seven tabs**, `?tab=` in the URL (overview is the default and unset):
+  - *Overview* (`overview-tab.tsx`): the quick actions as one row across
+    the top (every send the state allows, the next step filled, blocked
+    ones explained on hover, Cancel booking last); then the Contacts card
+    top left (primary first, the on-the-day marker, Manage → the tab) with
+    Hold & reminders and the collapsed Record footer under it; the Details
+    card large on the right (visit, arrival, visitors, vehicles and gazebos,
+    kind, price per visitor as a plain number, area, the customer's notes,
+    source, reference and barcode), questions when any, the internal note.
+    Nothing else about money.
   - *Conversation*: the existing `ConversationView` (design 2's, kept).
-  - *Payments* (`payments-tab.tsx`): proofs of payment to verify at the top
-    (read from the PDF / mentioned in the mail, Find payment prefilled with
-    the proof, Dismiss), then the money ladder with the payment rows always
-    open and **Find payment** (`find-payment-dialog.tsx`): bank credits by
-    reference, amount or date window, each with why it matched, "Use this
-    payment" records it; opened from a proof it allocates the proof too.
-    Record payment stays for cash and card. No Bank page links.
+  - *Payments* (`payments-tab.tsx`): three figures across the top (Deposit,
+    Total, Balance) with **Find payment** beside them and the money state
+    word; any proof of payment waiting (Find payment prefilled with the
+    proof, Dismiss); then the payments received as a list (date, amount,
+    kind, reference, source). **No manual "record payment"**: every amount
+    reaches the bank and is found by the search; cash on the day will come
+    from Loyverse later. The old pricing footer (tier, rate, override
+    chips, deposit formula) is gone. `find-payment-dialog.tsx` searches
+    the bank feed by reference, amount or date; results are plain lines
+    (date, amount, the full description), never wrap, and the backend
+    returns only credits not yet on any booking and no larger than the
+    outstanding balance plus R 1 000 (`payment_search.OVERPAY_LEEWAY`).
+    "Use this payment" records it; opened from a proof it allocates the
+    proof too. The "Record payment" verb is "Find payment" everywhere (the
+    header's primary button, the ⋯ menu, the next-step strip).
   - *Documents* (`documents-tab.tsx`): proforma, statement, tax invoice
     (number, version, issued, emailed to whom; View, Download, Send or
     Resend; Preview before issue) and the vehicle ticket (barcode, emailed

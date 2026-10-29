@@ -19,6 +19,7 @@ from src.models.base import query
 from src.services import matching as mt
 from src.utils.date import get_today
 
+OVERPAY_LEEWAY = Decimal("1000")  # a credit may exceed the balance by this much
 DEFAULT_TOLERANCE = Decimal("5.00")
 
 
@@ -80,14 +81,21 @@ def search(
     doc = booking.get("doc_number")
     tokens = mt.distinctive_tokens(booking.get("group_name"))
     ref_words = set(mt.words(reference)) if reference else set()
+    # Only credits that can still be matched: never one already on a booking
+    # (this one included), never more than the outstanding balance plus a
+    # little leeway for an overpayment (owner's rule, 29 Oct 2026).
+    outstanding = expected.get("balance") or expected.get("total") or Decimal("0")
+    cap = outstanding + OVERPAY_LEEWAY
     out: list[dict] = []
     for r in rows:
+        if r.get("booking_id") is not None:
+            continue
         desc = f"{r.get('description') or ''} {r.get('end_to_end_id') or ''}"
         hay = set(mt.words(desc))
         why: list[str] = []
         value = Decimal(str(r["amount"]))
-        if r.get("booking_id") == booking.get("id"):
-            why.append("already on this booking")
+        if value > cap:
+            continue
         if doc and re.search(rf"(?<!\d){int(doc)}(?!\d)", desc):
             why.append("booking reference")
         if ref_words and all(mt.fuzzy_word_in(w, hay) or w in desc.lower() for w in ref_words):

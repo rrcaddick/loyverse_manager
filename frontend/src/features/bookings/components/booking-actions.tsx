@@ -58,7 +58,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
             setSending(verb.action);
             break;
           case "record-payment":
-            setPaymentOpen(true);
+            setFindPayment({ open: true });
             break;
           case "record-arrivals":
             setArrivalsOpen(true);

@@ -10,7 +10,6 @@ import { Landmark, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { errorMessage } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 import { useAllocateCredit, usePaymentSearch, usePopAllocate } from "../api";
 import type { BankCredit, BookingDetail, PaymentSearchParams } from "../types";
@@ -37,7 +35,7 @@ const money = (n: number) => formatMoney(n, { compact: true });
 export function FindPaymentDialog({ booking, open, onOpenChange, prefill }: { booking: BookingDetail; open: boolean; onOpenChange: (open: boolean) => void; prefill?: FindPaymentPrefill }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-3xl">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-section">Find payment · {booking.reference}</DialogTitle>
           <DialogDescription>Bank credits that could be this booking's. Leave the fields empty to search on the reference, the group's name and the expected amounts.</DialogDescription>
@@ -135,38 +133,26 @@ function Body({ booking, prefill, onDone }: { booking: BookingDetail; prefill?: 
         ) : search.isError ? (
           <p className="p-4 text-sm text-red-text">{errorMessage(search.error)}</p>
         ) : !search.data || search.data.items.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No credits match. Widen the dates or search on the amount alone; a payment made today may not have reached the feed yet.</p>
+          <p className="p-4 text-sm text-muted-foreground">No credits match. Widen the dates or search on the amount alone; a payment made today may not have reached the feed yet. Credits already on a booking, and any larger than the balance plus R 1 000, are left out.</p>
         ) : (
           <ul className="divide-y divide-border">
-            {search.data.items.map((credit) => {
-              const mine = credit.booking_id === booking.id;
-              const elsewhere = credit.booking_id !== null && !mine;
-              return (
-                <li key={credit.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2", mine && "bg-green-soft/40")}>
+            {search.data.items
+              .filter((credit) => credit.booking_id === null)
+              .map((credit) => (
+                <li key={credit.id} className="flex items-center gap-x-3 px-3 py-2">
                   <Landmark aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
                   <span className="w-24 shrink-0 text-sm tabular text-muted-foreground">{formatDate(credit.booking_date)}</span>
                   <span className="w-24 shrink-0 text-body font-medium tabular text-foreground">{money(credit.amount)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={credit.description ?? undefined}>
+                  <span className="min-w-0 flex-1 truncate text-sm whitespace-nowrap text-foreground" title={credit.why.join(" · ") || undefined}>
                     {credit.description ?? "—"}
+                    {credit.end_to_end_id ? <span className="text-muted-foreground"> · {credit.end_to_end_id}</span> : null}
                   </span>
-                  <span className="flex flex-wrap gap-1">
-                    {credit.why.map((w) => (
-                      <StatusPill key={w} tone="blue" label={w} size="sm" dot={false} />
-                    ))}
-                  </span>
-                  {mine ? (
-                    <StatusPill tone="green" label="On this booking" size="sm" />
-                  ) : elsewhere ? (
-                    <StatusPill tone="neutral" label="On another booking" size="sm" />
-                  ) : (
-                    <Button size="sm" disabled={busy} onClick={() => use(credit)}>
-                      {busy ? <Spinner data-icon="inline-start" /> : null}
-                      Use this payment
-                    </Button>
-                  )}
+                  <Button size="sm" disabled={busy} onClick={() => use(credit)}>
+                    {busy ? <Spinner data-icon="inline-start" /> : null}
+                    Use this payment
+                  </Button>
                 </li>
-              );
-            })}
+              ))}
           </ul>
         )}
       </div>

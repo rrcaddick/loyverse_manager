@@ -53,7 +53,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   "reminder:deposit_reminder": "Send deposit reminder",
   "reminder:final_details": "Send final details",
   confirm: "Confirm booking",
-  "record-payment": "Record payment",
+  "record-payment": "Find payment",
   "record-arrivals": "Record arrivals",
 };
 
