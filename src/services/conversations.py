@@ -431,25 +431,20 @@ def build_stream(
     thread_notes: list[dict],
     booking_events: list[dict],
 ) -> list[dict]:
-    """Merge messages, notes and booking events into one chronological list.
+    """Merge messages and notes into one chronological list.
 
-    Booking-event mirrors of thread notes (``data.thread_note_id``) and
-    email events for messages already in the stream are dropped so nothing
-    shows twice.
+    Of the booking events only notes are kept (the booking record's Activity
+    tab holds the rest, since 29 Oct 2026); booking-event mirrors of thread
+    notes (``data.thread_note_id``) are dropped so a note never shows twice.
     """
     items = [message_item(m) for m in messages]
-    message_ids = {int(m["id"]) for m in messages}
     items.extend(note_item(n) for n in thread_notes)
     for ev in booking_events:
-        data = loads(ev.get("data")) or {}
-        if ev.get("kind") == "note" and data.get("thread_note_id"):
+        if ev.get("kind") != "note":
             continue
-        if ev.get("kind") in ("email_sent", "email_failed", "email_received"):
-            try:
-                if int(data.get("email_message_id") or 0) in message_ids:
-                    continue
-            except (TypeError, ValueError):
-                pass
+        data = loads(ev.get("data")) or {}
+        if data.get("thread_note_id"):
+            continue
         items.append(event_item(ev))
     items.sort(key=lambda i: (i.get("at") or "", _TYPE_RANK.get(i["type"], 9), int(i["id"])))
     return items

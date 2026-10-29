@@ -159,20 +159,21 @@ def test_build_stream_merges_and_dedupes(monkeypatch):
          "actor_user_id": 1, "actor_name": "Linda", "created_at": datetime(2026, 10, 7, 10, 59)},
     ]
     items = cv.build_stream(messages, notes, events)
-    assert [i["type"] for i in items] == ["inbound", "note", "event", "outbound", "event", "note"]
-    assert [i["key"] for i in items] == ["msg-1", "note-5", "event-24", "msg-2", "event-22", "bnote-23"]
+    # Messages and notes only: the other booking events live on the Activity tab.
+    assert [i["type"] for i in items] == ["inbound", "note", "outbound", "note"]
+    assert [i["key"] for i in items] == ["msg-1", "note-5", "msg-2", "bnote-23"]
     first = items[0]
     assert first["body_new_html"] == "<p>new</p>" and first["has_quoted"] is True and first["quoted_lines"] == 2
     assert first["has_signature"] is True and first["signature_text"] == "Regards\nJen"
     assert first["at"] == "2026-10-07T09:00:00" and first["gmail_thrid"] == "1878302343153220866"
-    outbound = items[3]
+    outbound = items[2]
     assert outbound["kind"] == "proforma" and outbound["sent_by_name"] == "Linda" and outbound["send_status"] == "sent"
-    payment = items[4]
-    assert payment["link"] == {"kind": "payment", "id": 8, "bank_transaction_id": 4, "booking_id": 3}
-    doc = items[2]
-    assert doc["link"] == {"kind": "document", "id": 9, "booking_id": 3}
-    booking_note = items[5]
+    booking_note = items[3]
     assert booking_note["source"] == "booking" and booking_note["body"] == "Booking note" and booking_note["booking_id"] == 3
+    payment = cv.event_item(events[2])
+    assert payment["link"] == {"kind": "payment", "id": 8, "bank_transaction_id": 4, "booking_id": 3}
+    doc = cv.event_item(events[4])
+    assert doc["link"] == {"kind": "document", "id": 9, "booking_id": 3}
 
 
 def test_message_item_for_an_unsplit_row_uses_original_bodies(monkeypatch):
