@@ -25,6 +25,7 @@ def test_expected_amounts_reads_the_finance_keys(monkeypatch):
 
 
 def test_expected_amounts_after_the_deposit(monkeypatch):
+    """The deposit stays as a hint once paid (deposit_due); the balance follows the money."""
     monkeypatch.setattr(bs, "get_settings", lambda: Settings(copy.deepcopy(DEFAULTS)))
     monkeypatch.setattr(bs.payment_model, "sum_for_booking", lambda _id: Decimal("4000"))
-    assert ps.expected_amounts(_pending_booking()) == {"balance": Decimal("100.00"), "total": Decimal("4100.00")}
+    assert ps.expected_amounts(_pending_booking()) == {"deposit": Decimal("4000.00"), "balance": Decimal("100.00"), "total": Decimal("4100.00")}
