@@ -178,9 +178,11 @@ the contact is left out so the name stays readable. On phones the card
 view scrolls inside its own box under the buckets, filters and pager, which
 stay on screen (the fill layout now applies at every width).
 
-New booking by width: on the buckets row from lg (1024 px) up; at md it is a
-short "New" button beside the pager in the filter row; on phones it is a
-round floating plus at the bottom right, and the buckets and date ranges
-become two dropdowns side by side above the search box, with the chip row
-hidden, so the controls take less height.
-
+Card screens come in two forms (table screens are unchanged: New booking
+on the buckets row). With room (480–767 px): the search, the range chips on
+centred lines, then one row with the pager on the left and New booking on
+the right. Narrower: the buckets and date ranges are two dropdowns side by
+side above the search, the pager row under it, and New booking is a round
+floating plus at the bottom right. The emblem has its fence back: the two
+panels narrowed so their outer ends line up with the canopy's edges, and the
+whole fence-and-gate assembly stretched 1.5× vertically from its base.
