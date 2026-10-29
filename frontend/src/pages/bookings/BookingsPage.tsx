@@ -9,7 +9,7 @@
  */
 
 import type { SortingState } from "@tanstack/react-table";
-import { BookOpenText, Plus, Search, X } from "lucide-react";
+import { BookOpenText, Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -107,7 +107,7 @@ export default function BookingsPage() {
         </Alert>
       ) : null}
 
-      <Toolbar state={state} onChange={update} summary={list.data ? `${formatNumber(total)} ${total === 1 ? "booking" : "bookings"}` : null} />
+      <Toolbar state={state} onChange={update} total={list.data ? total : null} />
 
       {isMobile ? (
         list.isPending ? (
@@ -142,6 +142,7 @@ export default function BookingsPage() {
           <DataTable
             key={state.tab}
             fill
+            pagination={false}
             columns={columns}
             data={items}
             isLoading={list.isPending}
@@ -208,11 +209,14 @@ function EmptyBookings({ state, onClear, onCreate }: { state: ListState; onClear
 
 interface ToolbarProps {
   state: ListState;
-  onChange: (patch: Partial<ListState>) => void;
-  summary: string | null;
+  onChange: (patch: Partial<ListState>, resetPage?: boolean) => void;
+  total: number | null;
 }
 
-function Toolbar({ state, onChange, summary }: ToolbarProps) {
+function Toolbar({ state, onChange, total }: ToolbarProps) {
+  const pageCount = total === null ? 1 : Math.max(1, Math.ceil(total / state.size));
+  const from = !total ? 0 : (state.page - 1) * state.size + 1;
+  const to = total === null ? 0 : Math.min(total, state.page * state.size);
   const [q, setQ] = useState(state.q);
   const [syncedQ, setSyncedQ] = useState(state.q);
   if (state.q !== syncedQ) {
@@ -268,14 +272,22 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
         </Button>
       ) : null}
 
-      <div className="flex items-center gap-3 sm:ml-auto">
-        {summary ? (
-          <span className="text-sm tabular text-muted-foreground" aria-live="polite">
-            {summary}
+      {/* The pager lives here, Gmail-style, so no row is lost to a footer
+          (owner's note, 29 Oct 2026). */}
+      <div className="flex items-center gap-1 sm:ml-auto">
+        {total !== null ? (
+          <span className="mr-1 text-sm tabular text-muted-foreground" aria-live="polite">
+            {total === 0 ? "No bookings" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
           </span>
         ) : null}
+        <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={state.page <= 1} onClick={() => onChange({ page: state.page - 1 }, false)}>
+          <ChevronLeft />
+        </Button>
+        <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={state.page >= pageCount} onClick={() => onChange({ page: state.page + 1 }, false)}>
+          <ChevronRight />
+        </Button>
         <Select value={String(state.size)} onValueChange={(v) => onChange({ size: Number(v) })}>
-          <SelectTrigger size="sm" className="w-28" aria-label="Rows per page">
+          <SelectTrigger size="sm" className="ml-2 w-28" aria-label="Rows per page">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

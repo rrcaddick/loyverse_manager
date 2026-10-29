@@ -128,3 +128,13 @@ viewport on md+), the table card takes the remaining height, and only the
 table body scrolls (`DataTable fill`), with the header sticky inside that
 scroller and the pagination pinned under it. Phones keep page scrolling.
 
+Refinements the same afternoon: the filled table scrolls inside a Radix
+scroll area whose overlay bar starts under the sticky header (`top:
+var(--spacing-thead)`), so the header spans the card's full width and the bar
+sits beside the rows only. The pager moved to the right end of the filter
+row, Gmail-style ("1–25 of 69" with previous and next beside the rows
+dropdown), and the footer pagination is gone so no row is lost to it. The
+label inventory for the owner to condense is `data/exports/
+booking-action-labels.xlsx` (last-action pill, status pill, booking action
+buttons; generated from the source files).
+

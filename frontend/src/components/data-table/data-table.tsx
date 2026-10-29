@@ -42,6 +42,10 @@ import { TableSkeleton } from "@/components/page-skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
+
+import { ScrollBar } from "@/components/ui/scroll-area";
+
 import { DataTablePagination } from "./data-table-pagination";
 
 export interface DataTableProps<TData, TValue = unknown> {
@@ -168,13 +172,7 @@ export function DataTable<TData, TValue = unknown>({
     return !target.closest(INTERACTIVE_SELECTOR);
   }
 
-  return (
-    <div className={cn("flex flex-col", fill && "min-h-0 flex-1", className)}>
-      {toolbar ? <div className="flex flex-wrap items-center gap-2 pb-3">{toolbar}</div> : null}
-      <div
-        className={cn("relative w-full overflow-auto scrollbar-thin [&_[data-slot=table-container]]:overflow-visible", maxHeight && "max-h-(--table-max-h)", fill && "min-h-0 flex-1")}
-        style={maxHeight ? ({ "--table-max-h": maxHeight } as React.CSSProperties) : undefined}
-      >
+  const tableEl = (
         <Table className="[&_td]:align-middle">
           <TableHeader className={cn("bg-table-head text-table-head-foreground", stickyHeader && "sticky top-0 z-10 shadow-[inset_0_-1px_0_var(--border)]")}>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -264,7 +262,28 @@ export function DataTable<TData, TValue = unknown>({
             )}
           </TableBody>
         </Table>
-      </div>
+  );
+
+  return (
+    <div className={cn("flex flex-col", fill && "min-h-0 flex-1", className)}>
+      {toolbar ? <div className="flex flex-wrap items-center gap-2 pb-3">{toolbar}</div> : null}
+      {fill ? (
+        // The overlay scrollbar starts under the sticky header, so the header
+        // spans the full width and the bar sits beside the rows only.
+        <ScrollAreaPrimitive.Root type="auto" className="relative min-h-0 flex-1 overflow-hidden">
+          <ScrollAreaPrimitive.Viewport className="size-full outline-none [&_[data-slot=table-container]]:overflow-visible">{tableEl}</ScrollAreaPrimitive.Viewport>
+          <ScrollBar style={{ top: "var(--spacing-thead)", height: "auto" }} />
+          <ScrollBar orientation="horizontal" />
+          <ScrollAreaPrimitive.Corner />
+        </ScrollAreaPrimitive.Root>
+      ) : (
+        <div
+          className={cn("relative w-full overflow-auto scrollbar-thin [&_[data-slot=table-container]]:overflow-visible", maxHeight && "max-h-(--table-max-h)")}
+          style={maxHeight ? ({ "--table-max-h": maxHeight } as React.CSSProperties) : undefined}
+        >
+          {tableEl}
+        </div>
+      )}
       {pagination && !isLoading && (manualPagination || data.length > (paginationState?.pageSize ?? paginationLocal.pageSize)) ? (
         <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
       ) : null}
