@@ -182,9 +182,9 @@ export default function CalendarPage() {
   const [addFor, setAddFor] = useState<string | null>(null);
 
   return (
-    // Positioned under the header on its own so it fits the viewport without
-    // the route's `layout: "full"` handle (requested in the handoff).
-    <div className="fy-cal absolute inset-x-0 top-header bottom-0 flex min-h-0 overflow-hidden bg-background">
+    // Positioned on its own so it fits the viewport without the route's
+    // `layout: "full"` handle (requested in the handoff).
+    <div className="fy-cal absolute inset-0 flex min-h-0 overflow-hidden bg-background">
       <div className="flex min-w-0 flex-1 flex-col">
         <CalendarToolbar window={view} title={title} totals={totals} onToday={goToday} onMonth={stepMonth} onWeek={stepWeeks} onPickMonth={pickMonth} />
 

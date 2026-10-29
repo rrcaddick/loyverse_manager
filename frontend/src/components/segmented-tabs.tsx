@@ -16,7 +16,7 @@
 import type { LucideIcon } from "lucide-react";
 import { useRef, type KeyboardEvent } from "react";
 
-import { formatNumber } from "@/lib/format";
+import { CountBadge } from "@/components/count-badge";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedTabItem<V extends string = string> {
@@ -95,16 +95,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
           >
             {item.icon ? <item.icon aria-hidden="true" className="size-4" /> : null}
             {item.label}
-            {count !== null ? (
-              <span
-                className={cn(
-                  "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-                  "bg-highlight text-highlight-foreground",
-                )}
-              >
-                {formatNumber(count)}
-              </span>
-            ) : null}
+            {count !== null ? <CountBadge count={count} /> : null}
           </button>
         );
       })}

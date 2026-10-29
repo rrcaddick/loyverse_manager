@@ -95,6 +95,19 @@ open, the tree mark when collapsed; `APP_NAME` is now Farmyard Admin
 page: Radix's scroll lock hid the viewport scrollbar and padded the body,
 so `index.css` keeps the scrollbar on `body[data-scroll-locked]`.
 
-Open for discussion: the 56 px app header (sidebar toggle, breadcrumb,
-global search, help) duplicates the page title and the list's own search;
-the owner suggests dropping it and moving New booking onto the tabs row.
+Later the same day, agreed and done: **the app header is gone** app-wide.
+The drawer carries its own toggle (a corner button when open, under the
+mark when collapsed; the rail handle and Ctrl/Cmd+B still work; narrow
+screens get a floating button over the content). "/" opens a small search
+dialog from anywhere (`components/layout/global-search.tsx`, admin only)
+and on the Bookings list focuses the list's own box. The breadcrumb went;
+records keep their own back links. Keyboard shortcuts stay in the user
+menu. On Bookings the title row went too: the buckets are the header and
+New booking sits at the right end of their row. The calendar and the
+full-height layout now size against the viewport, not the header.
+
+Also: the **Status** cell is two pills side by side, the status pill at a
+fixed width so they line up down the column and the last-action pill
+stretching to fill the rest, with the action's date and age under them.
+**Count badges** share one component (`components/count-badge.tsx`): one
+and two digits get the same chip, three or more stretch.

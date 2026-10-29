@@ -11,6 +11,7 @@ import { useState } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router";
 
 import { Logo, LogoMark } from "@/components/brand/Logo";
+import { CountBadge } from "@/components/count-badge";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -28,6 +29,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
   SidebarSeparator,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useNavCounts } from "@/hooks/use-nav-counts";
@@ -36,20 +38,6 @@ import { APP_NAME } from "@/lib/brand";
 import { formatNumber } from "@/lib/format";
 import { NAV_BOTTOM, NAV_MAIN, homeFor, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-
-function CountBadge({ count, tone = "primary" }: { count: number; tone?: "primary" | "muted" }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-        tone === "primary" ? "bg-highlight text-highlight-foreground" : "bg-highlight/70 text-highlight-foreground",
-      )}
-    >
-      {formatNumber(count)}
-    </span>
-  );
-}
 
 export function AppSidebar() {
   const { user } = useAuth();
@@ -102,15 +90,12 @@ export function AppSidebar() {
           <item.icon aria-hidden="true" className={cn("shrink-0", active ? "text-primary" : "text-sidebar-foreground/80")} />
           <span className="flex-1 truncate group-data-[collapsible=icon]:hidden">{item.title}</span>
           {showCount ? (
-            <span
+            <CountBadge
+              count={count}
+              size="md"
               aria-hidden="true"
-              className={cn(
-                "ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-highlight px-1.5 text-xs font-semibold text-highlight-foreground tabular",
-                "group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:right-1 group-data-[collapsible=icon]:h-2.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:w-2.5 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:text-[0px]",
-              )}
-            >
-              {formatNumber(count)}
-            </span>
+              className="ml-auto group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:right-1 group-data-[collapsible=icon]:h-2.5 group-data-[collapsible=icon]:w-2.5 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:text-[0px]"
+            />
           ) : null}
         </NavLink>
       </SidebarMenuButton>
@@ -147,7 +132,7 @@ export function AppSidebar() {
                       <NavLink to={child.view === "up_next" ? "/work" : `/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
                         <child.icon aria-hidden="true" />
                         <span className="flex-1 truncate">{child.title}</span>
-                        {n > 0 ? <CountBadge count={n} tone={child.muted ? "muted" : "primary"} /> : null}
+                        {n > 0 ? <CountBadge count={n} tone={child.muted ? "muted" : "highlight"} aria-hidden="true" className="ml-auto" /> : null}
                       </NavLink>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -163,8 +148,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" aria-label="Main">
       {/* Open: the full lock-up at the drawer's width with the app name under
-          it (owner's note, 29 Oct 2026). Collapsed: the tree mark alone. */}
-      <SidebarHeader className="justify-center border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:h-header group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-0">
+          it (owner's note, 29 Oct 2026). Collapsed: the tree mark alone. The
+          toggle lives here since the app header went: a corner button when
+          open, under the mark when collapsed. */}
+      <SidebarHeader className="relative border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -181,6 +168,10 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <SidebarTrigger
+          aria-label={state === "collapsed" ? "Expand navigation" : "Collapse navigation"}
+          className="absolute top-1.5 right-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:static"
+        />
       </SidebarHeader>
 
       <SidebarContent className="pt-2">

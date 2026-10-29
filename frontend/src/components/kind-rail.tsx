@@ -101,7 +101,7 @@ export function KindRail<V extends string>({ items, value, onChange, className, 
             {count !== null ? (
               <span
                 className={cn(
-                  "ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
+                  "ml-2 inline-flex h-5 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
                   COUNT_TONE[item.tone ?? "neutral"],
                   item.muted && !item.tone && "bg-transparent text-muted-foreground ring-1 ring-border",
                 )}

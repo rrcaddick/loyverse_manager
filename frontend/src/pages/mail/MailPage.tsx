@@ -251,7 +251,7 @@ export default function MailPage() {
   }
 
   return (
-    <div className="@container flex h-[calc(100dvh-var(--spacing-header)-2.5rem)] min-h-0 flex-col gap-3">
+    <div className="@container flex h-[calc(100dvh-2.5rem)] min-h-0 flex-col gap-3">
       <PageHeader
         title="Mail"
         className={cn("shrink-0 gap-3", openKey && "hidden @3xl:flex")}

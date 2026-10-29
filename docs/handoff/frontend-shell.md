@@ -384,3 +384,13 @@ those).
 - The public layout's footer contact details are constants in
   `src/lib/brand.ts`; once `GET /public/form-config` exists the public pages
   can read them from there instead.
+
+## Update, 29 Oct 2026: no app header
+
+The 56 px header described above (sidebar toggle, breadcrumb, global
+search, help) was removed app-wide at the owner's request: it duplicated
+each page's title row and the Bookings list's own search. The drawer header
+now holds the toggle, "/" opens a search dialog (`global-search.tsx`), the
+cheat sheet stays in the user menu, and pages own their title row and
+primary action. See `docs/handoff/ui-round1.md`, addendum of 29 Oct.
+

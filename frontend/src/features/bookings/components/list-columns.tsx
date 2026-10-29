@@ -9,8 +9,9 @@
  * The reference is the row's primary cell (15 px semibold foreground).
  * Payment is one cell: paid of total, a bar that fills with the payments, and
  * what is still due (owner's note, 29 Oct 2026). Status is the booking's
- * state as a whole: the status pill with the last action and its date under
- * it, coloured by who acted (amber: the customer, the move is ours; green: us).
+ * state as a whole: the status pill (fixed width, so they line up) beside the
+ * last-action pill (stretching; amber: the customer acted, the move is ours;
+ * green: we did), with the action's date and age under them.
  */
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -95,20 +96,22 @@ const status: Col = {
   header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
   cell: ({ row }) => {
     const a = row.original.latest_action;
+    const tone = a?.who === "customer" ? "amber" : a?.who === "us" ? "green" : "neutral";
     return (
-      <div className="grid min-w-0 justify-items-start gap-0.5 whitespace-nowrap">
-        <StatusPill status={row.original.status} />
+      <div className="grid gap-1">
+        <div className="flex items-center gap-1.5">
+          <StatusPill status={row.original.status} className="w-26 justify-center" />
+          {a ? <StatusPill tone={tone} label={a.label} dot={false} className="min-w-0 flex-1 justify-center" /> : null}
+        </div>
         {a ? (
-          <span className="max-w-full truncate text-sm leading-4 tabular text-muted-foreground" title={`${a.label} · ${formatDate(a.at)}`}>
-            <span className={cn("font-medium", a.who === "customer" ? "text-amber-text" : a.who === "us" ? "text-green-text" : "text-foreground")}>{a.label}</span>
-            {" · "}
+          <span className="text-sm leading-4 tabular text-muted-foreground" title={formatDate(a.at)}>
             {formatDayMonth(a.at)} · {relativeTo(a.at.slice(0, 10))}
           </span>
         ) : null}
       </div>
     );
   },
-  meta: { className: cn(CELL, "min-w-44") },
+  meta: { className: cn(CELL, "min-w-64") },
 };
 
 const depositDueBy: Col = {

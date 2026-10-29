@@ -15,7 +15,6 @@ import { useNavigate, useSearchParams } from "react-router";
 
 import { DataTable } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/layout/page-header";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -73,15 +72,10 @@ export default function BookingsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Bookings"
-        actions={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus data-icon="inline-start" />
-            New booking
-          </Button>
-        }
-      >
+      {/* No title row: the nav says where you are, the buckets are the header
+          and the primary action sits on their row (owner's note, 29 Oct 2026). */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="sr-only">Bookings</h1>
         <SegmentedTabs
           aria-label="Booking buckets"
           value={state.tab}
@@ -95,7 +89,11 @@ export default function BookingsPage() {
             { value: "all", label: TAB_LABELS.all, count: c?.all },
           ]}
         />
-      </PageHeader>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus data-icon="inline-start" />
+          New booking
+        </Button>
+      </header>
 
       {list.isError ? (
         <Alert variant="destructive">
@@ -238,7 +236,7 @@ function Toolbar({ state, onChange, summary }: ToolbarProps) {
           <InputGroupAddon>
             <Search aria-hidden="true" className="size-4 text-muted-foreground" />
           </InputGroupAddon>
-          <InputGroupInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, group, contact, phone, area" aria-label="Search bookings" autoComplete="off" />
+          <InputGroupInput data-list-search type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, group, contact, phone, area" aria-label="Search bookings" autoComplete="off" />
           {q ? (
             <InputGroupAddon align="inline-end">
               <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-selection-ring">

@@ -205,7 +205,6 @@
   --spacing-row-lg: 3rem; /* two-line table row 48 */
   --spacing-row-queue: 3.5rem; /* work / list row 56 */
   --spacing-thead: 2.5rem; /* sticky table header 40 */
-  --spacing-header: 3.5rem; /* app header 56 */
   --spacing-target: 2.75rem; /* minimum click target 44 */
 
   --container-page: 100%; /* lists use the width they are given (research/08) */

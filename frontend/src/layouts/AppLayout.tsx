@@ -1,24 +1,27 @@
 /**
- * Authenticated shell: sidebar + header + page content.
+ * Authenticated shell: sidebar + page content. There is no app header since
+ * 29 Oct 2026 (owner's note): the drawer carries its own toggle, each page
+ * its own title row and primary action, and search is the "/" dialog.
  *
  * - The sidebar's open state is the person's own (cookie `sidebar_state`),
  *   except while a route or page forces the icon rail: /calendar does this
  *   through its route handle, any page can with `useSidebarCollapsed()`.
  *   A forced collapse never overwrites the cookie.
  * - Route handles may set `layout: "full"` to drop the page padding and give
- *   the page the full height under the header (the calendar's viewport fit).
- * - Global keys: G T/W/C/B/M navigate, ? opens the cheat sheet, / focuses
- *   search (in the header), Ctrl/Cmd+B toggles the sidebar (shadcn).
+ *   the page the full viewport height (the calendar's viewport fit).
+ * - Global keys: G T/W/C/B/M navigate, ? opens the cheat sheet, / opens the
+ *   search dialog (or focuses the Bookings list's own box), Ctrl/Cmd+B
+ *   toggles the sidebar (shadcn).
  */
 
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { Outlet, useLocation, useMatches, useNavigate } from "react-router";
 
 import { KeyboardCheatSheet } from "@/components/keyboard-cheat-sheet";
-import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { GlobalSearchDialog } from "@/components/layout/global-search";
 import { PageSkeleton } from "@/components/page-skeleton";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useShortcut } from "@/hooks/use-keyboard";
 import { useMediaBelow } from "@/hooks/use-media-below";
 import { SidebarForceContext, type SidebarForceContextValue } from "@/hooks/use-sidebar-collapsed";
@@ -98,6 +101,21 @@ export function AppLayout() {
   const [helpOpen, setHelpOpen] = useState(false);
   const shell = useMemo<ShellContextValue>(() => ({ openHelp: () => setHelpOpen(true) }), []);
   useShortcut("?", () => setHelpOpen(true));
+  const [searchOpen, setSearchOpen] = useState(false);
+  useShortcut(
+    "/",
+    () => {
+      // On the Bookings list the list's own box is the search.
+      const own = /^\/bookings\/?$/.test(location.pathname) ? document.querySelector<HTMLInputElement>("[data-list-search]") : null;
+      if (own) {
+        own.focus();
+        own.select();
+      } else {
+        setSearchOpen(true);
+      }
+    },
+    { enabled: isAdmin },
+  );
   useShortcut("g t", () => navigate("/today"));
   useShortcut("g c", () => navigate("/calendar"));
   useShortcut("g w", () => navigate("/work"), { enabled: isAdmin });
@@ -118,14 +136,13 @@ export function AppLayout() {
             >
               Skip to content
             </a>
-            <AppHeader />
+            {/* Narrow screens have no drawer on screen, so the toggle floats. */}
+            <SidebarTrigger aria-label="Open navigation" className="fixed top-3 left-3 z-30 bg-card shadow-sm ring-1 ring-border md:hidden" />
             <div
               id="main-content"
               className={cn(
                 "flex min-w-0 flex-1 flex-col",
-                full
-                  ? "h-[calc(100dvh-var(--spacing-header))] min-h-0 overflow-hidden"
-                  : "mx-auto w-full max-w-page gap-card-gap px-4 py-5 sm:px-6 lg:px-gutter",
+                full ? "h-dvh min-h-0 overflow-hidden" : "mx-auto w-full max-w-page gap-card-gap px-4 py-5 max-md:pt-14 sm:px-6 lg:px-gutter",
               )}
             >
               <Suspense fallback={<PageSkeleton />}>
@@ -134,6 +151,7 @@ export function AppLayout() {
             </div>
           </SidebarInset>
           <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+          {isAdmin ? <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} /> : null}
         </SidebarProvider>
       </SidebarForceContext.Provider>
     </ShellContext.Provider>
