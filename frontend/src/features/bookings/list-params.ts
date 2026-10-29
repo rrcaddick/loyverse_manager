@@ -65,8 +65,8 @@ export function parseListState(params: URLSearchParams): ListState {
   // A search (from the header or the box) looks at everything unless a range was chosen.
   if (!rawRange && q) range = "all";
   const page = Math.max(1, Number(params.get("page")) || 1);
-  const rawSize = Number(params.get("size"));
-  const size = (PAGE_SIZES as readonly number[]).includes(rawSize) ? rawSize : DEFAULT_PAGE_SIZE;
+  // The page size is the person's Appearance preference (BookingsPage fills it in).
+  const size = DEFAULT_PAGE_SIZE;
   const rawSort = params.get("sort") ?? "";
   const sortKey = rawSort.startsWith("-") ? rawSort.slice(1) : rawSort;
   const sort = SORTABLE_COLUMNS.has(sortKey) ? rawSort : defaults.sort;
@@ -124,7 +124,7 @@ export function writeListState(state: ListState, current: URLSearchParams): URLS
   set("range", state.range === impliedRange ? null : state.range);
   set("sort", state.sort === defaults.sort ? null : state.sort);
   set("page", state.page > 1 ? String(state.page) : null);
-  set("size", state.size !== DEFAULT_PAGE_SIZE ? String(state.size) : null);
+  set("size", null); // the page size is a preference, never a URL key
   return next;
 }
 

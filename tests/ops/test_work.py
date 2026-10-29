@@ -525,9 +525,9 @@ def test_extend_hold_endpoint(rows, admin):
 def test_preferences_endpoint(admin, manager):
     res = manager.put("/api/v1/users/me/preferences", json={"theme": " Sand ", "mode": "dark"}, headers=CSRF)
     assert res.status_code == 200
-    assert res.get_json()["user"]["preferences"] == {"theme": "sand", "mode": "dark", "text_size": "large"}
-    res = manager.put("/api/v1/users/me/preferences", json={"text_size": "xlarge"}, headers=CSRF)
-    assert res.get_json()["user"]["preferences"] == {"theme": "sand", "mode": "dark", "text_size": "xlarge"}
+    assert res.get_json()["user"]["preferences"] == {"theme": "sand", "mode": "dark", "text_size": "large", "table_rows": 50}
+    res = manager.put("/api/v1/users/me/preferences", json={"text_size": "xlarge", "table_rows": 50}, headers=CSRF)
+    assert res.get_json()["user"]["preferences"] == {"theme": "sand", "mode": "dark", "text_size": "xlarge", "table_rows": 50}
     res = manager.put("/api/v1/users/me/preferences", json={"theme": "no spaces", "mode": "blue", "text_size": "huge"}, headers=CSRF)
     assert res.status_code == 422 and set(res.get_json()["error"]["fields"]) == {"theme", "mode", "text_size"}
     assert manager.put("/api/v1/users/me/preferences", json={}, headers=CSRF).status_code == 422

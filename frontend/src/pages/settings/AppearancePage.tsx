@@ -2,21 +2,21 @@
  * Settings › Personal › Appearance (docs/research/07 §c).
  *
  * Six 160×100 theme tiles, each rendered in its own theme (the tile carries
- * data-theme, so tokens.css recomputes every token inside it), Mode and
- * Text size. Applied immediately — the change is its own preview — and
+ * data-theme, so tokens.css recomputes every token inside it), Mode, Text
+ * size and Rows per page (every list). Applied immediately — the change is its own preview — and
  * persisted per user (see src/lib/appearance-sync.tsx).
  */
 
 import { Check, Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 
 import { Section } from "@/components/section";
-import { useAppearance, type Mode, type TextSize, type ThemeMeta } from "@/lib/appearance";
+import { useAppearance, type Mode, type TableRows, type TextSize, type ThemeMeta } from "@/lib/appearance";
 import { cn } from "@/lib/utils";
 
 const MODE_ICON: Record<Mode, LucideIcon> = { light: Sun, dark: Moon, system: Monitor };
 
 export default function AppearancePage() {
-  const { appearance, resolvedMode, setAppearance, themes, modes, textSizes } = useAppearance();
+  const { appearance, resolvedMode, setAppearance, themes, modes, textSizes, tableRows } = useAppearance();
 
   return (
     <>
@@ -50,6 +50,21 @@ export default function AppearancePage() {
               <ChoiceCard key={size.value} selected={selected} onSelect={() => setAppearance({ text_size: size.value as TextSize })} label={size.label} description={size.description}>
                 <span aria-hidden="true" className="font-semibold leading-none" style={{ fontSize: `${size.px * 1.25}px` }}>
                   Aa
+                </span>
+              </ChoiceCard>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section title="Tables" description="Rows per page on the Bookings list and every other list. Set once here instead of on each table (owner's note, 29 Oct 2026).">
+        <div role="radiogroup" aria-label="Rows per page" className="grid gap-3">
+          {tableRows.map((option) => {
+            const selected = appearance.table_rows === option.value;
+            return (
+              <ChoiceCard key={option.value} selected={selected} onSelect={() => setAppearance({ table_rows: option.value as TableRows })} label={option.label} description={option.description}>
+                <span aria-hidden="true" className="text-lg font-semibold tabular leading-none">
+                  {option.value === 500 ? "∞" : option.value}
                 </span>
               </ChoiceCard>
             );

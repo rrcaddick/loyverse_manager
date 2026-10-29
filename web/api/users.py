@@ -83,11 +83,12 @@ def update_my_preferences():
     """Merge appearance preferences for the signed-in user (docs/research/07).
 
     ``theme`` is a slug of at most 32 characters (the frontend owns the list),
-    ``mode`` is light/dark/system and ``text_size`` default/large/xlarge. Keys
-    left out keep their stored value; unknown keys are ignored.
+    ``mode`` is light/dark/system, ``text_size`` default/large/xlarge and
+    ``table_rows`` 25/50/100/500 (rows per page on every list). Keys left out
+    keep their stored value; unknown keys are ignored.
     """
     data = parse_json()
-    changes: dict[str, str] = {}
+    changes: dict[str, object] = {}
     fields: dict[str, str] = {}
     if "theme" in data:
         theme = data["theme"]
@@ -105,6 +106,11 @@ def update_my_preferences():
             fields["text_size"] = f"Choose one of: {', '.join(user_model.PREFERENCE_TEXT_SIZES)}"
         else:
             changes["text_size"] = data["text_size"]
+    if "table_rows" in data:
+        if data["table_rows"] not in user_model.PREFERENCE_TABLE_ROWS or isinstance(data["table_rows"], bool):
+            fields["table_rows"] = f"Choose one of: {', '.join(str(n) for n in user_model.PREFERENCE_TABLE_ROWS)}"
+        else:
+            changes["table_rows"] = int(data["table_rows"])
     if fields:
         raise ApiError("validation_error", "Invalid preferences", 422, fields)
     if not changes:
@@ -112,7 +118,7 @@ def update_my_preferences():
             "validation_error",
             "Nothing to change",
             422,
-            {"preferences": "Send at least one of theme, mode, text_size"},
+            {"preferences": "Send at least one of theme, mode, text_size, table_rows"},
         )
     me = current_user()
     user_model.update_preferences(me["id"], changes)

@@ -9,9 +9,10 @@ ROLES = ("admin", "manager")
 # Appearance preferences (docs/research/07). Stored as JSON in users.preferences;
 # missing keys fall back to these defaults. The frontend owns the theme list,
 # so ``theme`` is any slug for now.
-PREFERENCE_DEFAULTS = {"theme": "graphite", "mode": "system", "text_size": "large"}
+PREFERENCE_DEFAULTS = {"theme": "graphite", "mode": "system", "text_size": "large", "table_rows": 50}
 PREFERENCE_MODES = ("light", "dark", "system")
 PREFERENCE_TEXT_SIZES = ("default", "large", "xlarge")
+PREFERENCE_TABLE_ROWS = (25, 50, 100, 500)  # rows per page on every list; 500 is "all"
 
 PUBLIC_FIELDS = (
     "id",

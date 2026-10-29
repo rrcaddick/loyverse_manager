@@ -179,16 +179,19 @@ view scrolls inside its own box under the buckets, filters and pager, which
 stay on screen (the fill layout now applies at every width).
 
 The list's controls by width (the toolbar and the buckets row are named
-containers, `@container/toolbar` and `@container/header`). Table screens:
-one row while it fits; under 70 rem the pager and rows dropdown join the
-search on the first row and the range chips centre on the second; under
-48 rem the buckets fill their row, so New booking joins the search row too.
-Card screens (viewport under 768 px) come in two forms. With room (480 px
-up): the buckets wrap and centre, the search with New booking beside it,
-the chips centred, then the pager with the rows dropdown at the right.
-Narrower: the buckets and date ranges are two dropdowns above the search,
-the pager row under it with the rows dropdown at the right, and New booking
-is a round floating plus. The emblem has its fence back: the panels sit 5 %
+containers, `@container/toolbar` and `@container/header`). The rows-per-page
+selector is gone from the list: the page size is a per-user preference
+(Settings › Appearance › Tables: 25 / 50 / 100 / all, default 50, stored
+with the other preferences as `table_rows`) and never a URL key. A filter
+snaps to a dropdown the moment it would need a second line: the range chips
+below 64 rem of control width, the buckets below 37.75 rem (their natural
+width is 37.4 rem). Table screens are always two rows: buckets (with New
+booking while the row has room, i.e. 48 rem up) and the search row with
+the ranges, the pager and, under 48 rem, New booking. Card screens
+(viewport under 768 px): the buckets row, the search with the range
+dropdown, then the pager with New booking at its end; once the buckets
+become a dropdown they share the header row with the range dropdown and
+New booking floats as a round plus. The emblem has its fence back: the panels sit 5 %
 inside the canopy's edges, the fence-and-gate assembly is 1.25× tall and
 grows downward from the fence top so the canopy stays clear, and the trunk
 is carried down to the new base.

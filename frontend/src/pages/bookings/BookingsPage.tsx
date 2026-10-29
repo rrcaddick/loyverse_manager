@@ -10,7 +10,7 @@
 
 import type { SortingState } from "@tanstack/react-table";
 import { BookOpenText, Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { DataTable } from "@/components/data-table";
@@ -24,12 +24,12 @@ import { useBookingCounts, useBookings } from "@/features/bookings/api";
 import { BookingFormDialog } from "@/features/bookings/components/booking-form-dialog";
 import { BookingCards } from "@/features/bookings/components/list-cards";
 import { columnsFor } from "@/features/bookings/components/list-columns";
-import { PAGE_SIZES, RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
+import { RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
 import { BOOKING_BUCKETS, type BookingBucket } from "@/features/bookings/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
-import { useMediaBelow } from "@/hooks/use-media-below";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { errorMessage } from "@/lib/api";
+import { useAppearance } from "@/lib/appearance";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -48,12 +48,11 @@ export default function BookingsPage() {
   useDocumentTitle("Bookings");
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  // Card screens come in two forms: with room, the chips stay and the pager
-  // and New booking share a row; narrower, dropdowns and a floating plus.
-  const isPhone = useMediaBelow(480);
-  const layout: ToolbarLayout = !isMobile ? "table" : isPhone ? "phone" : "cards";
+  const layout: ToolbarLayout = isMobile ? "cards" : "table";
+  const { appearance } = useAppearance();
   const [params, setParams] = useSearchParams();
-  const state = useMemo(() => parseListState(params), [params]);
+  // The page size is the person's preference (Settings › Appearance › Tables).
+  const state = useMemo(() => ({ ...parseListState(params), size: appearance.table_rows }), [params, appearance.table_rows]);
   const apiParams = useMemo(() => toApiParams(state), [state]);
   const list = useBookings(apiParams);
   const counts = useBookingCounts();
@@ -77,15 +76,31 @@ export default function BookingsPage() {
 
   return (
     <>
-      {/* No title row: the nav says where you are, the buckets are the header
-          and the primary action sits on their row. Card screens: the action
-          moves to the pager row, and on narrow phones the buckets and date
-          ranges become two dropdowns and the action a floating plus
-          (owner's notes, 29 Oct 2026). */}
+      {/* No title row: the nav says where you are and the buckets are the
+          header. The filters snap to dropdowns the moment either would need
+          a second line: the range chips below 64 rem of control width, the
+          buckets below 37.75 rem (card screens). New booking sits on the
+          buckets row while there is room, else on the search row; on card
+          screens it ends the pager row, or floats as a round plus once the
+          buckets are a dropdown (owner's notes, 29 Oct 2026). */}
       <header className={cn("@container/header flex flex-wrap items-center gap-3", layout === "cards" ? "justify-center" : "justify-between")}>
         <h1 className="sr-only">Bookings</h1>
-        {layout === "phone" ? (
-          <div className="grid w-full grid-cols-2 gap-2">
+        <SegmentedTabs
+          aria-label="Booking buckets"
+          value={state.tab}
+          onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
+          className={layout === "cards" ? "@max-[37.75rem]/header:hidden" : undefined}
+          items={[
+            { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
+            { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
+            { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
+            { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
+            { value: "past", label: TAB_LABELS.past, count: c?.past },
+            { value: "all", label: TAB_LABELS.all, count: c?.all },
+          ]}
+        />
+        {layout === "cards" ? (
+          <div className="hidden w-full grid-cols-2 gap-2 @max-[37.75rem]/header:grid">
             <Select value={state.tab} onValueChange={(tab) => setParams(writeListState(stateForTab(state, tab as BookingBucket), params), { replace: true })}>
               <SelectTrigger className="w-full" aria-label="Bucket">
                 <SelectValue />
@@ -102,48 +117,15 @@ export default function BookingsPage() {
                 })}
               </SelectContent>
             </Select>
-            <Select value={state.range} onValueChange={(range) => update({ range: range as RangePreset })}>
-              <SelectTrigger className="w-full" aria-label="Date range">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RANGE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <RangeSelect value={state.range} onChange={(range) => update({ range })} className="w-full" />
           </div>
         ) : (
-          <SegmentedTabs
-            aria-label="Booking buckets"
-            value={state.tab}
-            onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
-            className={layout === "cards" ? "flex-wrap justify-center overflow-visible" : undefined}
-            items={[
-              { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
-              { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
-              { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
-              { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
-              { value: "past", label: TAB_LABELS.past, count: c?.past },
-              { value: "all", label: TAB_LABELS.all, count: c?.all },
-            ]}
-          />
-        )}
-        {layout === "table" ? (
-          // Hidden when the buckets fill the row; the toolbar shows it instead.
           <Button className="@max-[48rem]/header:hidden" onClick={() => setCreateOpen(true)}>
             <Plus data-icon="inline-start" />
             New booking
           </Button>
-        ) : null}
+        )}
       </header>
-      {layout === "phone" ? (
-        <Button size="icon" aria-label="New booking" className="fixed right-4 bottom-4 z-30 size-14 rounded-full shadow-lg" onClick={() => setCreateOpen(true)}>
-          <Plus className="size-6" />
-        </Button>
-      ) : null}
 
       {list.isError ? (
         <Alert variant="destructive">
@@ -157,20 +139,7 @@ export default function BookingsPage() {
         </Alert>
       ) : null}
 
-      <Toolbar
-        state={state}
-        onChange={update}
-        total={list.data ? total : null}
-        layout={layout}
-        action={
-          layout !== "phone" ? (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus data-icon="inline-start" />
-              New booking
-            </Button>
-          ) : null
-        }
-      />
+      <Toolbar state={state} onChange={update} total={list.data ? total : null} layout={layout} onCreate={() => setCreateOpen(true)} />
 
       {isMobile ? (
         // The cards scroll in their own box so the buckets, filters and pager
@@ -205,7 +174,6 @@ export default function BookingsPage() {
             manualPagination
             rowCount={total}
             pageSize={state.size}
-            pageSizeOptions={[...PAGE_SIZES]}
             paginationState={{ pageIndex: state.page - 1, pageSize: state.size }}
             onPaginationChange={(updater) => {
               const current = { pageIndex: state.page - 1, pageSize: state.size };
@@ -259,26 +227,41 @@ function EmptyBookings({ state, onClear, onCreate }: { state: ListState; onClear
 
 // ------------------------------------------------------------------ toolbar
 
-type ToolbarLayout = "table" | "cards" | "phone";
+type ToolbarLayout = "table" | "cards";
+
+function RangeSelect({ value, onChange, className }: { value: RangePreset; onChange: (range: RangePreset) => void; className?: string }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as RangePreset)}>
+      <SelectTrigger className={cn("w-36", className)} aria-label="Date range">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {RANGE_OPTIONS.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 interface ToolbarProps {
   state: ListState;
   onChange: (patch: Partial<ListState>, resetPage?: boolean) => void;
   total: number | null;
   /**
-   * table: one row while it fits; under 70 rem the pager joins the search on
-   * the first row and the range chips centre on the second; under 48 rem the
-   * action joins the first row too (the buckets row has no room for it).
-   * cards: search + action, the chips centred, then the pager with the rows
-   * dropdown at the right. phone: the ranges are a dropdown in the header, so
-   * just the search and the pager row.
+   * table: one row — search, the range chips (a dropdown below 64 rem), the
+   * pager, and New booking below 48 rem (the buckets fill their row then).
+   * cards: the search with the range dropdown, then the pager with New
+   * booking at its end; below 37.75 rem the ranges live in the header with
+   * the buckets and New booking floats as a round plus.
    */
   layout?: ToolbarLayout;
-  /** The primary action (New booking) for the rows that carry it. */
-  action?: ReactNode;
+  onCreate: () => void;
 }
 
-function Toolbar({ state, onChange, total, layout = "table", action }: ToolbarProps) {
+function Toolbar({ state, onChange, total, layout = "table", onCreate }: ToolbarProps) {
   const pageCount = total === null ? 1 : Math.max(1, Math.ceil(total / state.size));
   const from = !total ? 0 : (state.page - 1) * state.size + 1;
   const to = total === null ? 0 : Math.min(total, state.page * state.size);
@@ -300,7 +283,7 @@ function Toolbar({ state, onChange, total, layout = "table", action }: ToolbarPr
   const search = (
     <form
       role="search"
-      className={layout === "table" ? "w-80 @max-[70rem]/toolbar:w-auto @max-[70rem]/toolbar:min-w-40 @max-[70rem]/toolbar:flex-1 @max-[70rem]/toolbar:max-w-80" : "min-w-0 flex-1"}
+      className={layout === "table" ? "w-80 @max-[64rem]/toolbar:w-auto @max-[64rem]/toolbar:min-w-36 @max-[64rem]/toolbar:flex-1 @max-[64rem]/toolbar:max-w-80" : "min-w-0 flex-1"}
       onSubmit={(e) => {
         e.preventDefault();
         onChange({ q: q.trim() });
@@ -321,37 +304,18 @@ function Toolbar({ state, onChange, total, layout = "table", action }: ToolbarPr
       </InputGroup>
     </form>
   );
-
-  const chips =
-    layout === "phone" ? null : (
-      <div
-        role="group"
-        aria-label="Date range"
-        className={cn(
-          "flex flex-wrap items-center gap-1",
-          layout === "table" ? "order-2 @max-[70rem]/toolbar:order-3 @max-[70rem]/toolbar:w-full @max-[70rem]/toolbar:justify-center" : "w-full justify-center",
-        )}
-      >
-        {RANGE_OPTIONS.map((o) => (
-          <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
-            {o.label}
-          </Button>
-        ))}
-        {hasActiveFilters(state) ? (
-          <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
-            <X data-icon="inline-start" />
-            Clear
-          </Button>
-        ) : null}
-      </div>
-    );
-
+  const clear = hasActiveFilters(state) ? (
+    <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
+      <X data-icon="inline-start" />
+      Clear
+    </Button>
+  ) : null;
   // The pager lives up here, Gmail-style, so no row is lost to a footer
-  // (owner's note, 29 Oct 2026).
+  // (owner's note, 29 Oct 2026). The page size is a preference, not a control.
   const pager = (
     <>
       {total !== null ? (
-        <span className="mr-1 text-sm tabular text-muted-foreground" aria-live="polite">
+        <span className="mr-0.5 text-sm tabular text-muted-foreground" aria-live="polite">
           {total === 0 ? "No bookings" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
         </span>
       ) : null}
@@ -363,56 +327,47 @@ function Toolbar({ state, onChange, total, layout = "table", action }: ToolbarPr
       </Button>
     </>
   );
-  const rows = (
-    <Select value={String(state.size)} onValueChange={(v) => onChange({ size: Number(v) })}>
-      <SelectTrigger size="sm" className="w-28" aria-label="Rows per page">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {PAGE_SIZES.map((n) => (
-          <SelectItem key={n} value={String(n)}>
-            {n === 500 ? "All rows" : `${n} rows`}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+  const create = (className?: string) => (
+    <Button className={className} onClick={onCreate}>
+      <Plus data-icon="inline-start" />
+      New booking
+    </Button>
   );
 
   if (layout === "table") {
     return (
-      <div className="@container/toolbar flex w-full flex-wrap items-center gap-2">
+      <div className="@container/toolbar flex w-full items-center gap-2">
         {search}
-        {chips}
-        <div className="order-3 ml-auto flex items-center gap-1 @max-[70rem]/toolbar:order-2">
-          {pager}
-          <span className="ml-2">{rows}</span>
-          {action ? <span className="ml-2 hidden @max-[48rem]/toolbar:inline-flex">{action}</span> : null}
+        <div role="group" aria-label="Date range" className="flex items-center gap-1 whitespace-nowrap @max-[64rem]/toolbar:hidden">
+          {RANGE_OPTIONS.map((o) => (
+            <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
+              {o.label}
+            </Button>
+          ))}
         </div>
-      </div>
-    );
-  }
-  if (layout === "cards") {
-    return (
-      <div className="flex w-full flex-col gap-2">
-        <div className="flex items-center gap-2">
-          {search}
-          {action}
-        </div>
-        {chips}
-        <div className="flex items-center gap-1">
+        <RangeSelect value={state.range} onChange={(range) => onChange({ range })} className="hidden @max-[64rem]/toolbar:flex" />
+        {clear}
+        <div className="ml-auto flex items-center gap-0.5">
           {pager}
-          <span className="ml-auto">{rows}</span>
+          {create("ml-2 hidden @max-[48rem]/toolbar:inline-flex")}
         </div>
       </div>
     );
   }
   return (
-    <div className="flex w-full flex-col gap-2">
-      {search}
-      <div className="flex items-center gap-1">
-        {pager}
-        <span className="ml-auto">{rows}</span>
+    <div className="@container/toolbar flex w-full flex-col gap-2">
+      <div className="flex items-center gap-2">
+        {search}
+        <RangeSelect value={state.range} onChange={(range) => onChange({ range })} className="@max-[37.75rem]/toolbar:hidden" />
+        {clear}
       </div>
+      <div className="flex items-center gap-0.5">
+        {pager}
+        {create("ml-auto @max-[37.75rem]/toolbar:hidden")}
+      </div>
+      <Button size="icon" aria-label="New booking" className="fixed right-4 bottom-4 z-30 hidden size-14 rounded-full shadow-lg @max-[37.75rem]/toolbar:inline-flex" onClick={onCreate}>
+        <Plus className="size-6" />
+      </Button>
     </div>
   );
 }

@@ -22,11 +22,14 @@ export type ThemeId = (typeof THEME_IDS)[number];
 export type Mode = "light" | "dark" | "system";
 export type TextSize = "default" | "large" | "xlarge";
 export type ResolvedMode = "light" | "dark";
+/** Rows per page on every list; 500 stands for "all". */
+export type TableRows = 25 | 50 | 100 | 500;
 
 export interface Appearance {
   theme: ThemeId;
   mode: Mode;
   text_size: TextSize;
+  table_rows: TableRows;
 }
 
 export interface ThemeMeta {
@@ -56,7 +59,14 @@ export const TEXT_SIZES: { value: TextSize; label: string; px: number; descripti
   { value: "xlarge", label: "Extra large", px: 18, description: "Body text 17 px." },
 ];
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: "graphite", mode: "system", text_size: "large" };
+export const TABLE_ROW_OPTIONS: { value: TableRows; label: string; description: string }[] = [
+  { value: 25, label: "25 rows", description: "Short pages; more paging." },
+  { value: 50, label: "50 rows", description: "The default: a season's pending bookings on one page." },
+  { value: 100, label: "100 rows", description: "Long pages; less paging." },
+  { value: 500, label: "All rows", description: "Everything on one page. Slower on large lists." },
+];
+
+export const DEFAULT_APPEARANCE: Appearance = { theme: "graphite", mode: "system", text_size: "large", table_rows: 50 };
 
 const STORAGE_KEY = "fy.appearance";
 const LEGACY_KEY = "fy.theme";
@@ -68,11 +78,13 @@ export function normaliseAppearance(input: unknown, base: Appearance = DEFAULT_A
   const mode = obj.mode === "light" || obj.mode === "dark" || obj.mode === "system" ? (obj.mode as Mode) : base.mode;
   const text_size =
     obj.text_size === "default" || obj.text_size === "large" || obj.text_size === "xlarge" ? (obj.text_size as TextSize) : base.text_size;
-  return { theme, mode, text_size };
+  const rows = Number(obj.table_rows);
+  const table_rows = TABLE_ROW_OPTIONS.some((o) => o.value === rows) ? (rows as TableRows) : base.table_rows;
+  return { theme, mode, text_size, table_rows };
 }
 
 export function sameAppearance(a: Appearance, b: Appearance): boolean {
-  return a.theme === b.theme && a.mode === b.mode && a.text_size === b.text_size;
+  return a.theme === b.theme && a.mode === b.mode && a.text_size === b.text_size && a.table_rows === b.table_rows;
 }
 
 function readStored(): Appearance {
@@ -209,6 +221,7 @@ export function useAppearance() {
       themes: THEMES,
       modes: MODES,
       textSizes: TEXT_SIZES,
+      tableRows: TABLE_ROW_OPTIONS,
     }),
     [current, set],
   );
