@@ -11,7 +11,6 @@ import { ChevronDown, Eye, FileText, Send } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { Section } from "@/components/section";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -134,16 +133,12 @@ export function DocumentsTab({ booking }: { booking: BookingDetail }) {
   }
 
   return (
-    <div className="flex max-w-5xl flex-col gap-card-gap">
-      <Section
-        title={
-          <span className="inline-flex items-center gap-2">
-            <FileText aria-hidden="true" className="size-4 text-muted-foreground" />
-            Documents
-          </span>
-        }
-        flush
-      >
+    <div className="flex flex-col gap-3">
+      <h2 className="text-section flex items-center gap-2 text-foreground">
+        <FileText aria-hidden="true" className="size-4 text-muted-foreground" />
+        Documents
+      </h2>
+      <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
         <Table>
           <TableHeader className="bg-table-head text-table-head-foreground">
             <TableRow className="hover:bg-transparent">
@@ -223,7 +218,7 @@ export function DocumentsTab({ booking }: { booking: BookingDetail }) {
             ) : null}
           </div>
         ) : null}
-      </Section>
+      </div>
     </div>
   );
 }

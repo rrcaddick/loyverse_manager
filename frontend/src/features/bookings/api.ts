@@ -273,6 +273,35 @@ export function usePopDismiss(id: number) {
   return useDetailMutation<number>(id, (popId) => api.post<BookingDetail>(`/bookings/${id}/pops/${popId}/dismiss`, {}), { successMessage: "Proof of payment dismissed" });
 }
 
+/** Release a bank credit from this booking: the payment goes, the credit is unallocated again. */
+export function useReleasePayment(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tx_id: number) => api.post(`/payments/bank-transactions/${tx_id}/unmatch`, {}),
+    meta: { silent: true },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: bookingKeys.detail(id) });
+      invalidateBookingWorld(qc);
+    },
+  });
+}
+
+/** Release here, then record on the booking it belongs to. */
+export function useMovePayment(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tx_id, to_booking_id }: { tx_id: number; to_booking_id: number }) => {
+      await api.post(`/payments/bank-transactions/${tx_id}/unmatch`, {});
+      return api.post<BookingDetail>(`/bookings/${to_booking_id}/payment-search/allocate`, { tx_id });
+    },
+    meta: { silent: true },
+    onSuccess: (detail) => {
+      void qc.invalidateQueries({ queryKey: bookingKeys.detail(id) });
+      invalidateBookingWorld(qc, detail);
+    },
+  });
+}
+
 /** The vehicle ticket PDF (legacy route, session-protected). */
 export function ticketPdfUrl(barcode: string, download = false): string {
   return `/group-bookings/${download ? "download" : "ticket"}/${encodeURIComponent(barcode)}`;

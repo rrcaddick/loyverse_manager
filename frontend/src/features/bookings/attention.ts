@@ -4,7 +4,7 @@
  */
 
 import { availability, type ActionId } from "./actions";
-import { daysFromToday } from "./lib";
+import { daysFromToday, holdState } from "./lib";
 import { nextStep } from "./next-step";
 import type { BookingDetail } from "./types";
 
@@ -29,10 +29,31 @@ export function dueReminders(booking: BookingDetail): DueReminder[] {
   return out;
 }
 
-/** The tab's badge: the request review, the next step, due reminders, proofs waiting. */
+/** The hold has run out and no lapse reminder carries the notice already. */
+export function lapseNoticeDue(booking: BookingDetail): boolean {
+  if (holdState(booking)?.tone !== "red") return false;
+  if (availability(booking, "send-expiry").hidden) return false;
+  const step = nextStep(booking);
+  if (step.primary?.kind === "send" && step.primary.action === "send-expiry") return false;
+  return !dueReminders(booking).some((r) => r.action === "send-expiry");
+}
+
+/** No email address on the booking, unless the next step is already "add one". */
+export function emailMissing(booking: BookingDetail): boolean {
+  if (booking.contact_email) return false;
+  const step = nextStep(booking);
+  return step.primary?.kind !== "edit";
+}
+
+export function onSiteMissing(booking: BookingDetail): boolean {
+  const ended = booking.status === "cancelled" || booking.status === "lapsed" || booking.status === "no_show" || booking.status === "declined" || booking.status === "completed";
+  return !ended && !booking.contacts.some((c) => c.on_site);
+}
+
+/** The tab's badge: the request review, the next step, due reminders, the lapse notice, proofs waiting, missing details. */
 export function attentionCount(booking: BookingDetail): number {
   if (booking.status === "requested") return 1 + booking.pops.length;
   const step = nextStep(booking);
-  return (step.primary ? 1 : 0) + dueReminders(booking).length + booking.pops.length;
+  return (step.primary ? 1 : 0) + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
 }
 

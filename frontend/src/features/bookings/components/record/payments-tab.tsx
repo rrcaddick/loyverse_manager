@@ -6,24 +6,24 @@
  * and is found by the search; cash on the day comes from Loyverse later.
  */
 
-import { Banknote, FileCheck, Landmark, Mail, Search, Trash2 } from "lucide-react";
+import { Banknote, FileCheck, Landmark, Mail, Search } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 
 import { BigNumber, BigNumberRow } from "@/components/big-number";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
-import { useSubjectDialog } from "@/hooks/use-subject-dialog";
 import { errorMessage } from "@/lib/api";
 import { formatDate, formatDateShort, formatMoney, formatNumber } from "@/lib/format";
 
-import { useDeletePayment, usePopDismiss } from "../../api";
+import { usePopDismiss } from "../../api";
 import { isTentative } from "../../lib";
 import { moneyState } from "../../money";
 import { PAYMENT_KIND_LABELS, type BookingDetail, type Payment } from "../../types";
 import { useBookingActions } from "../../use-booking-actions";
+import { PaymentDialog } from "./payment-dialog";
 
 const money = (n: number) => formatMoney(n, { compact: true });
 
@@ -65,8 +65,7 @@ export function PaymentsTab({ booking }: { booking: BookingDetail }) {
 function PaymentsList({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const state = moneyState(booking);
-  const deleting = useSubjectDialog<Payment>();
-  const remove = useDeletePayment(booking.id);
+  const [selected, setSelected] = useState<Payment | null>(null);
   const rows = [...booking.payments].sort((a, b) => ((a.paid_on ?? a.created_at) < (b.paid_on ?? b.created_at) ? 1 : -1));
   return (
     <Section
@@ -78,8 +77,8 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
         </span>
       }
       actions={
-        <div className="flex items-center gap-3">
-          <StatusPill tone={state.tone} label={state.label} />
+        <div className="flex items-center gap-4">
+          <StatusPill tone={state.tone} label={state.label} className="h-9 px-3.5 text-body" />
           <Button onClick={() => actions.openFindPayment()}>
             <Search data-icon="inline-start" />
             Find payment
@@ -90,42 +89,25 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing received yet.</p>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul className="-mx-5 divide-y divide-border">
           {rows.map((p) => (
-            <li key={p.id} className="flex items-center gap-x-4 py-2.5 first:pt-0 last:pb-0">
-              {p.bank_transaction_id ? <Landmark aria-hidden="true" className="size-4 shrink-0 text-green-text" /> : <Banknote aria-hidden="true" className="size-4 shrink-0 text-green-text" />}
-              <span className="w-28 shrink-0 text-body tabular text-foreground">{p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)}</span>
-              <span className="w-24 shrink-0 text-body font-medium tabular text-green-text">{money(p.amount)}</span>
-              <span className="w-28 shrink-0 text-sm text-muted-foreground">{PAYMENT_KIND_LABELS[p.kind] ?? p.kind}</span>
-              <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={[p.reference, p.note].filter(Boolean).join(" · ") || undefined}>
-                {p.reference ?? ""}
-                {p.note ? (p.reference ? ` · ${p.note}` : p.note) : ""}
-              </span>
-              <span className="w-24 shrink-0 text-right text-sm text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : (p.recorded_by_name ?? "System")}</span>
-              <span className="flex w-9 shrink-0 justify-end">
-                {p.bank_transaction_id ? null : (
-                  <Button variant="ghost" size="icon-sm" aria-label={`Remove the ${money(p.amount)} payment`} onClick={() => deleting.show(p)}>
-                    <Trash2 />
-                  </Button>
-                )}
-              </span>
+            <li key={p.id}>
+              <button type="button" onClick={() => setSelected(p)} className="flex w-full items-center gap-x-4 px-5 py-2.5 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset">
+                {p.bank_transaction_id ? <Landmark aria-hidden="true" className="size-4 shrink-0 text-green-text" /> : <Banknote aria-hidden="true" className="size-4 shrink-0 text-green-text" />}
+                <span className="w-28 shrink-0 text-body tabular text-foreground">{p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)}</span>
+                <span className="w-24 shrink-0 text-body font-medium tabular text-green-text">{money(p.amount)}</span>
+                <span className="w-28 shrink-0 text-sm text-muted-foreground">{PAYMENT_KIND_LABELS[p.kind] ?? p.kind}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={[p.reference, p.note].filter(Boolean).join(" · ") || undefined}>
+                  {p.reference ?? ""}
+                  {p.note ? (p.reference ? ` · ${p.note}` : p.note) : ""}
+                </span>
+                <span className="w-24 shrink-0 text-right text-sm text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : (p.recorded_by_name ?? "System")}</span>
+              </button>
             </li>
           ))}
         </ul>
       )}
-      <ConfirmDialog
-        open={deleting.open}
-        onOpenChange={deleting.onOpenChange}
-        title={`Remove the ${formatMoney(deleting.subject?.amount)} payment?`}
-        description="The amount comes off the paid total."
-        confirmLabel="Remove payment"
-        destructive
-        onConfirm={async () => {
-          if (!deleting.subject) return;
-          await remove.mutateAsync(deleting.subject.id);
-          deleting.close();
-        }}
-      />
+      <PaymentDialog booking={booking} payment={selected} open={selected !== null} onOpenChange={(o) => !o && setSelected(null)} />
     </Section>
   );
 }

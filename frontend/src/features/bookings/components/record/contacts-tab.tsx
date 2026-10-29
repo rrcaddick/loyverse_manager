@@ -12,8 +12,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
-import { Section } from "@/components/section";
-import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,10 +33,6 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
   const rows: BookingContact[] = booking.contacts.some((c) => c.role === "primary") ? booking.contacts : [primary, ...booking.contacts];
 
   async function change(contact: BookingContact, patch: { role?: "primary" | "cc"; on_site?: boolean }) {
-    if (contact.id === 0) {
-      toast.info("Save the booking once (Edit) so its contact can be changed here.");
-      return;
-    }
     try {
       await update.mutateAsync({ contactId: contact.id, ...patch });
     } catch (err) {
@@ -118,31 +112,23 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
   ];
 
   return (
-    <Section
-      title={
-        <span className="inline-flex items-center gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-section flex items-center gap-2 text-foreground">
           <Users aria-hidden="true" className="size-4 text-muted-foreground" />
           Contacts
-        </span>
-      }
-      description="Mail from any of these addresses lands on this booking. Every primary contact receives the WhatsApp ticket."
-      actions={
+        </h2>
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus data-icon="inline-start" />
           Add contact
         </Button>
-      }
-      flush
-    >
-      <DataTable columns={columns} data={rows} getRowId={(c) => `${c.id}-${c.email}`} pagination={false} maxHeight="60dvh" className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-4 [&_th:first-child]:pl-5 [&_th:last-child]:pr-4" />
-      {booking.contacts.some((c) => c.on_site) ? null : (
-        <p className="px-5 py-3 text-sm text-muted-foreground">
-          <StatusPill tone="amber" label="Nobody on site yet" size="sm" dot={false} /> <span className="ml-1">Tick On site for the person in charge on the day.</span>
-        </p>
-      )}
+      </div>
+      <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
+        <DataTable columns={columns} data={rows} getRowId={(c) => `${c.id}-${c.email}`} pagination={false} maxHeight="60dvh" className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-4 [&_th:first-child]:pl-5 [&_th:last-child]:pr-4" />
+      </div>
       <ContactDialog booking={booking} contact={editing} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />
       <ContactDialog booking={booking} contact={null} open={adding} onOpenChange={setAdding} />
-    </Section>
+    </div>
   );
 }
 

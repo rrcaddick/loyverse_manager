@@ -81,3 +81,23 @@ tab); the Payments tiles carry their state as pills top right and the money
 state with Find payment sits in the "Payments received" header; copy rules
 applied (no implementation talk in descriptions, labels capitalised,
 actions on one right edge).
+
+Third pass (owner's review, 29 Oct evening): tab badges only where something
+needs doing (Needs attention, Conversation's unanswered, Payments' proofs
+waiting). Needs attention also lists a missing email address, a missing
+on-site contact (the emergency contact at the gate) and the lapse notice
+when the hold has run out. Clicking a payment opens its dialog
+(`record/payment-dialog.tsx`): every field we hold, the bank transaction's
+included (from `GET /payments/bank-transactions/:id` with the raw payload),
+and at the bottom Release from this booking (our unmatch) or Move to
+another booking (unmatch, then allocate on the booking picked by reference
+or name); a payment without a bank transaction can only be removed. Quick
+actions are grouped by channel with the channel's colour: email in Gmail
+red, the ticket in WhatsApp green, then Confirm and Cancel. Documents and
+Contacts have their heading above the table, full width. The note box says
+only "Add a note…". The header's ⋯ menu holds only the status changes nothing
+else offers (lapsed, no-show, reopen) and is absent when there are none;
+"mark proforma sent" and "mark completed" are gone. A booking contact with
+no email now exists as a contacts row too (migration 015: email optional),
+so On site can be ticked on any booking.
+

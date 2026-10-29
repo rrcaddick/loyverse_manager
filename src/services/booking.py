@@ -563,13 +563,16 @@ def _mirror_primary_contact(booking_id: int) -> None:
     from src.models import booking_contact
 
     booking = booking_model.get(booking_id)
-    email = (booking or {}).get("contact_email")
-    if not booking or not email or "@" not in email:
+    if not booking:
         return
+    email = booking.get("contact_email")
     try:
-        booking_contact.upsert(
-            booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"), role="primary", source="booking"
-        )
+        if email and "@" in email:
+            booking_contact.upsert(
+                booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"), role="primary", source="booking"
+            )
+        else:
+            booking_contact.upsert_primary_without_email(booking_id, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"))
     except Exception:  # noqa: BLE001 - never let the mirror break a save
         logger.exception("Could not mirror the primary contact for booking %s", booking_id)
 

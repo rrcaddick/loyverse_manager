@@ -145,15 +145,15 @@ function Record({ booking }: { booking: BookingDetail }) {
           { value: "overview", label: "Overview" },
           { value: "attention", label: "Needs attention", count: attention },
           { value: "conversation", label: "Conversation", count: conversation.data?.unanswered_count ?? 0 },
-          { value: "payments", label: "Payments", count: booking.payments.length + booking.pops.length },
-          { value: "documents", label: "Documents", count: booking.documents.length },
+          { value: "payments", label: "Payments", count: booking.pops.length },
+          { value: "documents", label: "Documents" },
           { value: "activity", label: "Activity" },
-          { value: "contacts", label: "Contacts", count: Math.max(booking.contacts.length, 1) },
+          { value: "contacts", label: "Contacts" },
         ]}
       />
 
       {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} /> : null}
-      {tab === "attention" ? <AttentionTab booking={booking} onPayments={() => setTab("payments")} /> : null}
+      {tab === "attention" ? <AttentionTab booking={booking} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} /> : null}
       {tab === "conversation" ? (
         <Suspense fallback={<PageSkeleton rows={6} />}>
           <ConversationView bookingId={booking.id} />

@@ -5,7 +5,7 @@
  * a Work item. A request's review (Accept, Decline) is the first item.
  */
 
-import { Bell, CheckCircle2, FileCheck } from "lucide-react";
+import { AtSign, Bell, CheckCircle2, FileCheck, UserCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 
 import { availability } from "../../actions";
-import { dueReminders } from "../../attention";
+import { dueReminders, emailMissing, lapseNoticeDue, onSiteMissing } from "../../attention";
 import { relativeTo } from "../../lib";
 import { nextStep } from "../../next-step";
 import { REMINDER_KIND_LABELS, type BookingDetail } from "../../types";
@@ -22,7 +22,7 @@ import { useBookingActions } from "../../use-booking-actions";
 import { NextStepCard } from "../record-header";
 import { RequestBanner } from "./request-banner";
 
-export function AttentionTab({ booking, onPayments }: { booking: BookingDetail; onPayments: () => void }) {
+export function AttentionTab({ booking, onPayments, onContacts }: { booking: BookingDetail; onPayments: () => void; onContacts: () => void }) {
   const actions = useBookingActions();
   const reminders = booking.status === "requested" ? [] : dueReminders(booking);
   const step = nextStep(booking);
@@ -41,6 +41,49 @@ export function AttentionTab({ booking, onPayments }: { booking: BookingDetail; 
       ),
     };
   });
+  if (booking.status !== "requested" && lapseNoticeDue(booking)) {
+    const av = availability(booking, "send-expiry");
+    items.push({
+      key: "lapse",
+      urgency: "red",
+      icon: Bell,
+      title: "Hold expired",
+      detail: "The deposit did not arrive in time. Send the lapse notice; it marks the booking lapsed.",
+      action: (
+        <Button size="sm" variant="destructive" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send("send-expiry")}>
+          Send lapse notice
+        </Button>
+      ),
+    });
+  }
+  if (booking.status !== "requested" && emailMissing(booking)) {
+    items.push({
+      key: "email",
+      urgency: "amber",
+      icon: AtSign,
+      title: "No email address",
+      detail: "Nothing can be emailed until the booking has one.",
+      action: (
+        <Button size="sm" onClick={() => actions.openEdit("contact")}>
+          Add email
+        </Button>
+      ),
+    });
+  }
+  if (onSiteMissing(booking)) {
+    items.push({
+      key: "on-site",
+      urgency: "amber",
+      icon: UserCheck,
+      title: "No on-site contact",
+      detail: "Mark the person in charge on the day; it is the emergency contact at the gate.",
+      action: (
+        <Button size="sm" variant="outline" onClick={onContacts}>
+          Open contacts
+        </Button>
+      ),
+    });
+  }
   if (booking.pops.length > 0) {
     const n = booking.pops.length;
     items.push({

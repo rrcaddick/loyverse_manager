@@ -462,14 +462,13 @@ function NoteComposer({ booking }: { booking: BookingDetail }) {
         rows={2}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Add a note… (only the team sees it)"
+        placeholder="Add a note…"
         className="min-h-0 resize-y border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void submit();
         }}
       />
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">N focuses this box · Ctrl+Enter adds</span>
+      <div className="flex items-center justify-end gap-3">
         <Button type="submit" size="sm" disabled={!text.trim() || addNote.isPending}>
           {addNote.isPending ? <Spinner data-icon="inline-start" /> : <StickyNote data-icon="inline-start" />}
           Add note

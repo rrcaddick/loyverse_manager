@@ -40,6 +40,22 @@ def upsert(booking_id: int, email: str, *, name: str | None = None, mobile: str 
     return True
 
 
+def upsert_primary_without_email(booking_id: int, *, name: str | None, mobile: str | None, source: str = "booking") -> bool:
+    """The booking's own contact when it has no email address (migration 015
+    made email optional): one primary row with a NULL email. True when new."""
+    existing = query_one(
+        "SELECT id FROM booking_contacts WHERE booking_id = %s AND role = 'primary' AND email IS NULL", (int(booking_id),)
+    )
+    if existing:
+        execute("UPDATE booking_contacts SET name = %s, mobile = %s WHERE id = %s", (name, mobile, existing["id"]))
+        return False
+    execute(
+        "INSERT INTO booking_contacts (booking_id, email, name, mobile, role, source) VALUES (%s, NULL, %s, %s, 'primary', %s)",
+        (int(booking_id), name, mobile, source),
+    )
+    return True
+
+
 def update(booking_id: int, contact_id: int, *, name: str | None = None, mobile: str | None = None,
            on_site: bool | None = None, role: str | None = None, email: str | None = None) -> int:
     """Edit a contact's name, mobile, email or role, or mark it as the one on
@@ -95,7 +111,7 @@ def addresses_for_booking(booking_id: int) -> set[str]:
     rows = query(
         """
         SELECT LOWER(contact_email) AS e FROM bookings WHERE id = %s AND contact_email IS NOT NULL
-        UNION SELECT email FROM booking_contacts WHERE booking_id = %s
+        UNION SELECT email FROM booking_contacts WHERE booking_id = %s AND email IS NOT NULL
         """,
         (int(booking_id), int(booking_id)),
     )

@@ -6,7 +6,7 @@
  * internal note, the hold and the collapsed record footer keep their places.
  */
 
-import { CalendarDays, Pencil, UserCheck, Users, Zap } from "lucide-react";
+import { CalendarDays, Mail, MessageCircle, Pencil, UserCheck, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -124,29 +124,52 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 
 // ----------------------------------------------------------- quick actions
 
-const QUICK: ActionId[] = ["send-proforma", "send-ticket", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers", "confirm"];
+const EMAIL_ACTIONS: ActionId[] = ["send-proforma", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers"];
+const WHATSAPP_ACTIONS: ActionId[] = ["send-ticket"];
 
-/** One row across the top: every send the state allows, the next step filled, Cancel last. */
+/** Gmail red and WhatsApp green, so the channel is read at a glance. */
+const CHANNEL = {
+  email: { icon: Mail, outline: "border-[#d93025] text-[#d93025] hover:bg-[#d93025]/10 dark:border-[#f28b82] dark:text-[#f28b82]", filled: "border-[#d93025] bg-[#d93025] text-white hover:bg-[#b3261e]" },
+  whatsapp: { icon: MessageCircle, outline: "border-[#128c7e] text-[#128c7e] hover:bg-[#128c7e]/10 dark:border-[#25d366] dark:text-[#25d366]", filled: "border-[#128c7e] bg-[#128c7e] text-white hover:bg-[#0f766e]" },
+} as const;
+
+/** One row across the top, grouped by channel: email, then WhatsApp, then our own actions. */
 function QuickActionsRow({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const step = nextStep(booking);
   const primary = step.primary?.kind === "send" ? step.primary.action : null;
-  const ids = QUICK.filter((id) => !availability(booking, id).hidden);
+  const email = EMAIL_ACTIONS.filter((id) => !availability(booking, id).hidden);
+  const whatsapp = WHATSAPP_ACTIONS.filter((id) => !availability(booking, id).hidden);
+  const canConfirm = !availability(booking, "confirm").hidden;
   const canCancel = booking.allowed_transitions.includes("cancelled");
-  if (ids.length === 0 && !canCancel) return null;
+  if (email.length === 0 && whatsapp.length === 0 && !canConfirm && !canCancel) return null;
+
+  const channelButton = (id: ActionId, channel: keyof typeof CHANNEL) => {
+    const av = availability(booking, id);
+    const Icon = CHANNEL[channel].icon;
+    return (
+      <Gated key={id} availability={av}>
+        <Button variant="outline" size="sm" className={cn(primary === id ? CHANNEL[channel].filled : CHANNEL[channel].outline)} disabled={!av.enabled} onClick={() => actions.send(id)}>
+          <Icon data-icon="inline-start" />
+          {ACTION_LABELS[id]}
+        </Button>
+      </Gated>
+    );
+  };
+
   return (
     <div role="group" aria-label="Quick actions" className="flex flex-wrap items-center gap-2">
-      <Zap aria-hidden="true" className="size-4 text-muted-foreground" />
-      {ids.map((id) => {
-        const av = availability(booking, id);
-        return (
-          <Gated key={id} availability={av}>
-            <Button variant={primary === id ? "default" : "outline"} size="sm" disabled={!av.enabled} onClick={() => actions.send(id)}>
-              {ACTION_LABELS[id]}
-            </Button>
-          </Gated>
-        );
-      })}
+      {email.map((id) => channelButton(id, "email"))}
+      {email.length && whatsapp.length ? <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" /> : null}
+      {whatsapp.map((id) => channelButton(id, "whatsapp"))}
+      {(email.length || whatsapp.length) && (canConfirm || canCancel) ? <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" /> : null}
+      {canConfirm ? (
+        <Gated availability={availability(booking, "confirm")}>
+          <Button variant={primary === "confirm" ? "default" : "outline"} size="sm" disabled={!availability(booking, "confirm").enabled} onClick={() => actions.send("confirm")}>
+            {ACTION_LABELS.confirm}
+          </Button>
+        </Gated>
+      ) : null}
       {canCancel ? (
         <Button variant="outline" size="sm" className="text-red-text" onClick={() => actions.changeStatus("cancelled")}>
           Cancel booking

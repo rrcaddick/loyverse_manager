@@ -20,7 +20,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -28,7 +27,7 @@ import { formatDateShort, formatPhone, humanise, pluralise } from "@/lib/format"
 import { cn } from "@/lib/utils";
 import type { BookingStatus } from "@/types/api";
 
-import { ACTION_LABELS, STATUS_CHANGE_COPY, availability, type ActionId, type Availability } from "../actions";
+import { STATUS_CHANGE_COPY, type Availability } from "../actions";
 import { relativeTo, useGroupTypeLabel } from "../lib";
 import { nextStep, type StepVerb } from "../next-step";
 import type { BookingDetail } from "../types";
@@ -152,20 +151,13 @@ function Dot() {
 
 // ---------------------------------------------------------------- overflow
 
-/** Only what no tab offers: the lapse notice, a note, the other status changes. */
+/** Only the status changes nothing else offers (lapsed, no-show, reopen); none → no menu. */
+const MENU_STATUSES: BookingStatus[] = ["lapsed", "no_show", "enquiry"];
+
 function OverflowMenu({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
-  const a = (id: ActionId) => availability(booking, id);
-  const expiry = !a("send-expiry").hidden;
-  const confirmable = !a("confirm").hidden;
-  const transitions = booking.allowed_transitions.filter((t) => t !== "cancelled" && !(t === "confirmed" && confirmable));
-  if (!expiry && transitions.length === 0) {
-    return (
-      <Button variant="outline" size="icon" aria-label="More actions" onClick={actions.focusNote}>
-        <MoreHorizontal />
-      </Button>
-    );
-  }
+  const transitions = booking.allowed_transitions.filter((t) => MENU_STATUSES.includes(t));
+  if (transitions.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -175,22 +167,13 @@ function OverflowMenu({ booking }: { booking: BookingDetail }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuGroup>
-          <MenuAction availability={{ enabled: true }} label="Add note" onSelect={actions.focusNote} />
-          {expiry ? <MenuAction availability={a("send-expiry")} label={ACTION_LABELS["send-expiry"]} description="Emails the customer that the hold lapsed and marks the booking lapsed." destructive onSelect={() => actions.send("send-expiry")} /> : null}
+          <DropdownMenuLabel className="flex items-center justify-between gap-2 text-label text-muted-foreground uppercase">
+            Status <StatusPill status={booking.status} size="sm" />
+          </DropdownMenuLabel>
+          {transitions.map((target) => (
+            <StatusItem key={target} target={target} onSelect={() => actions.changeStatus(target)} />
+          ))}
         </DropdownMenuGroup>
-        {transitions.length ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex items-center justify-between gap-2 text-label text-muted-foreground uppercase">
-                Status <StatusPill status={booking.status} size="sm" />
-              </DropdownMenuLabel>
-              {transitions.map((target) => (
-                <StatusItem key={target} target={target} onSelect={() => actions.changeStatus(target)} />
-              ))}
-            </DropdownMenuGroup>
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -202,15 +185,6 @@ function StatusItem({ target, onSelect }: { target: BookingStatus; onSelect: () 
     <DropdownMenuItem variant={copy?.destructive ? "destructive" : "default"} onSelect={onSelect} className="flex-col items-start gap-0.5 py-1.5">
       <span className="font-medium">{copy?.label ?? humanise(target)}</span>
       {copy?.description ? <span className="text-xs text-muted-foreground">{copy.description}</span> : null}
-    </DropdownMenuItem>
-  );
-}
-
-function MenuAction({ availability: av, onSelect, label, description, destructive }: { availability: Availability; onSelect: () => void; label: string; description?: string; destructive?: boolean }) {
-  return (
-    <DropdownMenuItem disabled={!av.enabled} onSelect={onSelect} variant={destructive ? "destructive" : "default"} className="flex-col items-start gap-0.5 py-1.5" aria-label={av.enabled ? undefined : `${label}, unavailable: ${av.reason}`}>
-      <span className="font-medium">{label}</span>
-      {!av.enabled ? <span className="text-xs text-muted-foreground">{av.reason}</span> : description ? <span className="text-xs text-muted-foreground">{description}</span> : null}
     </DropdownMenuItem>
   );
 }

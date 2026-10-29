@@ -868,7 +868,8 @@ def update_contact(booking_id: int, contact_id: int):
         raise ApiError("validation_error", "Nothing to change", 422, {"contact": "Send name, mobile, email, role or on_site"})
     after = next((c for c in booking_contact.list_for_booking(booking_id) if int(c["id"]) == contact_id), before)
     # The mirrored primary contact is the booking's own contact: keep them in step.
-    if before.get("email") == (booking.get("contact_email") or "").lower():
+    is_own = (before.get("email") or "") == (booking.get("contact_email") or "").lower() and (before.get("email") or booking.get("role") or before.get("role") == "primary")
+    if is_own:
         sync = {}
         if "name" in data and after.get("name"):
             sync["contact_name"] = after["name"]
