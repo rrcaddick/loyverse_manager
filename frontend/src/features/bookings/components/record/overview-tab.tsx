@@ -6,8 +6,8 @@
  * internal note, the hold and the collapsed record footer keep their places.
  */
 
-import { CalendarDays, Pencil, UserCheck, Users } from "lucide-react";
-import { siGmail, siWhatsapp } from "simple-icons";
+import { CalendarDays, Mail, Pencil, UserCheck, Users } from "lucide-react";
+import { siWhatsapp } from "simple-icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -128,25 +128,22 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 const EMAIL_ACTIONS: ActionId[] = ["send-proforma", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers"];
 const WHATSAPP_ACTIONS: ActionId[] = ["send-ticket"];
 
-/** The brand's mark on a small white chip, so it reads on any button colour. Gmail #EA4335, WhatsApp #25D366 (simple-icons). */
-function BrandMark({ path, title, colour }: { path: string; title: string; colour: string }) {
-  return (
-    <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm bg-white">
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-3.5" style={{ fill: colour }}>
-        <title>{title}</title>
-        <path d={path} />
-      </svg>
-    </span>
-  );
-}
+/** A plain mail glyph for email; the WhatsApp mark (simple-icons) for WhatsApp, both in the button's text colour. */
 const CHANNEL = {
-  email: { mark: <BrandMark path={siGmail.path} title="Gmail" colour="#EA4335" /> },
-  whatsapp: { mark: <BrandMark path={siWhatsapp.path} title="WhatsApp" colour="#25D366" /> },
+  email: { mark: <Mail aria-hidden="true" className="size-4 shrink-0" /> },
+  whatsapp: {
+    mark: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0 fill-current">
+        <title>WhatsApp</title>
+        <path d={siWhatsapp.path} />
+      </svg>
+    ),
+  },
 } as const;
 
 /** Amber while nothing has gone out, green once it has (and the verb becomes Re-send). */
-const SENT_STYLE = "border-transparent bg-green-solid text-white hover:bg-green-solid/90";
-const UNSENT_STYLE = "border-transparent bg-amber-solid text-white hover:bg-amber-solid/90";
+const SENT_STYLE = "border-transparent bg-[#16a34a] text-white hover:bg-[#15803d]";
+const UNSENT_STYLE = "border-transparent bg-[#f59e0b] text-[#1f1a0a] hover:bg-[#d97706]";
 
 const EMAIL_KIND: Partial<Record<ActionId, string>> = {
   "send-proforma": "proforma",
