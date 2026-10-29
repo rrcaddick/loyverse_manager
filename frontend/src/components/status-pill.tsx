@@ -56,8 +56,8 @@ export const BOOKING_STATUS_META: Record<BookingStatus, StatusMeta> = {
   // Amber means "the move is ours" and lives on the Last action pill, so
   // Pending is the quiet tinted neutral and Request is blue (new, unread).
   requested: { label: "Request", tone: "blue" },
-  enquiry: { label: "Pending", tone: "neutral" },
-  proforma_sent: { label: "Pending", tone: "neutral" },
+  enquiry: { label: "Pending", tone: "amber" },
+  proforma_sent: { label: "Pending", tone: "amber" },
   confirmed: { label: "Confirmed", tone: "green" },
   completed: { label: "Completed", tone: "green-muted", icon: Check },
   cancelled: { label: "Cancelled", tone: "red" },

@@ -12,7 +12,7 @@ interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes
 /** Sortable column header: click or Enter cycles asc → desc → off. */
 export function DataTableColumnHeader<TData, TValue>({ column, title, align = "left", className }: DataTableColumnHeaderProps<TData, TValue>) {
   if (!column.getCanSort()) {
-    return <span className={cn(className)}>{title}</span>;
+    return <span className={cn("text-table-head-foreground", className)}>{title}</span>;
   }
   const sorted = column.getIsSorted();
   const Icon = sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ChevronsUpDown;
@@ -22,9 +22,9 @@ export function DataTableColumnHeader<TData, TValue>({ column, title, align = "l
       onClick={column.getToggleSortingHandler()}
       aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
       className={cn(
-        "-mx-1.5 inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-label uppercase outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+        "-mx-1.5 inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-label uppercase outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60",
         align === "right" && "flex-row-reverse",
-        sorted ? "text-foreground" : "text-muted-foreground",
+        sorted ? "text-table-head-foreground" : "text-table-head-foreground/85",
         className,
       )}
     >

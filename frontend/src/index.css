@@ -69,6 +69,10 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-nested: var(--surface-nested);
+  --color-table-head: var(--table-head);
+  --color-table-head-foreground: var(--table-head-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   /* Material surface tiers and state layers (scripts/gen-m3-tokens.mjs). */
   --color-surface-lowest: var(--surface-lowest);
   --color-surface-low: var(--surface-low);

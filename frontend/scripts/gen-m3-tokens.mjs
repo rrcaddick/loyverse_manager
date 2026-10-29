@@ -250,6 +250,24 @@ function tokens(theme, isDark) {
     "shadow-overlay": shadowLevel(3),
     "color-scheme": isDark ? "dark" : "light",
   };
+  // ---- The owner's palette (materialpalette.com, 27 Oct 2026) ----------
+  const PRIMARY = "#009688", PRIMARY_DARK = "#00796b";
+  const PRIMARY_TINT = "#80cbc4"; // the primary at 50 % over white (Teal 200)
+  const ACCENT = "#ff4081";
+  const TEXT = "#212121", TEXT_2 = "#757575", DIVIDER = "#bdbdbd", TEXT_3 = "#9e9e9e";
+  Object.assign(t, {
+    primary: PRIMARY, "primary-foreground": "#ffffff", "primary-hover": PRIMARY_DARK, "primary-text": PRIMARY_DARK,
+    "primary-soft": PRIMARY_TINT, "primary-container": PRIMARY_TINT, "on-primary-container": TEXT,
+    ring: PRIMARY, "selection-ring": PRIMARY, "selection-row": "#80cbc4",
+    "table-head": PRIMARY, "table-head-foreground": "#ffffff",
+    "sidebar-primary": PRIMARY, "sidebar-primary-foreground": "#ffffff", "sidebar-ring": PRIMARY,
+    "surface-hover": "color-mix(in srgb, " + PRIMARY + " 25%, transparent)",
+    highlight: ACCENT, "highlight-foreground": "#ffffff",
+    ...(L
+      ? { foreground: TEXT, "card-foreground": TEXT, "muted-foreground": TEXT_2, "faint-foreground": TEXT_3,
+          border: DIVIDER, "border-strong": TEXT_3, input: TEXT_3, "popover-foreground": TEXT, "heat-text": TEXT }
+      : {}),
+  });
   return t;
 }
 

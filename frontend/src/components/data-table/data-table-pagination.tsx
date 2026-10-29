@@ -18,7 +18,7 @@ export function DataTablePagination<TData>({ table, pageSizeOptions = [10, 25, 5
   const pageCount = Math.max(1, table.getPageCount());
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-2 pt-3 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-2 pt-3 pb-4 text-sm text-muted-foreground">
       <div className="tabular" aria-live="polite">
         {total === 0 ? "No rows" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
       </div>

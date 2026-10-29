@@ -99,7 +99,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
               <span
                 className={cn(
                   "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular",
-                  active ? "bg-primary text-primary-foreground" : "bg-foreground/8 text-muted-foreground",
+                  "bg-highlight text-highlight-foreground",
                 )}
               >
                 {formatNumber(count)}
