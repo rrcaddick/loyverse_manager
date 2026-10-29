@@ -110,28 +110,17 @@ export default function BookingsPage() {
       <Toolbar state={state} onChange={update} total={list.data ? total : null} />
 
       {isMobile ? (
-        list.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : items.length === 0 ? (
-          <EmptyBookings state={state} onClear={clear} onCreate={() => setCreateOpen(true)} />
-        ) : (
-          <>
+        // The cards scroll in their own box so the buckets, filters and pager
+        // stay on screen (owner's note, 29 Oct 2026).
+        <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-4 scrollbar-thin">
+          {list.isPending ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : items.length === 0 ? (
+            <EmptyBookings state={state} onClear={clear} onCreate={() => setCreateOpen(true)} />
+          ) : (
             <BookingCards items={items} tab={state.tab} />
-            {total > state.size ? (
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <Button variant="outline" size="sm" disabled={state.page <= 1} onClick={() => update({ page: state.page - 1 }, false)}>
-                  Previous
-                </Button>
-                <span className="tabular">
-                  Page {state.page} of {Math.ceil(total / state.size)}
-                </span>
-                <Button variant="outline" size="sm" disabled={state.page * state.size >= total} onClick={() => update({ page: state.page + 1 }, false)}>
-                  Next
-                </Button>
-              </div>
-            ) : null}
-          </>
-        )
+          )}
+        </div>
       ) : (
         // Desktop: the card takes the remaining height and only the table body
         // scrolls, so the buckets and filters never leave the screen.

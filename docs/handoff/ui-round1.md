@@ -171,3 +171,10 @@ action (the gate records them live). The action pill is 10.5 rem, sized to
 `config` and `scripts` into the web and worker containers, so a backend
 edit needs only `docker compose restart web worker`.
 
+Same day, later: whenever the two Status pills stack they share one width
+(10.5 rem at compact, 8 rem at stacked). At stacked the Group cell shows the
+reference with the counts on its first line and the group name under it;
+the contact is left out so the name stays readable. On phones the card
+view scrolls inside its own box under the buckets, filters and pager, which
+stay on screen (the fill layout now applies at every width).
+

@@ -14,9 +14,12 @@
  *   compact  < 76rem  the contextual columns fold away: Count, Arrived and
  *                     Reason into Group, Deposit due by into Date (two short
  *                     lines); the two Status pills stack
- *   stacked  < 56rem  Ref folds into Group, the year leaves the date, Payment
+ *   stacked  < 56rem  Group shows the reference and counts over the group
+ *                     name (no contact), the year leaves the date, Payment
  *                     shows paid and due on their own lines (the total is in
  *                     the tooltip), the action pill may truncate
+ *
+ * Whenever the two Status pills stack they share one width.
  *
  * Below md the list is cards (list-cards.tsx), so stacked is the floor. Base
  * classes are the full layout; the `@max-[…]/table:` variants are the
@@ -67,11 +70,15 @@ const group: Col = {
     const b = row.original;
     return (
       <div className="grid min-w-0">
-        <span className="flex min-w-0 items-baseline gap-1.5 text-body leading-5 font-medium text-foreground">
-          <RefLink booking={b} className="hidden shrink-0 @max-[56rem]/table:inline" />
-          <span className="truncate">{b.group_name}</span>
+        {/* Stacked: the reference on its own line with the counts, the group
+            name under it, the contact left out so the name stays readable. */}
+        <span className="hidden truncate text-sm leading-5 @max-[56rem]/table:block">
+          <RefLink booking={b} />
+          <span className="tabular text-muted-foreground"> · {formatNumber(b.people_booked)} people</span>
+          {b.arrived_count !== null ? <span className="tabular text-green-text"> · {formatNumber(b.arrived_count)} arrived</span> : null}
         </span>
-        <span className="truncate text-sm leading-4 text-muted-foreground">
+        <span className="truncate text-body leading-5 font-medium text-foreground">{b.group_name}</span>
+        <span className="truncate text-sm leading-4 text-muted-foreground @max-[56rem]/table:hidden">
           {b.contact_name}
           {b.area ? ` · ${b.area}` : ""}
           <span className="hidden tabular @max-[76rem]/table:inline"> · {formatNumber(b.people_booked)} people</span>
@@ -135,13 +142,13 @@ const status: Col = {
     return (
       <div className="grid gap-1">
         <div className="flex items-center gap-1.5 @max-[76rem]/table:flex-col @max-[76rem]/table:items-start @max-[76rem]/table:gap-1">
-          <StatusPill status={row.original.status} className="w-24 justify-center" />
+          <StatusPill status={row.original.status} className="w-24 justify-center @max-[76rem]/table:w-42 @max-[56rem]/table:w-32" />
           {a ? (
             <StatusPill
               tone={tone}
               label={a.label}
               dot={false}
-              className="w-42 justify-center @max-[56rem]/table:inline-block @max-[56rem]/table:w-auto @max-[56rem]/table:max-w-32 @max-[56rem]/table:truncate @max-[56rem]/table:text-center @max-[56rem]/table:leading-[1.375rem]"
+              className="w-42 justify-center @max-[56rem]/table:inline-block @max-[56rem]/table:w-32 @max-[56rem]/table:truncate @max-[56rem]/table:text-center @max-[56rem]/table:leading-[1.375rem]"
             />
           ) : null}
         </div>
