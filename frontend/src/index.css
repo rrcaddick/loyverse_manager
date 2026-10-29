@@ -241,6 +241,16 @@
     scrollbar-gutter: stable;
   }
 
+  /* Radix scroll locks (selects, menus, dialogs) hide the viewport scrollbar
+     and add a body margin to compensate. With classic scrollbars the page
+     still jumps 15 px while the lock is on, so keep the bar in place instead:
+     the lock's wheel and touch handlers still stop the page scrolling. */
+  body[data-scroll-locked][data-scroll-locked] {
+    overflow-y: scroll !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+  }
+
   body {
     @apply bg-background text-foreground text-base;
     min-height: 100svh;

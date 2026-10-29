@@ -10,7 +10,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router";
 
-import { LogoMark } from "@/components/brand/Logo";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useNavCounts } from "@/hooks/use-nav-counts";
 import { useAuth } from "@/lib/auth";
-import { APP_NAME, PARK_NAME } from "@/lib/brand";
+import { APP_NAME } from "@/lib/brand";
 import { formatNumber } from "@/lib/format";
 import { NAV_BOTTOM, NAV_MAIN, homeFor, isNavActive, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -162,16 +162,21 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" aria-label="Main">
-      <SidebarHeader className="h-header justify-center border-b border-sidebar-border">
+      {/* Open: the full lock-up at the drawer's width with the app name under
+          it (owner's note, 29 Oct 2026). Collapsed: the tree mark alone. */}
+      <SidebarHeader className="justify-center border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:h-header group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-0">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip={APP_NAME} className="gap-2.5 group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton
+              asChild
+              size="lg"
+              tooltip={APP_NAME}
+              className="h-auto flex-col items-stretch gap-2 px-2 py-2 group-data-[collapsible=icon]:flex-row group-data-[collapsible=icon]:justify-center"
+            >
               <NavLink to={homeFor(user.role)} aria-label={`${APP_NAME} home`}>
-                <LogoMark className="size-7 shrink-0 text-sidebar-foreground" />
-                <span className="grid leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-body font-semibold text-sidebar-foreground">{APP_NAME}</span>
-                  <span className="truncate text-xs text-muted-foreground">{PARK_NAME}</span>
-                </span>
+                <Logo className="w-full text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+                <LogoMark className="hidden size-7 shrink-0 text-sidebar-foreground group-data-[collapsible=icon]:inline-block" />
+                <span className="text-center text-sm font-semibold tracking-wide text-sidebar-foreground uppercase group-data-[collapsible=icon]:hidden">{APP_NAME}</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

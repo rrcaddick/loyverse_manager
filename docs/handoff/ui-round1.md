@@ -25,7 +25,7 @@ screen will follow. Research: `docs/research/08-contrast-elevation-tables.md`.
   show. What last happened is the **latest action**, not the status.
 - **Bookings list**: buckets Requests · Pending · Confirmed · Lapsed · Past ·
   All as filters over one column set — Ref (primary cell) · Group / contact ·
-  Visit · People · Paid (of total) · Balance · Status · Latest action — plus
+  Date · Count · Payment · Status (since 29 Oct; see the addendum) — plus
   one contextual column (Pending: Deposit due by; Past: Arrived; Lapsed:
   Reason). Ranges: Upcoming, This week, This month, Next month, Past, All
   dates. Page sizes 25 / 50 / 100 / All (500). State in the URL (`?tab=
@@ -66,3 +66,35 @@ customer acted last, green when we did; labels Customer reply / Response
 sent / Proforma sent …), and Pending status is the tinted neutral so amber
 means one thing. Screenshots in `data/screenshots/r1b/` (Graphite light,
 Fynbos dark, Lagoon light, Indigo dark, hover states, 1920).
+
+## Addendum, 29 Oct 2026: design signed off; list housekeeping
+
+The owner signed off the design at the commit before the calibration sheet
+(`ca47a39`) with his materialpalette teal applied and the approved elevation
+added back: Teal 500 `#009688` on the table head, buttons and the active nav
+item; `#FF4081` count badges; the 50 % tint `#80CBC4` on the active filter
+and tab; the hovered row at 25 % primary; text `#212121` / `#757575`;
+dividers `#BDBDBD`; Pending amber; padding under the pagination. The
+palette lives as an override block at the end of `tokens()` in
+`frontend/scripts/gen-m3-tokens.mjs`. The calibration ladder and the
+Material 2 pass that followed are kept under the tag
+`archive/palette-explorations`, not on the branch. (The owner's screen
+brightness was down during the first pass, which explains the contrast
+chase.)
+
+Same day on the list: Paid and Balance became one **Payment** cell
+(`features/bookings/components/payment-bar.tsx`: paid of total, a bar that
+fills with the payments made, the deposit as a tick on the bar, what is
+still due beside it; overpaid shows the credit in blue). Status and Last
+action became one **Status** cell: the pill, then the last action with its
+date and age under it, coloured by who acted (amber: the customer; green:
+us). Visit is now Date, People is now Count. The sidebar header shows the
+full lock-up at the drawer's width with "Farmyard Admin" under it when
+open, the tree mark when collapsed; `APP_NAME` is now Farmyard Admin
+(titles, login). Opening a select, menu or dialog no longer shifts the
+page: Radix's scroll lock hid the viewport scrollbar and padded the body,
+so `index.css` keeps the scrollbar on `body[data-scroll-locked]`.
+
+Open for discussion: the 56 px app header (sidebar toggle, breadcrumb,
+global search, help) duplicates the page title and the list's own search;
+the owner suggests dropping it and moving New booking onto the tabs row.

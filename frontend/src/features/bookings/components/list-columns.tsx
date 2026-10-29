@@ -3,12 +3,14 @@
  * docs/research/08): the buckets are filters, not different tables. A bucket
  * may add one contextual column:
  *
- *   Ref · Group / contact · Visit · People · Paid · Balance · Status · Latest action
+ *   Ref · Group / contact · Date · Count · Payment · Status
  *   + Pending: Deposit due by   + Past: Arrived   + Lapsed: Reason
  *
- * The reference is the row's primary cell (15 px semibold foreground); money
- * is right-aligned in tabular figures; the latest action is text with its
- * date under it, and says who acted.
+ * The reference is the row's primary cell (15 px semibold foreground).
+ * Payment is one cell: paid of total, a bar that fills with the payments, and
+ * what is still due (owner's note, 29 Oct 2026). Status is the booking's
+ * state as a whole: the status pill with the last action and its date under
+ * it, coloured by who acted (amber: the customer, the move is ours; green: us).
  */
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -16,15 +18,15 @@ import { Link } from "react-router";
 
 import { DataTableColumnHeader } from "@/components/data-table";
 import { StatusPill } from "@/components/status-pill";
-import { formatDate, formatDateShort, formatMoney, formatNumber } from "@/lib/format";
+import { formatDate, formatDateShort, formatDayMonth, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { daysFromToday, holdState, relativeDays, relativeTo } from "../lib";
 import type { BookingBucket, BookingListItem } from "../types";
+import { PaymentBar } from "./payment-bar";
 
 type Col = ColumnDef<BookingListItem>;
 
-const money = (n: number) => formatMoney(n, { compact: true });
 const CELL = "py-1.5";
 
 const ref: Col = {
@@ -58,7 +60,7 @@ const group: Col = {
 
 const visit: Col = {
   accessorKey: "visit_date",
-  header: ({ column }) => <DataTableColumnHeader column={column} title="Visit" />,
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
   cell: ({ row }) => {
     const d = daysFromToday(row.original.visit_date);
     return (
@@ -75,66 +77,38 @@ const visit: Col = {
 
 const people: Col = {
   accessorKey: "people_booked",
-  header: ({ column }) => <DataTableColumnHeader column={column} title="People" align="right" />,
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Count" align="right" />,
   cell: ({ row }) => <span className="text-body">{formatNumber(row.original.people_booked)}</span>,
   meta: { align: "right", numeric: true, className: cn(CELL, "w-16") },
 };
 
-const paid: Col = {
-  id: "paid_total",
-  header: ({ column }) => <DataTableColumnHeader column={column} title="Paid" align="right" />,
+const payment: Col = {
+  id: "payment",
+  header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
   enableSorting: false,
-  cell: ({ row }) => {
-    const b = row.original;
-    return (
-      <div className="grid whitespace-nowrap">
-        <span className={cn("text-body leading-5", b.paid_total > 0 ? "text-green-text" : "text-muted-foreground")}>{money(b.paid_total)}</span>
-        <span className="text-sm leading-4 text-muted-foreground">of {money(b.total_amount)}</span>
-      </div>
-    );
-  },
-  meta: { align: "right", numeric: true, className: CELL },
-};
-
-const balance: Col = {
-  id: "balance_due",
-  header: ({ column }) => <DataTableColumnHeader column={column} title="Balance" align="right" />,
-  enableSorting: false,
-  cell: ({ row }) => {
-    const b = row.original;
-    const paidUp = b.balance_due <= 0.005 && b.total_amount > 0;
-    if (b.balance_due < -0.005) return <span className="text-body text-blue-text">credit {money(-b.balance_due)}</span>;
-    return <span className={cn("text-body", paidUp ? "text-green-text" : "text-foreground")}>{money(b.balance_due)}</span>;
-  },
-  meta: { align: "right", numeric: true, className: CELL },
+  cell: ({ row }) => <PaymentBar booking={row.original} />,
+  meta: { className: cn(CELL, "w-56") },
 };
 
 const status: Col = {
   accessorKey: "status",
   header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-  cell: ({ row }) => <StatusPill status={row.original.status} />,
-  meta: { className: cn(CELL, "w-28") },
-};
-
-/** Amber: the customer acted last, the move is ours. Green: we acted last. */
-const latestAction: Col = {
-  id: "latest_action",
-  header: ({ column }) => <DataTableColumnHeader column={column} title="Last action" />,
-  enableSorting: false,
   cell: ({ row }) => {
     const a = row.original.latest_action;
-    if (!a) return <span className="text-muted-foreground">—</span>;
-    const tone = a.who === "customer" ? "amber" : a.who === "us" ? "green" : "neutral";
     return (
-      <div className="grid justify-items-start gap-0.5 whitespace-nowrap">
-        <StatusPill tone={tone} label={a.label} dot={false} />
-        <span className="text-sm leading-4 tabular text-muted-foreground">
-          {formatDate(a.at)} · {relativeTo(a.at.slice(0, 10))}
-        </span>
+      <div className="grid min-w-0 justify-items-start gap-0.5 whitespace-nowrap">
+        <StatusPill status={row.original.status} />
+        {a ? (
+          <span className="max-w-full truncate text-sm leading-4 tabular text-muted-foreground" title={`${a.label} · ${formatDate(a.at)}`}>
+            <span className={cn("font-medium", a.who === "customer" ? "text-amber-text" : a.who === "us" ? "text-green-text" : "text-foreground")}>{a.label}</span>
+            {" · "}
+            {formatDayMonth(a.at)} · {relativeTo(a.at.slice(0, 10))}
+          </span>
+        ) : null}
       </div>
     );
   },
-  meta: { className: cn(CELL, "min-w-40") },
+  meta: { className: cn(CELL, "min-w-44") },
 };
 
 const depositDueBy: Col = {
@@ -173,7 +147,7 @@ const reason: Col = {
   meta: { className: cn(CELL, "max-w-[18rem]") },
 };
 
-const CORE: Col[] = [ref, group, visit, people, paid, balance, status, latestAction];
+const CORE: Col[] = [ref, group, visit, people, payment, status];
 
 export function columnsFor(tab: BookingBucket): Col[] {
   switch (tab) {

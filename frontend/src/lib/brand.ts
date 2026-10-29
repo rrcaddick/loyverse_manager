@@ -1,6 +1,6 @@
 /** Park identity used by the shell (public layout footer, login, titles). */
 
-export const APP_NAME = "Farmyard Bookings";
+export const APP_NAME = "Farmyard Admin";
 export const PARK_NAME = "The Farmyard Park";
 export const PARK_LEGAL_NAME = "The Farmyard Park (Pty) Ltd";
 
