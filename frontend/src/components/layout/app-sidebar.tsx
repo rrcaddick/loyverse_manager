@@ -10,10 +10,11 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router";
 
-import { Logo, LogoMark } from "@/components/brand/Logo";
+import { Logo, LogoEmblem } from "@/components/brand/Logo";
 import { CountBadge } from "@/components/count-badge";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Sidebar,
   SidebarContent,
@@ -43,7 +44,8 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { pathname } = useLocation();
   const [params] = useSearchParams();
-  const { isMobile, setOpenMobile, state } = useSidebar();
+  const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
   const counts = useNavCounts();
   const onWork = pathname === "/work" || pathname.startsWith("/work/");
   // Open on Work, otherwise remember the last toggle (the render-time sync
@@ -148,30 +150,39 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" aria-label="Main">
       {/* Open: the full lock-up at the drawer's width with the app name under
-          it (owner's note, 29 Oct 2026). Collapsed: the tree mark alone. The
-          toggle lives here since the app header went: a corner button when
-          open, under the mark when collapsed. */}
-      <SidebarHeader className="relative border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="lg"
-              tooltip={APP_NAME}
-              className="h-auto flex-col items-stretch gap-2 px-2 py-2 group-data-[collapsible=icon]:flex-row group-data-[collapsible=icon]:justify-center"
-            >
-              <NavLink to={homeFor(user.role)} aria-label={`${APP_NAME} home`}>
-                <Logo className="w-full text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
-                <LogoMark className="hidden size-7 shrink-0 text-sidebar-foreground group-data-[collapsible=icon]:inline-block" />
-                <span className="text-center text-sm font-semibold tracking-wide text-sidebar-foreground uppercase group-data-[collapsible=icon]:hidden">{APP_NAME}</span>
-              </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <SidebarTrigger
-          aria-label={state === "collapsed" ? "Expand navigation" : "Collapse navigation"}
-          className="absolute top-1.5 right-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:static"
-        />
+          it and a corner button to collapse. Collapsed: the emblem (tree and
+          gate cut from the logo) fills the rail and is itself the button that
+          opens the drawer (owner's notes, 29 Oct 2026). */}
+      <SidebarHeader className="relative border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-0.5 group-data-[collapsible=icon]:py-2">
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Open navigation"
+                onClick={toggleSidebar}
+                className="block w-full rounded-md text-sidebar-foreground outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              >
+                <LogoEmblem className="w-full" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Open navigation</TooltipContent>
+          </Tooltip>
+        ) : (
+          <>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild size="lg" className="h-auto flex-col items-stretch gap-2 px-2 py-2">
+                  <NavLink to={homeFor(user.role)} aria-label={`${APP_NAME} home`}>
+                    <Logo className="w-full text-sidebar-foreground" />
+                    <span className="text-center text-sm font-semibold tracking-wide text-sidebar-foreground uppercase">{APP_NAME}</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarTrigger aria-label="Collapse navigation" className="absolute top-1.5 right-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
+          </>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="pt-2">

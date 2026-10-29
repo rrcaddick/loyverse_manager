@@ -111,3 +111,13 @@ fixed width so they line up down the column and the last-action pill
 stretching to fill the rest, with the action's date and age under them.
 **Count badges** share one component (`components/count-badge.tsx`): one
 and two digits get the same chip, three or more stretch.
+
+Then, same afternoon: both Status pills are fixed widths (the status pill
+6.5 rem, the action pill 12 rem for "Payment confirmation sent"), so both
+columns of pills line up; the Status cell shrinks to them and spare width
+goes to Group and Payment. The collapsed rail shows a new **emblem**
+(`assets/brand/emblem.svg`: the tree and the two gate panels cut from the
+lock-up without the ground or grass tufts, so the gate's bottom rail is
+the flat base; the full logo file is untouched) filling the rail width, and the emblem itself is the button that
+opens the drawer. The A/B servers and worktrees are gone: :8010 is the one
+local URL, with `web/static/app` bind-mounted so `pnpm build` is live there.

@@ -220,7 +220,9 @@ cd frontend && pnpm typecheck && pnpm lint && pnpm build   # build → web/stati
 PYTHONPATH=. .venv/bin/python -m pytest tests -q               # backend tests
 ```
 
-`ENV=dev` and `SESSION_COOKIE_SECURE=false` must be set in the local `.env`. The
+`compose.dev.yaml` bind-mounts `web/static/app` into the web container, so after
+`pnpm build` the UI on :8010 is current with no image rebuild; :8010 is the one
+local URL for UI review. `ENV=dev` and `SESSION_COOKIE_SECURE=false` must be set in the local `.env`. The
 README's `poppler-utils` requirement is stale; PDF→JPEG uses PyMuPDF.
 
 ## Conventions

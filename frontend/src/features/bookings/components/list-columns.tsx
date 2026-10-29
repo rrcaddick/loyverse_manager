@@ -9,9 +9,10 @@
  * The reference is the row's primary cell (15 px semibold foreground).
  * Payment is one cell: paid of total, a bar that fills with the payments, and
  * what is still due (owner's note, 29 Oct 2026). Status is the booking's
- * state as a whole: the status pill (fixed width, so they line up) beside the
- * last-action pill (stretching; amber: the customer acted, the move is ours;
- * green: we did), with the action's date and age under them.
+ * state as a whole: the status pill beside the last-action pill, each at one
+ * fixed width (sized to its longest label) so both line up down the column
+ * (amber: the customer acted, the move is ours; green: we did), with the
+ * action's date and age under them.
  */
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -88,7 +89,7 @@ const payment: Col = {
   header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
   enableSorting: false,
   cell: ({ row }) => <PaymentBar booking={row.original} />,
-  meta: { className: cn(CELL, "w-56") },
+  meta: { className: cn(CELL, "min-w-60") },
 };
 
 const status: Col = {
@@ -101,7 +102,7 @@ const status: Col = {
       <div className="grid gap-1">
         <div className="flex items-center gap-1.5">
           <StatusPill status={row.original.status} className="w-26 justify-center" />
-          {a ? <StatusPill tone={tone} label={a.label} dot={false} className="min-w-0 flex-1 justify-center" /> : null}
+          {a ? <StatusPill tone={tone} label={a.label} dot={false} className="w-48 justify-center" /> : null}
         </div>
         {a ? (
           <span className="text-sm leading-4 tabular text-muted-foreground" title={formatDate(a.at)}>
@@ -111,7 +112,8 @@ const status: Col = {
       </div>
     );
   },
-  meta: { className: cn(CELL, "min-w-64") },
+  // Shrinks to its pills; spare width goes to the group and payment columns.
+  meta: { className: cn(CELL, "w-px whitespace-nowrap") },
 };
 
 const depositDueBy: Col = {
