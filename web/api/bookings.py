@@ -827,7 +827,10 @@ def add_contact(booking_id: int):
     email = str(data.get("email") or "").strip().lower()
     if "@" not in email:
         raise ApiError("validation_error", "Enter an email address", 422, {"email": "Enter a valid email address"})
-    mobile = booking_service.normalise_mobile(data.get("mobile")) if data.get("mobile") else None
+    try:
+        mobile = booking_service.normalise_mobile(data.get("mobile")) if data.get("mobile") else None
+    except booking_service.BookingError:
+        raise ApiError("validation_error", "Enter a valid South African mobile number", 422, {"mobile": "Enter a valid mobile number"})
     booking_contact.upsert(booking_id, email, name=data.get("name"), mobile=mobile, role="cc", source="manual")
     return ok({"items": [serialize_row(r) for r in booking_contact.list_for_booking(booking_id)]}, 201)
 
@@ -854,8 +857,9 @@ def update_contact(booking_id: int, contact_id: int):
         raise ApiError("not_found", "No such contact on this booking", 404)
     mobile = data.get("mobile")
     if mobile:
-        mobile = booking_service.normalise_mobile(mobile)
-        if not mobile:
+        try:
+            mobile = booking_service.normalise_mobile(mobile)
+        except booking_service.BookingError:
             raise ApiError("validation_error", "Enter a valid South African mobile number", 422, {"mobile": "Enter a valid mobile number"})
     changed = booking_contact.update(
         booking_id, contact_id, name=data.get("name"), mobile=mobile, on_site=on_site, role=role, email=email
