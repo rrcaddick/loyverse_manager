@@ -138,7 +138,7 @@ export const router = createBrowserRouter([
             path: "bookings",
             handle: { crumb: "Bookings", crumbTo: "/bookings" },
             children: [
-              { index: true, lazy: page(() => import("@/pages/bookings/BookingsPage")), handle: { collapseSidebarBelow: 1600 } },
+              { index: true, lazy: page(() => import("@/pages/bookings/BookingsPage")), handle: { collapseSidebarBelow: 1600, layout: "fill" } },
               {
                 path: ":id",
                 lazy: page(() => import("@/pages/bookings/BookingDetailPage")),

@@ -121,3 +121,10 @@ lock-up without the ground or grass tufts, so the gate's bottom rail is
 the flat base; the full logo file is untouched) filling the rail width, and the emblem itself is the button that
 opens the drawer. The A/B servers and worktrees are gone: :8010 is the one
 local URL, with `web/static/app` bind-mounted so `pnpm build` is live there.
+
+The Bookings list no longer scrolls as a page on desktop (owner's note, 29
+Oct): the route uses `layout: "fill"` (AppLayout pins the padded page to the
+viewport on md+), the table card takes the remaining height, and only the
+table body scrolls (`DataTable fill`), with the header sticky inside that
+scroller and the pagination pinned under it. Phones keep page scrolling.
+

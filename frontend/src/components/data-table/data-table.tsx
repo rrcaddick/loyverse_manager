@@ -77,6 +77,8 @@ export interface DataTableProps<TData, TValue = unknown> {
   toolbar?: ReactNode;
   /** Sticky header while the page scrolls. Default true. */
   stickyHeader?: boolean;
+  /** Fill the parent flex column: the table body scrolls, the pagination stays under it. */
+  fill?: boolean;
   /** Constrain height and scroll within. */
   maxHeight?: string;
   /** 36 px rows instead of 44. */
@@ -113,6 +115,7 @@ export function DataTable<TData, TValue = unknown>({
   onRowSelectionChange,
   toolbar,
   stickyHeader = true,
+  fill = false,
   maxHeight,
   compact,
   dense = false,
@@ -166,10 +169,10 @@ export function DataTable<TData, TValue = unknown>({
   }
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex flex-col", fill && "min-h-0 flex-1", className)}>
       {toolbar ? <div className="flex flex-wrap items-center gap-2 pb-3">{toolbar}</div> : null}
       <div
-        className={cn("relative w-full overflow-auto scrollbar-thin", maxHeight && "max-h-(--table-max-h)")}
+        className={cn("relative w-full overflow-auto scrollbar-thin [&_[data-slot=table-container]]:overflow-visible", maxHeight && "max-h-(--table-max-h)", fill && "min-h-0 flex-1")}
         style={maxHeight ? ({ "--table-max-h": maxHeight } as React.CSSProperties) : undefined}
       >
         <Table className="[&_td]:align-middle">

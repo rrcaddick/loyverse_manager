@@ -8,7 +8,10 @@
  *   through its route handle, any page can with `useSidebarCollapsed()`.
  *   A forced collapse never overwrites the cookie.
  * - Route handles may set `layout: "full"` to drop the page padding and give
- *   the page the full viewport height (the calendar's viewport fit).
+ *   the page the full viewport height (the calendar's viewport fit), or
+ *   `layout: "fill"` to keep the padding but pin the page to the viewport on
+ *   desktop so one child scrolls inside it (the Bookings list: its controls
+ *   never scroll away, only the table does).
  * - Global keys: G T/W/C/B/M navigate, ? opens the cheat sheet, / opens the
  *   search dialog (or focuses the Bookings list's own box), Ctrl/Cmd+B
  *   toggles the sidebar (shadcn).
@@ -43,8 +46,8 @@ function writeSidebarCookie(open: boolean): void {
 }
 
 interface LayoutHandle {
-  /** "full": no page padding, full height under the header. */
-  layout?: "full" | "page";
+  /** "full": no padding, viewport height. "fill": padded, viewport height on md+ (one child scrolls). */
+  layout?: "full" | "fill" | "page";
   /** Collapse the sidebar to the icon rail on this route. */
   collapseSidebar?: boolean;
   /** Collapse it only while the viewport is narrower than this many px (wide tables). */
@@ -123,6 +126,7 @@ export function AppLayout() {
   useShortcut("g m", () => navigate("/mail"), { enabled: isAdmin });
 
   const full = handle.layout === "full";
+  const fill = handle.layout === "fill";
 
   return (
     <ShellContext.Provider value={shell}>
@@ -143,6 +147,7 @@ export function AppLayout() {
               className={cn(
                 "flex min-w-0 flex-1 flex-col",
                 full ? "h-dvh min-h-0 overflow-hidden" : "mx-auto w-full max-w-page gap-card-gap px-4 py-5 max-md:pt-14 sm:px-6 lg:px-gutter",
+                fill && "md:h-dvh md:flex-none md:min-h-0 md:overflow-hidden",
               )}
             >
               <Suspense fallback={<PageSkeleton />}>

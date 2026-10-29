@@ -133,9 +133,15 @@ export default function BookingsPage() {
           </>
         )
       ) : (
-        <section className={cn("overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-opacity", list.isPlaceholderData && "opacity-80")} aria-label={`${TAB_LABELS[state.tab]} bookings`}>
+        // Desktop: the card takes the remaining height and only the table body
+        // scrolls, so the buckets and filters never leave the screen.
+        <section
+          className={cn("overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-opacity md:flex md:min-h-0 md:flex-1 md:flex-col", list.isPlaceholderData && "opacity-80")}
+          aria-label={`${TAB_LABELS[state.tab]} bookings`}
+        >
           <DataTable
             key={state.tab}
+            fill
             columns={columns}
             data={items}
             isLoading={list.isPending}
