@@ -138,3 +138,13 @@ label inventory for the owner to condense is `data/exports/
 booking-action-labels.xlsx` (last-action pill, status pill, booking action
 buttons; generated from the source files).
 
+Follow-ups: the brand in the drawer header swaps halfway through the 200 ms
+width transition (a delayed copy of the collapsed state) and both images
+have fixed widths (lock-up 13 rem, emblem 3.25 rem), so neither bulges while
+the drawer moves. A padding rule meant for the old footer row had landed on
+the scroll area and inset the header on both sides; it is gone, and the
+header now runs edge to edge. The two Status pills are 6 rem and 11.5 rem
+so the nine Pending columns fit at 1440 px (narrower screens scroll the
+table sideways until the labels are condensed). The browser's own clear
+button on search fields is hidden, so only the app's X shows.
+

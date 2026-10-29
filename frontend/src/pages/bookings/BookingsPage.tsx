@@ -149,7 +149,7 @@ export default function BookingsPage() {
             getRowId={(b) => String(b.id)}
             onRowClick={(b) => navigate(`/bookings/${b.id}`)}
             rowClassName={() => "h-row-lg"}
-            className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5 [&>div:last-child]:px-4"
+            className="[&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5"
             manualPagination
             rowCount={total}
             pageSize={state.size}

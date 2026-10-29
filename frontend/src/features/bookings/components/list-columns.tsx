@@ -89,7 +89,7 @@ const payment: Col = {
   header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
   enableSorting: false,
   cell: ({ row }) => <PaymentBar booking={row.original} />,
-  meta: { className: cn(CELL, "min-w-60") },
+  meta: { className: cn(CELL, "min-w-56") },
 };
 
 const status: Col = {
@@ -101,8 +101,8 @@ const status: Col = {
     return (
       <div className="grid gap-1">
         <div className="flex items-center gap-1.5">
-          <StatusPill status={row.original.status} className="w-26 justify-center" />
-          {a ? <StatusPill tone={tone} label={a.label} dot={false} className="w-48 justify-center" /> : null}
+          <StatusPill status={row.original.status} className="w-24 justify-center" />
+          {a ? <StatusPill tone={tone} label={a.label} dot={false} className="w-46 justify-center" /> : null}
         </div>
         {a ? (
           <span className="text-sm leading-4 tabular text-muted-foreground" title={formatDate(a.at)}>

@@ -250,6 +250,13 @@
     padding-right: 0 !important;
   }
 
+  /* Search fields draw their own clear control; the browser's would double it. */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   body {
     @apply bg-background text-foreground text-base;
     min-height: 100svh;
