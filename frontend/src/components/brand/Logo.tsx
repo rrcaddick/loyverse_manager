@@ -5,7 +5,7 @@
  *   <Logo className="h-8 text-foreground" />     full lock-up (1774 × 913)
  *   <LogoMark className="size-8 text-foreground" />  square tree mark
  *   <LogoEmblem className="w-12 text-foreground" />  tree and gate, flat bottom
- *                                                    (792 × 521), the collapsed rail
+ *                                                    (792 × 563), the collapsed rail
  */
 
 import emblemUrl from "@/assets/brand/emblem.svg";
@@ -51,7 +51,7 @@ export function LogoMark({ className, ...props }: Omit<MaskedProps, "url" | "rat
   return <Masked url={markUrl} ratio="1 / 1" className={className} {...props} />;
 }
 
-/** The tree and the two gate panels cut from the lock-up (`emblem.svg`, no ground or grass), flat along the gate's bottom rail. */
+/** The tree over its gate and fence, cut from the lock-up (`emblem.svg`): no ground or grass, the fence 5 % inside the canopy, the base 1.25× tall. */
 export function LogoEmblem({ className, ...props }: Omit<MaskedProps, "url" | "ratio">) {
-  return <Masked url={emblemUrl} ratio="792 / 521" className={className} {...props} />;
+  return <Masked url={emblemUrl} ratio="792 / 563" className={className} {...props} />;
 }

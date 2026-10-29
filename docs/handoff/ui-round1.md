@@ -178,11 +178,17 @@ the contact is left out so the name stays readable. On phones the card
 view scrolls inside its own box under the buckets, filters and pager, which
 stay on screen (the fill layout now applies at every width).
 
-Card screens come in two forms (table screens are unchanged: New booking
-on the buckets row). With room (480–767 px): the search, the range chips on
-centred lines, then one row with the pager on the left and New booking on
-the right. Narrower: the buckets and date ranges are two dropdowns side by
-side above the search, the pager row under it, and New booking is a round
-floating plus at the bottom right. The emblem has its fence back: the two
-panels narrowed so their outer ends line up with the canopy's edges, and the
-whole fence-and-gate assembly stretched 1.5× vertically from its base.
+The list's controls by width (the toolbar and the buckets row are named
+containers, `@container/toolbar` and `@container/header`). Table screens:
+one row while it fits; under 70 rem the pager and rows dropdown join the
+search on the first row and the range chips centre on the second; under
+48 rem the buckets fill their row, so New booking joins the search row too.
+Card screens (viewport under 768 px) come in two forms. With room (480 px
+up): the buckets wrap and centre, the search with New booking beside it,
+the chips centred, then the pager with the rows dropdown at the right.
+Narrower: the buckets and date ranges are two dropdowns above the search,
+the pager row under it with the rows dropdown at the right, and New booking
+is a round floating plus. The emblem has its fence back: the panels sit 5 %
+inside the canopy's edges, the fence-and-gate assembly is 1.25× tall and
+grows downward from the fence top so the canopy stays clear, and the trunk
+is carried down to the new base.

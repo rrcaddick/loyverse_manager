@@ -82,7 +82,7 @@ export default function BookingsPage() {
           moves to the pager row, and on narrow phones the buckets and date
           ranges become two dropdowns and the action a floating plus
           (owner's notes, 29 Oct 2026). */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className={cn("@container/header flex flex-wrap items-center gap-3", layout === "cards" ? "justify-center" : "justify-between")}>
         <h1 className="sr-only">Bookings</h1>
         {layout === "phone" ? (
           <div className="grid w-full grid-cols-2 gap-2">
@@ -120,6 +120,7 @@ export default function BookingsPage() {
             aria-label="Booking buckets"
             value={state.tab}
             onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
+            className={layout === "cards" ? "flex-wrap justify-center overflow-visible" : undefined}
             items={[
               { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
               { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
@@ -131,7 +132,8 @@ export default function BookingsPage() {
           />
         )}
         {layout === "table" ? (
-          <Button onClick={() => setCreateOpen(true)}>
+          // Hidden when the buckets fill the row; the toolbar shows it instead.
+          <Button className="@max-[48rem]/header:hidden" onClick={() => setCreateOpen(true)}>
             <Plus data-icon="inline-start" />
             New booking
           </Button>
@@ -161,8 +163,8 @@ export default function BookingsPage() {
         total={list.data ? total : null}
         layout={layout}
         action={
-          layout === "cards" ? (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+          layout !== "phone" ? (
+            <Button onClick={() => setCreateOpen(true)}>
               <Plus data-icon="inline-start" />
               New booking
             </Button>
@@ -264,12 +266,15 @@ interface ToolbarProps {
   onChange: (patch: Partial<ListState>, resetPage?: boolean) => void;
   total: number | null;
   /**
-   * table: one wrapping row. cards: the search, the range chips on centred
-   * lines, then the pager on the left and the action on the right. phone:
-   * the ranges are a dropdown in the header, so only the search and pager.
+   * table: one row while it fits; under 70 rem the pager joins the search on
+   * the first row and the range chips centre on the second; under 48 rem the
+   * action joins the first row too (the buckets row has no room for it).
+   * cards: search + action, the chips centred, then the pager with the rows
+   * dropdown at the right. phone: the ranges are a dropdown in the header, so
+   * just the search and the pager row.
    */
   layout?: ToolbarLayout;
-  /** The primary action for the cards layout (a floating plus covers phone). */
+  /** The primary action (New booking) for the rows that carry it. */
   action?: ReactNode;
 }
 
@@ -292,75 +297,121 @@ function Toolbar({ state, onChange, total, layout = "table", action }: ToolbarPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  const stacked = layout !== "table";
-  return (
-    <div className={cn("flex w-full gap-2", stacked ? "flex-col" : "flex-wrap items-center")}>
-      <form
-        role="search"
-        className={stacked ? "w-full" : "w-80"}
-        onSubmit={(e) => {
-          e.preventDefault();
-          onChange({ q: q.trim() });
-        }}
-      >
-        <InputGroup>
-          <InputGroupAddon>
-            <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+  const search = (
+    <form
+      role="search"
+      className={layout === "table" ? "w-80 @max-[70rem]/toolbar:w-auto @max-[70rem]/toolbar:min-w-40 @max-[70rem]/toolbar:flex-1 @max-[70rem]/toolbar:max-w-80" : "min-w-0 flex-1"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onChange({ q: q.trim() });
+      }}
+    >
+      <InputGroup>
+        <InputGroupAddon>
+          <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+        </InputGroupAddon>
+        <InputGroupInput data-list-search type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, group, contact, phone, area" aria-label="Search bookings" autoComplete="off" />
+        {q ? (
+          <InputGroupAddon align="inline-end">
+            <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-selection-ring">
+              <X className="size-3.5" />
+            </button>
           </InputGroupAddon>
-          <InputGroupInput data-list-search type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, group, contact, phone, area" aria-label="Search bookings" autoComplete="off" />
-          {q ? (
-            <InputGroupAddon align="inline-end">
-              <button type="button" aria-label="Clear search" onClick={() => setQ("")} className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-selection-ring">
-                <X className="size-3.5" />
-              </button>
-            </InputGroupAddon>
-          ) : null}
-        </InputGroup>
-      </form>
-
-      {layout !== "phone" ? (
-        <div role="group" aria-label="Date range" className={cn("flex flex-wrap items-center gap-1", layout === "cards" && "w-full justify-center")}>
-          {RANGE_OPTIONS.map((o) => (
-            <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
-              {o.label}
-            </Button>
-          ))}
-          {hasActiveFilters(state) ? (
-            <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
-              <X data-icon="inline-start" />
-              Clear
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* The pager lives here, Gmail-style, so no row is lost to a footer
-          (owner's note, 29 Oct 2026). */}
-      <div className={cn("flex items-center gap-1", stacked ? "w-full" : "ml-auto")}>
-        {total !== null ? (
-          <span className="mr-1 text-sm tabular text-muted-foreground" aria-live="polite">
-            {total === 0 ? "No bookings" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
-          </span>
         ) : null}
-        <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={state.page <= 1} onClick={() => onChange({ page: state.page - 1 }, false)}>
-          <ChevronLeft />
-        </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={state.page >= pageCount} onClick={() => onChange({ page: state.page + 1 }, false)}>
-          <ChevronRight />
-        </Button>
-        <Select value={String(state.size)} onValueChange={(v) => onChange({ size: Number(v) })}>
-          <SelectTrigger size="sm" className="ml-2 w-28" aria-label="Rows per page">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAGE_SIZES.map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n === 500 ? "All rows" : `${n} rows`}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {action ? <div className="ml-auto">{action}</div> : null}
+      </InputGroup>
+    </form>
+  );
+
+  const chips =
+    layout === "phone" ? null : (
+      <div
+        role="group"
+        aria-label="Date range"
+        className={cn(
+          "flex flex-wrap items-center gap-1",
+          layout === "table" ? "order-2 @max-[70rem]/toolbar:order-3 @max-[70rem]/toolbar:w-full @max-[70rem]/toolbar:justify-center" : "w-full justify-center",
+        )}
+      >
+        {RANGE_OPTIONS.map((o) => (
+          <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
+            {o.label}
+          </Button>
+        ))}
+        {hasActiveFilters(state) ? (
+          <Button variant="ghost" size="sm" onClick={() => onChange({ range: TAB_DEFAULTS[state.tab].range, q: "" })}>
+            <X data-icon="inline-start" />
+            Clear
+          </Button>
+        ) : null}
+      </div>
+    );
+
+  // The pager lives up here, Gmail-style, so no row is lost to a footer
+  // (owner's note, 29 Oct 2026).
+  const pager = (
+    <>
+      {total !== null ? (
+        <span className="mr-1 text-sm tabular text-muted-foreground" aria-live="polite">
+          {total === 0 ? "No bookings" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
+        </span>
+      ) : null}
+      <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={state.page <= 1} onClick={() => onChange({ page: state.page - 1 }, false)}>
+        <ChevronLeft />
+      </Button>
+      <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={state.page >= pageCount} onClick={() => onChange({ page: state.page + 1 }, false)}>
+        <ChevronRight />
+      </Button>
+    </>
+  );
+  const rows = (
+    <Select value={String(state.size)} onValueChange={(v) => onChange({ size: Number(v) })}>
+      <SelectTrigger size="sm" className="w-28" aria-label="Rows per page">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {PAGE_SIZES.map((n) => (
+          <SelectItem key={n} value={String(n)}>
+            {n === 500 ? "All rows" : `${n} rows`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  if (layout === "table") {
+    return (
+      <div className="@container/toolbar flex w-full flex-wrap items-center gap-2">
+        {search}
+        {chips}
+        <div className="order-3 ml-auto flex items-center gap-1 @max-[70rem]/toolbar:order-2">
+          {pager}
+          <span className="ml-2">{rows}</span>
+          {action ? <span className="ml-2 hidden @max-[48rem]/toolbar:inline-flex">{action}</span> : null}
+        </div>
+      </div>
+    );
+  }
+  if (layout === "cards") {
+    return (
+      <div className="flex w-full flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {search}
+          {action}
+        </div>
+        {chips}
+        <div className="flex items-center gap-1">
+          {pager}
+          <span className="ml-auto">{rows}</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-2">
+      {search}
+      <div className="flex items-center gap-1">
+        {pager}
+        <span className="ml-auto">{rows}</span>
       </div>
     </div>
   );
