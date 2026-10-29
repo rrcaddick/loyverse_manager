@@ -221,7 +221,7 @@ function fromEmail(m: BookingEmail): Entry {
     ),
     actor: who,
     pill: failed ? { label: "Failed", tone: "red" } : m.kind ? { label: humanise(m.kind), tone: "neutral" } : inbound ? { label: "Received", tone: "blue" } : { label: "Sent", tone: "green-muted" },
-    open: "?tab=conversation",
+    open: `?tab=conversation&message=${m.id}`,
   };
 }
 

@@ -73,6 +73,8 @@ export interface ConversationViewProps {
   bridge?: ComposerBridge;
   /** Show "N messages waiting · Mark handled" above the stream. Default: booking mode only. */
   waitingStrip?: boolean;
+  /** Open this message (email_messages id) and scroll it to the top of the thread instead of the newest. */
+  focusMessageId?: number;
   className?: string;
 }
 
@@ -91,7 +93,7 @@ export function ConversationView(props: ConversationViewProps) {
   return <ConversationInner key={scope} scope={scope} {...props} />;
 }
 
-function ConversationInner({ bookingId, thrid, partyKey, markDone, shortcuts = true, bridge, waitingStrip, className, scope }: ConversationViewProps & { scope: string }) {
+function ConversationInner({ bookingId, thrid, partyKey, markDone, shortcuts = true, bridge, waitingStrip, focusMessageId, className, scope }: ConversationViewProps & { scope: string }) {
   const qc = useQueryClient();
   const mode: "party" | "thread" | "booking" = partyKey ? "party" : thrid ? "thread" : "booking";
   const byParty = useParty(mode === "party" ? partyKey ?? null : null);
@@ -205,18 +207,27 @@ function ConversationInner({ bookingId, thrid, partyKey, markDone, shortcuts = t
 
   function isOpen(item: MessageItem, index: number): boolean {
     if (expandAll) return toggled[item.key] ?? true;
-    // Unanswered messages stay open: they are what needs reading.
-    return toggled[item.key] ?? (index === newestIndex || Boolean(item.unanswered));
+    // Unanswered messages stay open: they are what needs reading; so does the one that was asked for.
+    return toggled[item.key] ?? (index === newestIndex || item.id === focusMessageId || Boolean(item.unanswered));
   }
 
-  // ---- keep the newest in view
+  // ---- keep the newest in view, or the message that was asked for (once, at the top)
   const scrollRef = useRef<HTMLDivElement>(null);
+  const focusedRef = useRef<number | null>(null);
   const lastKey = items[items.length - 1]?.key ?? null;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    if (focusMessageId && query.isSuccess && focusedRef.current !== focusMessageId) {
+      const target = el.querySelector<HTMLElement>(`[data-message-key="msg-${focusMessageId}"]`);
+      if (target) {
+        focusedRef.current = focusMessageId;
+        target.scrollIntoView({ block: "start" });
+        return;
+      }
+    }
     el.scrollTop = el.scrollHeight;
-  }, [lastKey, pending?.state, query.isSuccess]);
+  }, [lastKey, pending?.state, query.isSuccess, focusMessageId]);
 
   /** Clear every mark in this view's own cache entry (the refetch confirms). */
   function settleMarks() {
@@ -341,7 +352,7 @@ function ConversationInner({ bookingId, thrid, partyKey, markDone, shortcuts = t
               </li>
             ) : null}
             {items.map((item, index) => (
-              <li key={item.key}>
+              <li key={item.key} data-message-key={isMessage(item) ? item.key : undefined} className="scroll-mt-2">
                 {isMessage(item) ? (
                   <MessageCard
                     id={index === newestIndex ? "newest-message" : undefined}
