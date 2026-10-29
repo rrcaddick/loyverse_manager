@@ -209,11 +209,43 @@ def list_bookings():
     return paginated(items, total, page, size)
 
 
+BUCKET_STATUSES = {
+    "requests": ("requested",),
+    "pending": ("enquiry", "proforma_sent"),
+    "confirmed": ("confirmed",),
+    "lapsed": ("lapsed", "cancelled"),
+    "past": ("completed", "no_show"),
+}
+
+
+def _attention_by_bucket() -> dict[str, int]:
+    """How many bookings in each list bucket have a Work item (the tab badges
+    show work to do, not how many bookings there are; owner, 29 Oct 2026)."""
+    from src.services import work as work_service
+
+    snap = work_service.snapshot()
+    status_of: dict[int, str] = {}
+    for view in work_service.LIVE_VIEWS:
+        for row in snap["views"].get(view, []):
+            b = row.get("booking") or {}
+            bid = b.get("booking_id") or b.get("id")
+            if bid:
+                status_of[int(bid)] = str(b.get("status") or "")
+    out = {bucket: sum(1 for s in status_of.values() if s in statuses) for bucket, statuses in BUCKET_STATUSES.items()}
+    out["all"] = len(status_of)
+    return out
+
+
 @bp.get("/counts")
 def status_counts():
-    """Per-status counts plus the list tabs' buckets (pending, confirmed, lapsed, past, all)."""
+    """Per-status counts, the list tabs' buckets (pending, confirmed, lapsed,
+    past, all) and ``attention``: bookings with Work items per bucket."""
     by_status = booking_model.counts_by_status()
-    return ok({"counts": by_status, **booking_model.counts_by_bucket(by_status)})
+    try:
+        attention = _attention_by_bucket()
+    except Exception:  # noqa: BLE001 - the badges are a convenience, never a failure
+        attention = {}
+    return ok({"counts": by_status, **booking_model.counts_by_bucket(by_status), "attention": attention})
 
 
 @bp.post("")
@@ -849,6 +881,9 @@ def update_contact(booking_id: int, contact_id: int):
     role = data.get("role")
     if role is not None and role not in ("primary", "cc"):
         raise ApiError("validation_error", "role must be primary or cc", 422, {"role": "primary or cc"})
+    own_row = next((c for c in booking_contact.list_for_booking(booking_id) if int(c["id"]) == contact_id and c.get("source") == "booking"), None)
+    if own_row is not None and role == "cc":
+        role = None  # the booking's own contact is always primary
     email = data.get("email")
     if email is not None and "@" not in str(email):
         raise ApiError("validation_error", "Enter a valid email address", 422, {"email": "Enter a valid email address"})

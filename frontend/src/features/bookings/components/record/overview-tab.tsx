@@ -6,7 +6,8 @@
  * internal note, the hold and the collapsed record footer keep their places.
  */
 
-import { CalendarDays, Mail, MessageCircle, Pencil, UserCheck, Users } from "lucide-react";
+import { CalendarDays, Pencil, UserCheck, Users } from "lucide-react";
+import { siGmail, siWhatsapp } from "simple-icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -127,10 +128,19 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
 const EMAIL_ACTIONS: ActionId[] = ["send-proforma", "reminder:still_interested", "reminder:deposit_reminder", "reminder:final_details", "send-payment-confirmation", "send-invoice", "send-final-invoice", "send-answers"];
 const WHATSAPP_ACTIONS: ActionId[] = ["send-ticket"];
 
-/** Gmail red and WhatsApp green, so the channel is read at a glance. */
+/** The brands' own marks and colours (simple-icons), filled, so the channel is read at a glance. */
+function BrandMark({ path, title }: { path: string; title: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 shrink-0 fill-current">
+      <title>{title}</title>
+      <path d={path} />
+    </svg>
+  );
+}
 const CHANNEL = {
-  email: { icon: Mail, outline: "border-[#d93025] text-[#d93025] hover:bg-[#d93025]/10 dark:border-[#f28b82] dark:text-[#f28b82]", filled: "border-[#d93025] bg-[#d93025] text-white hover:bg-[#b3261e]" },
-  whatsapp: { icon: MessageCircle, outline: "border-[#128c7e] text-[#128c7e] hover:bg-[#128c7e]/10 dark:border-[#25d366] dark:text-[#25d366]", filled: "border-[#128c7e] bg-[#128c7e] text-white hover:bg-[#0f766e]" },
+  // Literal classes (Tailwind reads them at build time): Gmail #EA4335, WhatsApp #25D366 (simple-icons).
+  email: { mark: <BrandMark path={siGmail.path} title="Gmail" />, className: "border-transparent bg-[#EA4335] text-white hover:bg-[#d33b2c]" },
+  whatsapp: { mark: <BrandMark path={siWhatsapp.path} title="WhatsApp" />, className: "border-transparent bg-[#25D366] text-white hover:bg-[#1fb857]" },
 } as const;
 
 /** One row across the top, grouped by channel: email, then WhatsApp, then our own actions. */
@@ -146,11 +156,10 @@ function QuickActionsRow({ booking }: { booking: BookingDetail }) {
 
   const channelButton = (id: ActionId, channel: keyof typeof CHANNEL) => {
     const av = availability(booking, id);
-    const Icon = CHANNEL[channel].icon;
     return (
       <Gated key={id} availability={av}>
-        <Button variant="outline" size="sm" className={cn(primary === id ? CHANNEL[channel].filled : CHANNEL[channel].outline)} disabled={!av.enabled} onClick={() => actions.send(id)}>
-          <Icon data-icon="inline-start" />
+        <Button variant="outline" size="sm" className={cn("gap-2 font-medium", CHANNEL[channel].className)} disabled={!av.enabled} onClick={() => actions.send(id)}>
+          {CHANNEL[channel].mark}
           {ACTION_LABELS[id]}
         </Button>
       </Gated>

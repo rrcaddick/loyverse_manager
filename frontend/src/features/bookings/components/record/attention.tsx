@@ -35,7 +35,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
       title: `${REMINDER_KIND_LABELS[r.kind as keyof typeof REMINDER_KIND_LABELS] ?? r.kind} due`,
       detail: `Due ${formatDate(r.due_on)} · ${relativeTo(r.due_on)}`,
       action: (
-        <Button size="sm" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send(r.action)}>
+        <Button size="sm" className="min-w-32" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send(r.action)}>
           Send
         </Button>
       ),
@@ -50,7 +50,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
       title: "Hold expired",
       detail: "The deposit did not arrive in time. Send the lapse notice; it marks the booking lapsed.",
       action: (
-        <Button size="sm" variant="destructive" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send("send-expiry")}>
+        <Button size="sm" className="min-w-32" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send("send-expiry")}>
           Send lapse notice
         </Button>
       ),
@@ -64,7 +64,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
       title: "No email address",
       detail: "Nothing can be emailed until the booking has one.",
       action: (
-        <Button size="sm" onClick={() => actions.openEdit("contact")}>
+        <Button size="sm" className="min-w-32" onClick={() => actions.openEdit("contact")}>
           Add email
         </Button>
       ),
@@ -78,7 +78,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
       title: "No on-site contact",
       detail: "Mark the person in charge on the day; it is the emergency contact at the gate.",
       action: (
-        <Button size="sm" variant="outline" onClick={onContacts}>
+        <Button size="sm" className="min-w-32" onClick={onContacts}>
           Open contacts
         </Button>
       ),
@@ -93,7 +93,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
       title: `${n} ${n === 1 ? "proof of payment" : "proofs of payment"} to verify`,
       detail: "Match it to the bank credit with Find payment, or dismiss it.",
       action: (
-        <Button size="sm" variant="outline" onClick={onPayments}>
+        <Button size="sm" className="min-w-32" onClick={onPayments}>
           Open payments
         </Button>
       ),

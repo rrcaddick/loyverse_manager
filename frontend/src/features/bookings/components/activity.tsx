@@ -317,6 +317,7 @@ export function Activity({ booking }: { booking: BookingDetail }) {
     <SegmentedTabs
       aria-label="Activity filter"
       size="sm"
+      countStyle="text"
       value={chip}
       onChange={setChip}
       items={[

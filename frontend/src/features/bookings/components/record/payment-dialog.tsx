@@ -107,9 +107,6 @@ function Body({ booking, payment, onDone }: { booking: BookingDetail; payment: P
                 Move to another booking
               </Button>
             ) : null}
-            <Button variant="ghost" onClick={onDone}>
-              Close
-            </Button>
           </div>
         </DialogFooter>
       ) : null}

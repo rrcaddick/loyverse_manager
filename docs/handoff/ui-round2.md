@@ -101,3 +101,15 @@ else offers (lapsed, no-show, reopen) and is absent when there are none;
 no email now exists as a contacts row too (migration 015: email optional),
 so On site can be ticked on any booking.
 
+Fourth pass (29 Oct, late): the Bookings list's bucket badges count bookings
+with a Work item in the bucket (`GET /bookings/counts` → `attention`), not
+bookings; the earlier 42 against "1–41 of 41" was the pending total against
+the Upcoming-filtered list. Activity's chip counts are "(n)" text, since they
+are totals, not work. Quick actions are filled with the brands' own marks
+and colours (simple-icons: Gmail #EA4335, WhatsApp #25D366). Needs
+attention's buttons are uniform. Contact checkboxes are centred, tick at
+once (optimistic cache update, loud toast and roll-back on failure), the
+booking's own contact is always primary, and a row no longer duplicates
+after a toggle. The payment dialog has no Close button; every dialog's X is
+a step larger.
+

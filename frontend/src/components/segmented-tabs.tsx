@@ -17,6 +17,7 @@ import type { LucideIcon } from "lucide-react";
 import { useRef, type KeyboardEvent } from "react";
 
 import { CountBadge } from "@/components/count-badge";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedTabItem<V extends string = string> {
@@ -34,10 +35,12 @@ interface SegmentedTabsProps<V extends string> {
   "aria-label": string;
   variant?: "segmented" | "line";
   size?: "md" | "sm";
+  /** "badge" (default) means work to do; "text" renders "(n)" for plain totals. */
+  countStyle?: "badge" | "text";
   className?: string;
 }
 
-export function SegmentedTabs<V extends string>({ items, value, onChange, variant = "segmented", size = "md", className, ...aria }: SegmentedTabsProps<V>) {
+export function SegmentedTabs<V extends string>({ items, value, onChange, variant = "segmented", size = "md", countStyle = "badge", className, ...aria }: SegmentedTabsProps<V>) {
   const refs = useRef<Map<V, HTMLButtonElement>>(new Map());
 
   function onKeyDown(event: KeyboardEvent, index: number) {
@@ -95,7 +98,7 @@ export function SegmentedTabs<V extends string>({ items, value, onChange, varian
           >
             {item.icon ? <item.icon aria-hidden="true" className="size-4" /> : null}
             {item.label}
-            {count !== null ? <CountBadge count={count} /> : null}
+            {count !== null ? countStyle === "text" ? <span className="text-sm font-normal tabular text-muted-foreground">({formatNumber(count)})</span> : <CountBadge count={count} /> : null}
           </button>
         );
       })}

@@ -90,14 +90,8 @@ export default function BookingsPage() {
           value={state.tab}
           onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
           className={layout === "cards" ? "@max-[37.75rem]/header:hidden" : undefined}
-          items={[
-            { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
-            { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
-            { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
-            { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
-            { value: "past", label: TAB_LABELS.past, count: c?.past },
-            { value: "all", label: TAB_LABELS.all, count: c?.all },
-          ]}
+          // The badges count bookings with work to do in the bucket, not bookings.
+          items={BOOKING_BUCKETS.map((tab) => ({ value: tab, label: TAB_LABELS[tab], count: c?.attention?.[tab] ?? 0 }))}
         />
         {layout === "cards" ? (
           <div className="hidden w-full grid-cols-2 gap-2 @max-[37.75rem]/header:grid">
@@ -107,11 +101,11 @@ export default function BookingsPage() {
               </SelectTrigger>
               <SelectContent>
                 {BOOKING_BUCKETS.map((tab) => {
-                  const n = tab === "requests" ? (c?.requests ?? 0) : (c?.[tab] ?? 0);
+                  const n = c?.attention?.[tab] ?? 0;
                   return (
                     <SelectItem key={tab} value={tab}>
                       {TAB_LABELS[tab]}
-                      {n > 0 ? ` (${formatNumber(n)})` : ""}
+                      {n > 0 ? ` (${formatNumber(n)} to do)` : ""}
                     </SelectItem>
                   );
                 })}

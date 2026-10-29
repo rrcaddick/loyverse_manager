@@ -94,6 +94,8 @@ export const BOOKING_BUCKETS: BookingBucket[] = ["requests", "pending", "confirm
 
 export interface BookingCounts {
   counts: Partial<Record<BookingStatus, number>>;
+  /** Bookings with a Work item, per bucket: what the tab badges show. */
+  attention?: Partial<Record<BookingBucket, number>>;
   requests?: number;
   pending: number;
   confirmed: number;

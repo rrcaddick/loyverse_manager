@@ -236,13 +236,41 @@ export interface ContactUpdate {
   on_site?: boolean;
 }
 
-/** A new number on a primary contact gets the ticket again; the result rides along as `whatsapp`. */
+/**
+ * Optimistic: the detail's contact row changes first (a tick shows at once),
+ * springs back on failure; the server's list replaces it on success. A new
+ * number on a primary contact gets the ticket again; the result rides along
+ * as `whatsapp`.
+ */
 export function useUpdateContact(id: number) {
-  return useContactsMutation<ContactUpdate, { items: BookingContact[]; whatsapp?: { success?: boolean; error?: string; to?: string } | null }>(
-    id,
-    ({ contactId, ...input }) => api.patch(`/bookings/${id}/contacts/${contactId}`, input),
-    { silent: true },
-  );
+  const qc = useQueryClient();
+  const key = bookingKeys.detail(id);
+  return useMutation({
+    mutationFn: ({ contactId, ...input }: ContactUpdate) => api.patch<{ items: BookingContact[]; whatsapp?: { success?: boolean; error?: string; to?: string } | null }>(`/bookings/${id}/contacts/${contactId}`, input),
+    meta: { silent: true },
+    onMutate: async ({ contactId, role, on_site, name, mobile, email }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<BookingDetail>(key);
+      if (before) {
+        const contacts = before.contacts.map((c) => {
+          if (c.id !== contactId) return on_site === true ? { ...c, on_site: 0 } : c;
+          return { ...c, ...(role ? { role } : {}), ...(on_site !== undefined ? { on_site: on_site ? 1 : 0 } : {}), ...(name !== undefined ? { name } : {}), ...(mobile !== undefined ? { mobile } : {}), ...(email !== undefined ? { email } : {}) };
+        });
+        qc.setQueryData<BookingDetail>(key, { ...before, contacts });
+      }
+      return { before };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.before) qc.setQueryData(key, context.before);
+    },
+    onSuccess: (result) => {
+      const current = qc.getQueryData<BookingDetail>(key);
+      if (current) qc.setQueryData<BookingDetail>(key, { ...current, contacts: result.items });
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: key });
+    },
+  });
 }
 
 export function useDeleteContact(id: number) {

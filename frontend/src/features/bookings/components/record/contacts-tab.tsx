@@ -29,14 +29,17 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
   const update = useUpdateContact(booking.id);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BookingContact | null>(null);
-  const primary = primaryContact(booking);
-  const rows: BookingContact[] = booking.contacts.some((c) => c.role === "primary") ? booking.contacts : [primary, ...booking.contacts];
+  // Every booking's own contact is mirrored into the rows (it is always primary);
+  // the synthesised one only stands in while a booking has no rows at all.
+  const rows: BookingContact[] = booking.contacts.length ? booking.contacts : [primaryContact(booking)];
+  const isOwn = (c: BookingContact) => c.source === "booking" || (!!c.email && c.email === (booking.contact_email ?? "").toLowerCase());
 
+  // The box ticks at once (the hook updates the cache first) and springs back with a loud toast on failure.
   async function change(contact: BookingContact, patch: { role?: "primary" | "cc"; on_site?: boolean }) {
     try {
       await update.mutateAsync({ contactId: contact.id, ...patch });
     } catch (err) {
-      toast.error(errorMessage(err));
+      toast.error(`Could not update ${contact.name || contact.email || "the contact"}: ${errorMessage(err)}`, { duration: 8000 });
     }
   }
 
@@ -75,18 +78,30 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
     },
     {
       id: "primary",
-      header: "Primary",
+      header: () => <div className="w-full text-center">Primary</div>,
       enableSorting: false,
       cell: ({ row }) => (
-        <Checkbox aria-label={`${row.original.name || row.original.email} is a primary contact`} checked={row.original.role === "primary"} disabled={update.isPending} onCheckedChange={(v) => change(row.original, { role: v === true ? "primary" : "cc" })} />
+        <div className="flex justify-center">
+          <Checkbox
+            aria-label={`${row.original.name || row.original.email} is a primary contact`}
+            checked={row.original.role === "primary"}
+            disabled={row.original.id === 0 || isOwn(row.original)}
+            title={isOwn(row.original) ? "The booking's own contact is always primary" : undefined}
+            onCheckedChange={(v) => change(row.original, { role: v === true ? "primary" : "cc" })}
+          />
+        </div>
       ),
       meta: { align: "center", className: "w-24" },
     },
     {
       id: "on_site",
-      header: "On site",
+      header: () => <div className="w-full text-center">On site</div>,
       enableSorting: false,
-      cell: ({ row }) => <Checkbox aria-label={`${row.original.name || row.original.email} is on site on the day`} checked={!!row.original.on_site} disabled={update.isPending} onCheckedChange={(v) => change(row.original, { on_site: v === true })} />,
+      cell: ({ row }) => (
+        <div className="flex justify-center">
+          <Checkbox aria-label={`${row.original.name || row.original.email} is on site on the day`} checked={!!row.original.on_site} disabled={row.original.id === 0} onCheckedChange={(v) => change(row.original, { on_site: v === true })} />
+        </div>
+      ),
       meta: { align: "center", className: "w-24" },
     },
     {
