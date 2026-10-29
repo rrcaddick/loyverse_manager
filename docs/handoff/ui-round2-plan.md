@@ -73,10 +73,7 @@ Agreed 26 Oct, design 2's calendar as the base:
   is selected.
 - Day panel on the right: as design 2, without the rate line.
 - Viewport fit, sidebar to the rail on /calendar, month and week navigation,
-  keys: as the spec §5.
-
-Open: the five-band heat ramp in the spec §5 was not in the owner's notes;
-keep or drop (see §9).
+  keys: as the spec §5. The heat ramp stays, in blue (see §9).
 
 ## 4. Work
 
@@ -92,8 +89,7 @@ dismiss.
 Superseded in the spec: §4's own left rail of kinds (the nav accordion
 replaces it) and "Unlinked mail lives in Mail" (there is no Mail page).
 
-Open: whether a row's detail opens beside the list (spec) or goes to the
-record (see §9).
+A row goes straight to the record or enquiry (see §9).
 
 ## 5. Booking record
 
@@ -122,9 +118,8 @@ Agreed 26 Oct, back to tabs; design 2 was too cluttered:
 Superseded in the spec: §6's two-tab record and its Money ladder with
 payments as rows; payments are their own tab now.
 
-Open: whether reminder, lapse and cancellation emails belong on Documents
-(the owner listed them there) or only in Activity and Conversation, since
-they carry no document (see §9).
+Documents lists the PDFs only; the plain emails are sent from the quick
+actions and shown in Activity and Conversation (see §9).
 
 ## 6. Enquiries (new page)
 
@@ -153,15 +148,37 @@ the top level.
   template or script, never through Excel.
 - The public request form stays as it is, pre-filled from a convert link.
 
-## 9. Open questions to settle before building
+## 9. Settled on 29 Oct (afternoon)
 
-1. Today: are the dashboard blocks in §2 the right set, and in that order?
-2. Calendar: keep the heat ramp behind the figures, or the bar only?
-3. Work: a row's detail beside the list, or straight to the record?
-4. Record › Documents: PDFs only, or also the reminder, lapse and
-   cancellation emails the owner listed?
-5. Record › Overview: which quick actions, and does the money ladder sit on
-   Overview or only on Payments?
+- **Calendar cell.** The day kind shows as the cell's border colour plus a
+  small tag at the top right (try it; remove if too busy). The heat fill is
+  five shades of one blue, the darkest still carrying dark text. Layout:
+  total interest centred and large, the group count centred under it, then
+  confirmed left-aligned with its green dot and pending right-aligned with
+  its amber dot, then the bar. OVER stays, from its own threshold (default
+  1 200, Settings › Capacity) while the bar is drawn against capacity 1 500.
+  The rate pill goes everywhere. The Today date size the owner marked is the
+  standard for the calendar's month title; weekday headers go up one step.
+  The cell layout and the sizes are "try and maybe roll back".
+- **Work.** Confirm money (the old unmatched-credit queue) and Arrivals
+  (live from Loyverse now) go; so does the Up next view. Work in the nav is
+  a plain accordion toggle, no chevron, every count pill on one right edge.
+  A row goes straight to where the work is done (the booking or enquiry),
+  no side panel. The Work page itself still needs the round-two treatment.
+- **Every send is a manual click for now.** Reminders, lapse notices,
+  cancellations, payment confirmations, tickets: nothing goes out by itself
+  until the owner's mother trusts the system, likely a few weeks, after
+  which sending rules automate them. Each due send is therefore a Work item
+  and the booking shows a banner or prompt for it. The sends happen from
+  the record's quick actions (Send proforma, Find payment, Send ticket, Send
+  reminder, Confirm, Cancel; only those that apply are shown).
+- **Documents tab** lists only the PDFs we produce (proforma, statement, tax
+  invoice, vehicle ticket) with view, download and resend; the plain emails
+  (reminders, lapse, cancellation) live in Activity and Conversation.
+- **Overview** carries the details card, the contacts card and the quick
+  actions, nothing about money; **Payments** carries the summary line, the
+  list and Find payment.
+- Today's blocks as in §2 for the first look, with focused time later.
 
 ## 10. Proposed order
 
