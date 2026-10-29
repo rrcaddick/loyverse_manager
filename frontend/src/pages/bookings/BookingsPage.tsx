@@ -10,7 +10,7 @@
 
 import type { SortingState } from "@tanstack/react-table";
 import { BookOpenText, Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
 import { DataTable } from "@/components/data-table";
@@ -25,7 +25,7 @@ import { BookingFormDialog } from "@/features/bookings/components/booking-form-d
 import { BookingCards } from "@/features/bookings/components/list-cards";
 import { columnsFor } from "@/features/bookings/components/list-columns";
 import { PAGE_SIZES, RANGE_OPTIONS, SORTABLE_COLUMNS, TAB_DEFAULTS, hasActiveFilters, parseListState, stateForTab, toApiParams, writeListState, type ListState, type RangePreset } from "@/features/bookings/list-params";
-import type { BookingBucket } from "@/features/bookings/types";
+import { BOOKING_BUCKETS, type BookingBucket } from "@/features/bookings/types";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { errorMessage } from "@/lib/api";
@@ -73,27 +73,70 @@ export default function BookingsPage() {
   return (
     <>
       {/* No title row: the nav says where you are, the buckets are the header
-          and the primary action sits on their row (owner's note, 29 Oct 2026). */}
+          and the primary action sits on their row while there is room (lg+);
+          at md it moves beside the pager, on phones it floats as a round plus
+          and the buckets and date ranges become two dropdowns above the
+          search (owner's notes, 29 Oct 2026). */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="sr-only">Bookings</h1>
-        <SegmentedTabs
-          aria-label="Booking buckets"
-          value={state.tab}
-          onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
-          items={[
-            { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
-            { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
-            { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
-            { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
-            { value: "past", label: TAB_LABELS.past, count: c?.past },
-            { value: "all", label: TAB_LABELS.all, count: c?.all },
-          ]}
-        />
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus data-icon="inline-start" />
-          New booking
-        </Button>
+        {isMobile ? (
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Select value={state.tab} onValueChange={(tab) => setParams(writeListState(stateForTab(state, tab as BookingBucket), params), { replace: true })}>
+              <SelectTrigger className="w-full" aria-label="Bucket">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BOOKING_BUCKETS.map((tab) => {
+                  const n = tab === "requests" ? (c?.requests ?? 0) : (c?.[tab] ?? 0);
+                  return (
+                    <SelectItem key={tab} value={tab}>
+                      {TAB_LABELS[tab]}
+                      {n > 0 ? ` (${formatNumber(n)})` : ""}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <Select value={state.range} onValueChange={(range) => update({ range: range as RangePreset })}>
+              <SelectTrigger className="w-full" aria-label="Date range">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RANGE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <SegmentedTabs
+            aria-label="Booking buckets"
+            value={state.tab}
+            onChange={(tab) => setParams(writeListState(stateForTab(state, tab), params), { replace: true })}
+            items={[
+              { value: "requests", label: TAB_LABELS.requests, count: c?.requests ?? null },
+              { value: "pending", label: TAB_LABELS.pending, count: c?.pending },
+              { value: "confirmed", label: TAB_LABELS.confirmed, count: c?.confirmed },
+              { value: "lapsed", label: TAB_LABELS.lapsed, count: c?.lapsed },
+              { value: "past", label: TAB_LABELS.past, count: c?.past },
+              { value: "all", label: TAB_LABELS.all, count: c?.all },
+            ]}
+          />
+        )}
+        {!isMobile ? (
+          <Button className="hidden lg:inline-flex" onClick={() => setCreateOpen(true)}>
+            <Plus data-icon="inline-start" />
+            New booking
+          </Button>
+        ) : null}
       </header>
+      {isMobile ? (
+        <Button size="icon" aria-label="New booking" className="fixed right-4 bottom-4 z-30 size-14 rounded-full shadow-lg" onClick={() => setCreateOpen(true)}>
+          <Plus className="size-6" />
+        </Button>
+      ) : null}
 
       {list.isError ? (
         <Alert variant="destructive">
@@ -107,7 +150,20 @@ export default function BookingsPage() {
         </Alert>
       ) : null}
 
-      <Toolbar state={state} onChange={update} total={list.data ? total : null} />
+      <Toolbar
+        state={state}
+        onChange={update}
+        total={list.data ? total : null}
+        compact={isMobile}
+        action={
+          !isMobile ? (
+            <Button size="sm" className="ml-2 hidden md:inline-flex lg:hidden" onClick={() => setCreateOpen(true)}>
+              <Plus data-icon="inline-start" />
+              New
+            </Button>
+          ) : null
+        }
+      />
 
       {isMobile ? (
         // The cards scroll in their own box so the buckets, filters and pager
@@ -200,9 +256,13 @@ interface ToolbarProps {
   state: ListState;
   onChange: (patch: Partial<ListState>, resetPage?: boolean) => void;
   total: number | null;
+  /** Phones: the range chips are a dropdown in the header, so hide them here. */
+  compact?: boolean;
+  /** The primary action when the header row has no room for it. */
+  action?: ReactNode;
 }
 
-function Toolbar({ state, onChange, total }: ToolbarProps) {
+function Toolbar({ state, onChange, total, compact = false, action }: ToolbarProps) {
   const pageCount = total === null ? 1 : Math.max(1, Math.ceil(total / state.size));
   const from = !total ? 0 : (state.page - 1) * state.size + 1;
   const to = total === null ? 0 : Math.min(total, state.page * state.size);
@@ -246,7 +306,7 @@ function Toolbar({ state, onChange, total }: ToolbarProps) {
         </InputGroup>
       </form>
 
-      <div role="group" aria-label="Date range" className="flex flex-wrap items-center gap-1">
+      <div role="group" aria-label="Date range" className={cn("flex flex-wrap items-center gap-1", compact && "hidden")}>
         {RANGE_OPTIONS.map((o) => (
           <Button key={o.value} type="button" size="sm" variant={state.range === o.value ? "secondary" : "ghost"} aria-pressed={state.range === o.value} className={cn(state.range === o.value && "ring-1 ring-border")} onClick={() => onChange({ range: o.value as RangePreset })}>
             {o.label}
@@ -263,7 +323,7 @@ function Toolbar({ state, onChange, total }: ToolbarProps) {
 
       {/* The pager lives here, Gmail-style, so no row is lost to a footer
           (owner's note, 29 Oct 2026). */}
-      <div className="flex items-center gap-1 sm:ml-auto">
+      <div className="flex items-center gap-1 max-sm:w-full sm:ml-auto">
         {total !== null ? (
           <span className="mr-1 text-sm tabular text-muted-foreground" aria-live="polite">
             {total === 0 ? "No bookings" : `${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(total)}`}
@@ -287,6 +347,7 @@ function Toolbar({ state, onChange, total }: ToolbarProps) {
             ))}
           </SelectContent>
         </Select>
+        {action}
       </div>
     </div>
   );

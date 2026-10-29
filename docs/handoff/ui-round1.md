@@ -178,3 +178,9 @@ the contact is left out so the name stays readable. On phones the card
 view scrolls inside its own box under the buckets, filters and pager, which
 stay on screen (the fill layout now applies at every width).
 
+New booking by width: on the buckets row from lg (1024 px) up; at md it is a
+short "New" button beside the pager in the filter row; on phones it is a
+round floating plus at the bottom right, and the buckets and date ranges
+become two dropdowns side by side above the search box, with the chip row
+hidden, so the controls take less height.
+
