@@ -48,7 +48,7 @@ def test_issue_versions_events_and_bytes(test_booking_id):
     inv = d.issue_document(bid, "invoice", actor=None)
     # The deposit receipt and statement has its own number: FY9902-S.
     assert (inv["number"], inv["version"], inv["paid"], inv["due"]) == ("FY9902-S", 1, 3800.0, 2565.0)
-    assert inv["filename"] == "FY9902-S Invoice.pdf" and inv["label"] == "Statement"
+    assert inv["filename"] == "FY9902-S Invoice.pdf" and inv["label"] == "Invoice"
 
     execute("UPDATE bookings SET arrived_count = 61, arrived_source = 'manual' WHERE id = %s", (bid,))
     fin = d.issue_document(bid, "final_invoice", actor=None)
