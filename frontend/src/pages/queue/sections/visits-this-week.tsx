@@ -68,16 +68,6 @@ export function VisitsThisWeekSection({ section }: { section: Section }) {
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="py-2.5 whitespace-nowrap text-muted-foreground tabular">
-                  {item.arrival_time ?? "—"}
-                  {item.vehicles > 0 || item.gazebos > 0 ? (
-                    <span className="block text-xs">
-                      {item.vehicles > 0 ? `${item.vehicles} veh.` : ""}
-                      {item.vehicles > 0 && item.gazebos > 0 ? " · " : ""}
-                      {item.gazebos > 0 ? `${item.gazebos} gazebo${item.gazebos === 1 ? "" : "s"}` : ""}
-                    </span>
-                  ) : null}
-                </TableCell>
                 <TableCell className="py-2.5 text-right tabular">{formatNumber(item.booking.people_booked)}</TableCell>
                 <TableCell className="py-2.5">
                   <StatusBadge status={item.booking.status} />

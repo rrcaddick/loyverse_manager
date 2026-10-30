@@ -23,12 +23,9 @@ export const FIELD_STEP: Record<string, Step> = {
   visitors: "visit",
   adults: "visit",
   children: "visit",
-  arrival_time: "visit",
   group_name: "group",
   group_type: "group",
   area: "group",
-  vehicles: "group",
-  gazebos: "group",
   questions: "group",
   customer_notes: "group",
   contact_name: "contact",
@@ -91,10 +88,6 @@ export function visitSchema(config: FormConfig) {
           }
         })
         .transform((value) => wholeNumber(value) ?? 0),
-      arrival_time: z
-        .string()
-        .trim()
-        .refine((value) => value === "" || config.arrival_slots.includes(value), "Choose an arrival time from the list"),
     })
     .superRefine((value, ctx) => {
       if (value.alternative_date && value.alternative_date === value.visit_date) {
@@ -105,27 +98,11 @@ export function visitSchema(config: FormConfig) {
 
 export function groupSchema(config: FormConfig) {
   const codes = new Set(config.group_types.map((g) => g.code));
-  const optionalCount = (label: string, max?: number, maxMessage?: string) =>
-    z
-      .string()
-      .trim()
-      .superRefine((value, ctx) => {
-        if (!value) return;
-        const n = wholeNumber(value);
-        if (n === null) {
-          ctx.addIssue({ code: "custom", message: label });
-          return;
-        }
-        if (max !== undefined && n > max) ctx.addIssue({ code: "custom", message: maxMessage ?? label });
-      })
-      .transform((value) => (value ? (wholeNumber(value) ?? 0) : 0));
 
   return z.object({
     group_name: z.string().trim().min(1, "Enter the name of your group").max(255, "Keep the group name under 255 characters"),
     group_type: z.string().refine((value) => codes.has(value), "Choose the kind of group"),
     area: z.string().trim().max(255, "Keep the area under 255 characters"),
-    vehicles: optionalCount("Enter a whole number of vehicles, for example 2"),
-    gazebos: optionalCount("Enter a whole number of gazebos, for example 1", config.max_gazebos, `We have ${config.max_gazebos} gazebos to hire`),
     questions: z
       .array(z.string().trim().max(500, "Keep each question under 500 characters"))
       .transform((items) => items.filter((q) => q.length > 0))
@@ -159,12 +136,9 @@ export function buildPayload(visit: VisitOutput, group: GroupOutput, contact: Co
     visit_date: visit.visit_date,
     alternative_date: visit.alternative_date || undefined,
     visitors: visit.visitors,
-    arrival_time: visit.arrival_time || undefined,
     group_name: group.group_name,
     group_type: group.group_type,
     area: group.area || undefined,
-    vehicles: group.vehicles,
-    gazebos: group.gazebos,
     questions: group.questions,
     customer_notes: group.customer_notes || undefined,
     contact_name: contact.contact_name,

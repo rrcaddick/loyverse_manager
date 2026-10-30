@@ -70,18 +70,6 @@
       <h2>{% if doc.is_final and finance.uses_arrivals %}Visitors arrived{% else %}Group size{% endif %}</h2>
       <p class="big">{% if doc.is_final and finance.uses_arrivals %}{{ finance.arrived_count|plural("visitor") }}{% else %}{{ booking.people_booked|plural("visitor") }}{% endif %}</p>
     </td>
-    {% if booking.vehicles %}
-    <td class="visit-cell">
-      <h2>Vehicles</h2>
-      <p class="big">{{ booking.vehicles }}</p>
-    </td>
-    {% endif %}
-    {% if booking.arrival_time %}
-    <td class="visit-cell">
-      <h2>Arrival</h2>
-      <p class="big">{{ booking.arrival_time }}</p>
-    </td>
-    {% endif %}
   </tr>
 </table>
 

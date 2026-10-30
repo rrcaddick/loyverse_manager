@@ -21,7 +21,6 @@ export interface BookingActionsValue {
   openPayment: () => void;
   /** The Find payment search (bank credits by reference, amount, date). */
   openFindPayment: (prefill?: FindPaymentPrefill) => void;
-  openArrivals: () => void;
   openHold: () => void;
   changeStatus: (target: BookingStatus) => void;
   /** Focus the "Add a note…" composer (the N key). */

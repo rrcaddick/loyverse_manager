@@ -18,9 +18,6 @@ export interface FormConfig {
   max_questions: number;
   min_group_size: number;
   max_group_size: number;
-  max_gazebos: number;
-  /** Half-hour slots plus "Not sure yet"; the select's options verbatim. */
-  arrival_slots: string[];
   acknowledgement_enabled: boolean;
   turnstile_site_key: string | null;
   park: { name: string | null; phone: string | null; website: string | null; email: string | null };
@@ -31,12 +28,9 @@ export interface BookingRequestInput {
   visit_date: string;
   alternative_date?: string;
   visitors: number;
-  arrival_time?: string;
   group_name: string;
   group_type: string;
   area?: string;
-  vehicles?: number;
-  gazebos?: number;
   questions: string[];
   customer_notes?: string;
   contact_name: string;

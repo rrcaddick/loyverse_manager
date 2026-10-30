@@ -35,7 +35,6 @@ class GroupBooking:
         reference: str | None = None,
         status: str | None = None,
         people_booked: int | None = None,
-        vehicles: int | None = None,
     ):
         self.id = id
         self.group_name = group_name
@@ -46,7 +45,6 @@ class GroupBooking:
         self.reference = reference
         self.status = status
         self.people_booked = people_booked
-        self.vehicles = vehicles
 
     # ------------------------------------------------------------ display --
 
@@ -73,7 +71,6 @@ class GroupBooking:
             "reference": self.reference,
             "status": self.status,
             "people_booked": self.people_booked,
-            "vehicles": self.vehicles,
         }
 
     # ------------------------------------------------------------ loading --
@@ -93,7 +90,6 @@ class GroupBooking:
             reference=row.get("reference"),
             status=row.get("status"),
             people_booked=row.get("people_booked"),
-            vehicles=row.get("vehicles"),
         )
 
     from_dict = from_row

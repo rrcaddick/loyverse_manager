@@ -60,8 +60,6 @@ def form_config():
         "max_questions": int(s["form"].get("max_questions") or 0),
         "min_group_size": int(s["form"].get("min_group_size") or 0),
         "max_group_size": int(s["form"].get("max_group_size") or public_form.DEFAULT_MAX_GROUP_SIZE),
-        "max_gazebos": public_form.MAX_GAZEBOS,
-        "arrival_slots": [str(x) for x in (s["form"].get("arrival_slots") or public_form.DEFAULT_ARRIVAL_SLOTS)],
         "acknowledgement_enabled": bool(s["form"].get("acknowledgement_enabled")),
         "turnstile_site_key": TURNSTILE_SITE_KEY or None,
         "park": {

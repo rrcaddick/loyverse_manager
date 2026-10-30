@@ -29,11 +29,8 @@ export interface BookingListItem extends BookingSummary {
   area: string | null;
   contact_email: string | null;
   contact_mobile: string | null;
-  arrival_time: string | null;
   adults: number;
   children: number;
-  vehicles: number;
-  gazebos: number;
   price_per_person: number;
   deposit_due: number;
   deposit_waived: boolean;

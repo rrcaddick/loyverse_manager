@@ -4,9 +4,10 @@
  * Creation POSTs /bookings; editing PATCHes only the fields that changed.
  *
  * Visitors only (no adults / children). Billing address and VAT number sit
- * under "Invoice details"; price and deposit overrides, each with a reason,
- * under "Pricing". The price line is live: the estimate follows the date,
- * the kind of group and the visitors, and the server recalculates on save.
+ * under "Invoice details". Pricing is the rate the rules give for the date,
+ * the kind of group and the visitors (GET /bookings/quote, live as the form
+ * changes) and, when a lower price was agreed, that price with its reason:
+ * the server records the gap as a discount below the rate.
  */
 
 import { ChevronDown } from "lucide-react";
@@ -23,7 +24,6 @@ import {
   NumberField,
   RadioField,
   SelectField,
-  SwitchField,
   TextField,
   TextareaField,
   applyApiErrors,
@@ -34,50 +34,40 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
 import { Spinner } from "@/components/ui/spinner";
-import { useSettings } from "@/features/settings/api";
-import { formatMoney, formatNumber, parseDate, todayIso } from "@/lib/format";
+import { depositFor, useSettings } from "@/features/settings/api";
+import { formatMoney, formatNumber, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { SettingsResponse } from "@/types/api";
 
-import { useCreateBooking, useUpdateBooking } from "../api";
-import type { BookingDetail, BookingInput } from "../types";
+import { useCreateBooking, useQuote, useUpdateBooking } from "../api";
+import type { BookingDetail, BookingInput, RateQuote } from "../types";
 
 export type EditFocus = "contact" | "pricing" | null;
 
 const optionalText = z.string().trim().optional();
-const int = (label: string) => z.number({ error: `Enter ${label}` }).int("Whole numbers only").min(0, "Cannot be negative");
 
 const schema = z
   .object({
     group_name: z.string().trim().min(2, "Enter the group's name"),
     group_type: z.string().min(1, "Choose the kind of group"),
     area: optionalText,
-    arrival_time: optionalText,
     contact_name: z.string().trim().min(2, "Enter the contact's name"),
     contact_email: z.union([z.literal(""), z.string().trim().email("Enter a valid email address")]),
     contact_mobile: optionalText,
     visit_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the visit date"),
     alternative_date: z.string().optional(),
     visitors: z.number({ error: "Enter the number of visitors" }).int("Whole numbers only").min(1, "Enter at least one visitor"),
-    vehicles: int("the number of vehicles"),
-    gazebos: int("the number of gazebos").max(7, "The park has 7 gazebos"),
     billing_address: z.string().trim().max(500, "At most 500 characters").optional(),
     customer_vat_number: z.string().trim().max(32, "At most 32 characters").optional(),
     customer_notes: optionalText,
     internal_notes: optionalText,
-    // pricing
-    price_override: z.boolean(),
+    // pricing: the agreed price per visitor (empty = the rate) and why it is below the rate
     price_per_person: z.number().min(0, "Cannot be negative").optional(),
-    price_override_reason: optionalText,
+    discount_reason: optionalText,
     deposit_mode: z.enum(["auto", "custom", "waived"]),
     deposit_due: z.number().min(0, "Cannot be negative").optional(),
     deposit_override_reason: optionalText,
   })
   .superRefine((v, ctx) => {
-    if (v.price_override) {
-      if (v.price_per_person === undefined || Number.isNaN(v.price_per_person)) ctx.addIssue({ code: "custom", path: ["price_per_person"], message: "Enter the price per visitor" });
-      if (!v.price_override_reason) ctx.addIssue({ code: "custom", path: ["price_override_reason"], message: "Give the reason for the special price" });
-    }
     if (v.deposit_mode === "custom" && (v.deposit_due === undefined || Number.isNaN(v.deposit_due))) {
       ctx.addIssue({ code: "custom", path: ["deposit_due"], message: "Enter the deposit" });
     }
@@ -90,33 +80,29 @@ type FormValues = z.input<typeof schema>;
 type ParsedValues = z.output<typeof schema>;
 
 const nullable = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
+const isNumber = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v);
 
-function toInput(values: ParsedValues, editing: boolean): BookingInput {
+function toInput(values: ParsedValues, booking: BookingDetail | null): BookingInput {
   const input: BookingInput = {
     group_name: values.group_name,
     group_type: values.group_type,
     area: nullable(values.area),
-    arrival_time: nullable(values.arrival_time),
     contact_name: values.contact_name,
     contact_email: nullable(values.contact_email),
     contact_mobile: nullable(values.contact_mobile),
     visit_date: values.visit_date,
     alternative_date: nullable(values.alternative_date),
     people_booked: values.visitors,
-    vehicles: values.vehicles,
-    gazebos: values.gazebos,
     billing_address: nullable(values.billing_address),
     customer_vat_number: nullable(values.customer_vat_number),
     customer_notes: nullable(values.customer_notes),
     internal_notes: nullable(values.internal_notes),
   };
-  if (values.price_override) {
+  if (isNumber(values.price_per_person)) {
     input.price_per_person = values.price_per_person;
-    input.price_overridden = true;
-    input.price_override_reason = values.price_override_reason ?? null;
-  } else if (editing) {
-    input.price_overridden = false;
-    input.price_override_reason = null;
+    input.discount_reason = nullable(values.discount_reason);
+  } else if (booking && booking.discount_per_person > 0) {
+    input.discount_per_person = 0; // the agreed price was cleared: back to the rate
   }
   if (values.deposit_mode === "waived") {
     input.deposit_waived = true;
@@ -127,7 +113,7 @@ function toInput(values: ParsedValues, editing: boolean): BookingInput {
     input.deposit_due = values.deposit_due;
     input.deposit_overridden = true;
     input.deposit_override_reason = values.deposit_override_reason ?? null;
-  } else if (editing) {
+  } else if (booking) {
     input.deposit_waived = false;
     input.deposit_overridden = false;
     input.deposit_override_reason = null;
@@ -140,95 +126,22 @@ function defaultsFor(booking: BookingDetail | null, defaultDate?: string): FormV
     group_name: booking?.group_name ?? "",
     group_type: booking?.group_type ?? "",
     area: booking?.area ?? "",
-    arrival_time: booking?.arrival_time ?? "",
     contact_name: booking?.contact_name ?? "",
     contact_email: booking?.contact_email ?? "",
     contact_mobile: booking?.contact_mobile ?? "",
     visit_date: booking?.visit_date ?? defaultDate ?? "",
     alternative_date: booking?.alternative_date ?? "",
     visitors: booking?.people_booked ?? Number.NaN,
-    vehicles: booking?.vehicles ?? 0,
-    gazebos: booking?.gazebos ?? 0,
     billing_address: booking?.billing_address ?? "",
     customer_vat_number: booking?.customer_vat_number ?? "",
     customer_notes: booking?.customer_notes ?? "",
     internal_notes: booking?.internal_notes ?? "",
-    price_override: booking?.price_overridden ?? false,
-    price_per_person: booking?.price_per_person ?? undefined,
-    price_override_reason: booking?.price_override_reason ?? "",
+    price_per_person: booking && booking.discount_per_person > 0 ? booking.price_per_person : undefined,
+    discount_reason: booking?.discount_reason ?? "",
     deposit_mode: booking?.deposit_waived ? "waived" : booking?.deposit_overridden ? "custom" : "auto",
     deposit_due: booking?.deposit_due ?? undefined,
     deposit_override_reason: booking?.deposit_override_reason ?? "",
   };
-}
-
-// ---------------------------------------------------------------- estimate
-
-interface Estimate {
-  price: number;
-  total: number;
-  deposit: number;
-  tierLabel: string;
-  /** True when the estimate is computed here rather than taken from the server. */
-  estimated: boolean;
-}
-
-function mmdd(iso: string): string {
-  return iso.slice(5);
-}
-
-function inWindow(iso: string, start: string, end: string): boolean {
-  const d = mmdd(iso);
-  if (!start || !end) return false;
-  return start <= end ? d >= start && d <= end : d >= start || d <= end;
-}
-
-function roundHalfUp(n: number): number {
-  return Math.floor(n + 0.5);
-}
-
-/** The server's pricing rules (src/services/pricing.py), approximated for a live line. */
-function estimate(settings: SettingsResponse | undefined, values: Pick<FormValues, "visit_date" | "group_type" | "visitors" | "price_override" | "price_per_person" | "deposit_mode" | "deposit_due">, booking: BookingDetail | null): Estimate | null {
-  if (!settings) return null;
-  const visitors = Number.isFinite(values.visitors) ? Number(values.visitors) : 0;
-  const { pricing, deposit, season, form } = settings.settings;
-  const unchanged = !!booking && booking.visit_date === values.visit_date && (booking.group_type ?? "") === values.group_type;
-  let price: number;
-  let tierLabel: string;
-  if (values.price_override && values.price_per_person !== undefined && Number.isFinite(values.price_per_person)) {
-    price = Number(values.price_per_person);
-    tierLabel = "special price";
-  } else if (unchanged && !booking.price_overridden) {
-    price = booking.price_per_person;
-    tierLabel = settings.price_tiers.find((t) => t.code === booking.price_tier_code)?.label ?? booking.price_tier_code ?? "public";
-  } else {
-    const date = parseDate(values.visit_date);
-    const weekend = date ? [0, 6].includes(date.getDay()) : false;
-    const gt = form.group_types.find((t) => t.code === values.group_type);
-    const tierCode = gt ? (weekend ? gt.weekend_tier : gt.weekday_tier) : null;
-    const tier = settings.price_tiers.find((t) => t.code === tierCode);
-    const peak = settings.season_days.some((d) => d.day === values.visit_date && d.kind === "peak");
-    const window = values.visit_date ? inWindow(values.visit_date, season.no_discount_start, season.no_discount_end) : false;
-    if (peak) {
-      price = pricing.peak_price;
-      tierLabel = "peak";
-    } else if (window && tierCode && !tierCode.startsWith("public") && tierCode !== "peak") {
-      price = pricing.public_weekend_price;
-      tierLabel = "public rate (no-discount window)";
-    } else if (tier) {
-      price = tier.price;
-      tierLabel = tier.label;
-    } else {
-      price = pricing.public_weekend_price;
-      tierLabel = "public rate";
-    }
-  }
-  const total = visitors * price;
-  let dep: number;
-  if (values.deposit_mode === "waived") dep = 0;
-  else if (values.deposit_mode === "custom" && values.deposit_due !== undefined && Number.isFinite(values.deposit_due)) dep = Number(values.deposit_due);
-  else dep = Math.min(total, Math.max(deposit.min_people * price, roundHalfUp((visitors * deposit.percent) / 100) * price));
-  return { price, total, deposit: dep, tierLabel, estimated: !unchanged || booking.price_overridden !== values.price_override };
 }
 
 // ------------------------------------------------------------------ dialog
@@ -255,8 +168,8 @@ export function BookingFormDialog({ open, onOpenChange, booking = null, defaultD
           <DialogTitle className="text-section">{editing ? `Edit ${booking.reference}` : "New booking"}</DialogTitle>
           <DialogDescription>
             {editing
-              ? "Changing the date, kind of group or visitors recalculates the price and deposit unless they are overridden."
-              : "A group that booked by phone or in person. The price and deposit follow the date and kind of group; the reference is assigned on save."}
+              ? "Changing the date, kind of group or visitors recalculates the rate and deposit. An agreed price below the rate stays as a discount."
+              : "A group that booked by phone or in person. The rate follows the date, kind of group and visitors; the reference is assigned on save."}
           </DialogDescription>
         </DialogHeader>
         {open ? (
@@ -267,6 +180,14 @@ export function BookingFormDialog({ open, onOpenChange, booking = null, defaultD
   );
 }
 
+const RATE_DAY_LABEL: Record<RateQuote["rate_day"], string> = {
+  peak: "peak day",
+  public_holiday: "public holiday",
+  weekend: "weekend",
+  school_holiday: "school holidays",
+  weekday: "term-time weekday",
+};
+
 function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { booking: BookingDetail | null; defaultDate?: string; focus: EditFocus; onClose: () => void; onCreated?: (booking: BookingDetail) => void }) {
   const navigate = useNavigate();
   const settings = useSettings();
@@ -275,7 +196,7 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
   const [error, setError] = useState<string | null>(null);
   const form = useZodForm({ schema, defaultValues: defaultsFor(booking, defaultDate) });
   const [invoiceOpen, setInvoiceOpen] = useState(!!(booking?.billing_address || booking?.customer_vat_number));
-  const [pricingOpen, setPricingOpen] = useState(focus === "pricing" || !!(booking?.price_overridden || booking?.deposit_overridden || booking?.deposit_waived));
+  const [pricingOpen, setPricingOpen] = useState(focus === "pricing" || !!booking && (booking.discount_per_person > 0 || booking.deposit_overridden || booking.deposit_waived));
 
   useEffect(() => {
     if (focus === "contact") {
@@ -293,16 +214,36 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
     return groupTypeOptions;
   }, [groupTypeOptions, booking?.group_type]);
 
-  const watched = form.watch(["visit_date", "group_type", "visitors", "price_override", "price_per_person", "deposit_mode", "deposit_due"]);
-  const [visit_date, group_type, visitors, price_override, price_per_person, deposit_mode, deposit_due] = watched;
-  const est = useMemo(
-    () => estimate(settings.data, { visit_date, group_type, visitors, price_override, price_per_person, deposit_mode, deposit_due }, booking),
-    [settings.data, visit_date, group_type, visitors, price_override, price_per_person, deposit_mode, deposit_due, booking],
-  );
+  const [visit_date, group_type, visitors, price_per_person, deposit_mode, deposit_due] = form.watch(["visit_date", "group_type", "visitors", "price_per_person", "deposit_mode", "deposit_due"]);
+  const visitorsNum = Number.isFinite(visitors) ? Number(visitors) : 0;
+  const quote = useQuote(visit_date && visitorsNum > 0 ? { group_type: group_type || null, visit_date, people: visitorsNum, exclude: booking?.id } : null);
+  const rate = quote.data;
+  const agreed = isNumber(price_per_person) ? Number(price_per_person) : null;
+  const price = agreed ?? rate?.tier_price ?? null;
+  const discount = rate && agreed !== null ? rate.tier_price - agreed : 0;
+  const depositRule = settings.data?.settings.deposit;
+  const deposit =
+    deposit_mode === "waived"
+      ? 0
+      : deposit_mode === "custom" && isNumber(deposit_due)
+        ? Number(deposit_due)
+        : price !== null && depositRule
+          ? depositFor(visitorsNum, price, depositRule.min_people, depositRule.percent)
+          : (rate?.deposit_due ?? null);
 
   async function onSubmit(values: ParsedValues) {
     setError(null);
-    const input = toInput(values, !!booking);
+    if (isNumber(values.price_per_person) && rate) {
+      if (values.price_per_person > rate.tier_price) {
+        form.setError("price_per_person", { message: `The rate is ${formatMoney(rate.tier_price, { compact: true })}. A higher price means a different rate, not a discount.` });
+        return;
+      }
+      if (values.price_per_person < rate.tier_price && !values.discount_reason) {
+        form.setError("discount_reason", { message: "Say why the price is below the rate" });
+        return;
+      }
+    }
+    const input = toInput(values, booking);
     try {
       if (booking) {
         const changes: BookingInput = {};
@@ -311,11 +252,12 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
           const prev = (booking as unknown as Record<string, unknown>)[key] ?? null;
           if (JSON.stringify(next ?? null) !== JSON.stringify(prev)) (changes as Record<string, unknown>)[key] = next;
         }
-        // An override needs its flag and reason together even when only one changed.
-        if ("price_per_person" in changes || "price_override_reason" in changes) {
-          changes.price_overridden = input.price_overridden;
-          changes.price_override_reason = input.price_override_reason;
-          if (input.price_overridden) changes.price_per_person = input.price_per_person;
+        // The agreed price and its reason travel together.
+        if ("price_per_person" in changes || "discount_reason" in changes) {
+          if (isNumber(input.price_per_person)) {
+            changes.price_per_person = input.price_per_person;
+            changes.discount_reason = input.discount_reason ?? null;
+          }
         }
         if ("deposit_due" in changes || "deposit_override_reason" in changes || "deposit_waived" in changes) {
           changes.deposit_waived = input.deposit_waived;
@@ -343,7 +285,6 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
   }
 
   const busy = form.formState.isSubmitting;
-  const visitorsNum = Number.isFinite(visitors) ? Number(visitors) : 0;
 
   return (
     <Form {...form}>
@@ -355,12 +296,7 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
             <DateField control={form.control} name="visit_date" label="Visit date" required min={booking ? undefined : todayIso()} />
             <DateField control={form.control} name="alternative_date" label="Alternative date" clearable />
           </FieldRow>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <NumberField control={form.control} name="visitors" label="Visitors" integer min={1} required />
-            <TextField control={form.control} name="arrival_time" label="Arrival time" placeholder="09:30" />
-            <NumberField control={form.control} name="vehicles" label="Vehicles" integer min={0} />
-            <NumberField control={form.control} name="gazebos" label="Gazebos" integer min={0} max={7} />
-          </div>
+          <NumberField control={form.control} name="visitors" label="Visitors" integer min={1} required className="sm:max-w-[12rem]" />
         </Group>
 
         <Group label="Group">
@@ -374,7 +310,7 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
         <Group label="Contact">
           <TextField control={form.control} name="contact_name" label="Contact name" required placeholder="Jane Dlamini" className="sm:max-w-sm" />
           <FieldRow>
-            <TextField control={form.control} name="contact_email" label="Email" type="email" autoComplete="off" placeholder="jane@example.com" description="Needed for the proforma, statement, tax invoice and ticket." />
+            <TextField control={form.control} name="contact_email" label="Email" type="email" autoComplete="off" placeholder="jane@example.com" description="Needed for the proforma, invoices and ticket." />
             <TextField control={form.control} name="contact_mobile" label="Mobile" type="tel" autoComplete="off" placeholder="082 123 4567" description="Needed to WhatsApp the ticket." />
           </FieldRow>
           <Disclosure open={invoiceOpen} onOpenChange={setInvoiceOpen} label="Invoice details" hint="Billing address and VAT number, when the customer needs them on the documents">
@@ -384,25 +320,43 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
         </Group>
 
         <Group label="Pricing">
-          <p className="text-body tabular text-foreground" aria-live="polite">
-            {est && visitorsNum > 0 ? (
+          <div className="flex flex-col gap-1 text-body tabular text-foreground" aria-live="polite">
+            {rate && visitorsNum > 0 ? (
               <>
-                {formatNumber(visitorsNum)} × {formatMoney(est.price, { compact: true })} = <span className="font-semibold">{formatMoney(est.total, { compact: true })}</span> · deposit{" "}
-                <span className="font-medium">{deposit_mode === "waived" ? "waived" : formatMoney(est.deposit, { compact: true })}</span>
-                <span className="text-sm text-muted-foreground"> · {est.tierLabel}{est.estimated ? " · recalculated on save" : ""}</span>
+                <p>
+                  <span className="font-medium">{rate.tier_label}</span>
+                  <span className="text-muted-foreground"> · {RATE_DAY_LABEL[rate.rate_day]} · </span>
+                  {formatMoney(rate.tier_price, { compact: true })} per visitor
+                  {discount > 0 ? <span className="text-muted-foreground"> · less {formatMoney(discount, { compact: true })} discount</span> : null}
+                </p>
+                <p>
+                  {formatNumber(visitorsNum)} × {formatMoney(price ?? rate.tier_price, { compact: true })} = <span className="font-semibold">{formatMoney(visitorsNum * (price ?? rate.tier_price), { compact: true })}</span>
+                  {deposit !== null ? (
+                    <>
+                      {" "}
+                      · deposit <span className="font-medium">{deposit_mode === "waived" ? "waived" : formatMoney(deposit, { compact: true })}</span>
+                    </>
+                  ) : null}
+                </p>
+                {rate.under_minimum ? (
+                  <p className="text-sm text-muted-foreground">
+                    {rate.minimum_waived
+                      ? `Under the group minimum of ${rate.group_minimum}, but another group is booked that day, so the group rate applies.`
+                      : `Under the group minimum of ${rate.group_minimum}: the public rate applies.`}
+                  </p>
+                ) : null}
               </>
+            ) : quote.isFetching ? (
+              <span className="text-muted-foreground">Working out the rate…</span>
             ) : (
-              <span className="text-muted-foreground">Enter the date, kind of group and visitors to see the price.</span>
+              <span className="text-muted-foreground">Enter the date, kind of group and visitors to see the rate.</span>
             )}
-          </p>
-          <Disclosure open={pricingOpen} onOpenChange={setPricingOpen} label="Price and deposit overrides" hint="A special price or deposit stays put when the date or numbers change; the reason shows on the booking">
-            <SwitchField control={form.control} name="price_override" label="Special price per visitor" description="Instead of the tier price." />
-            {price_override ? (
-              <FieldRow>
-                <MoneyField control={form.control} name="price_per_person" label="Price per visitor" required />
-                <TextField control={form.control} name="price_override_reason" label="Reason" required placeholder="e.g. returning school, last year's rate" />
-              </FieldRow>
-            ) : null}
+          </div>
+          <Disclosure open={pricingOpen} onOpenChange={setPricingOpen} label="Agreed price and deposit" hint="A price below the rate is recorded as a discount with its reason; a special deposit keeps its reason too">
+            <FieldRow>
+              <MoneyField control={form.control} name="price_per_person" label="Agreed price per visitor" description={rate ? `Leave empty for the rate, ${formatMoney(rate.tier_price, { compact: true })}.` : "Leave empty for the rate."} />
+              <TextField control={form.control} name="discount_reason" label="Reason for the discount" placeholder="e.g. booked last season at last season's rate" />
+            </FieldRow>
             <RadioField
               control={form.control}
               name="deposit_mode"
@@ -415,7 +369,7 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
             />
             {deposit_mode === "custom" ? (
               <FieldRow>
-                <MoneyField control={form.control} name="deposit_due" label="Deposit due" required max={est?.total} />
+                <MoneyField control={form.control} name="deposit_due" label="Deposit due" required max={price !== null ? visitorsNum * price : undefined} />
                 <TextField control={form.control} name="deposit_override_reason" label="Reason" required placeholder="e.g. church pays half up front" />
               </FieldRow>
             ) : deposit_mode === "waived" ? (

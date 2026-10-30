@@ -537,7 +537,7 @@ def _money_rows(today: date) -> list[dict]:
 def _ticket_rows(today: date) -> list[dict]:
     rows = query(
         f"""
-        SELECT {BOOKING_COLS}, b.contact_email, b.contact_mobile, b.vehicles, b.confirmed_at
+        SELECT {BOOKING_COLS}, b.contact_email, b.contact_mobile, b.confirmed_at
         FROM bookings b
         WHERE b.status = 'confirmed' AND b.ticket_sent_at IS NULL AND b.ticket_emailed_at IS NULL
           AND b.visit_date >= %s
@@ -550,9 +550,6 @@ def _ticket_rows(today: date) -> list[dict]:
         bid = int(r["booking_id"])
         visit = _as_date(r["visit_date"])
         bits = [f"Visit {_day(visit)}", _rel((today - visit).days)]
-        vehicles = int(r["vehicles"] or 0)
-        if vehicles:
-            bits.append(f"{vehicles} vehicle{'s' if vehicles != 1 else ''}")
         email, mobile = r.get("contact_email"), r.get("contact_mobile")
         secondary: list[dict] = []
         if email:

@@ -14,11 +14,11 @@ import { Link } from "react-router";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatDateLong, formatMoney, formatNumber, formatPhone, pluralise } from "@/lib/format";
+import { formatDate, formatDateLong, formatMoney, formatNumber, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { ACTION_LABELS, availability, type ActionId } from "../../actions";
-import { isTentative, relativeTo, sourceLabel, useGroupTypeLabel } from "../../lib";
+import { isTentative, relativeTo, sourceLabel, useGroupTypeLabel, useTierLabel } from "../../lib";
 import { CONTACT_ROLE_LABELS, primaryContact } from "../../contacts";
 import { nextStep } from "../../next-step";
 import type { BookingContact, BookingDetail } from "../../types";
@@ -61,6 +61,7 @@ function Field({ label, children, wide = false, numeric = false }: { label: stri
 function DetailsCard({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
   const groupType = useGroupTypeLabel();
+  const tierLabel = useTierLabel();
   return (
     <Section
       title={
@@ -84,7 +85,6 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
           <span className="text-muted-foreground"> · {relativeTo(booking.visit_date)}</span>
           {booking.alternative_date ? <span className="block text-sm text-muted-foreground">or {formatDate(booking.alternative_date)}</span> : null}
         </Field>
-        <Field label="Arrival">{booking.arrival_time ?? <span className="text-muted-foreground">Not given</span>}</Field>
         <Field label="Visitors" numeric>
           {formatNumber(booking.people_booked)}
           {booking.adults || booking.children ? (
@@ -95,14 +95,20 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
           ) : null}
           {booking.arrived_count !== null ? <span className="text-green-text"> · {formatNumber(booking.arrived_count)} arrived</span> : null}
         </Field>
-        <Field label="Vehicles" numeric>
-          {formatNumber(booking.vehicles)}
-          <span className="text-muted-foreground"> · {pluralise(booking.gazebos, "gazebo")}</span>
-        </Field>
         <Field label="Kind of group">{groupType(booking.group_type)}</Field>
+        <Field label="Rate">
+          {tierLabel(booking.price_tier_code)}
+          {booking.minimum_waived_by ? <span className="text-muted-foreground"> · minimum waived, another group that day</span> : null}
+        </Field>
         <Field label="Price per visitor" numeric>
           {formatMoney(booking.price_per_person, { compact: true })}
-          {booking.price_overridden && booking.price_override_reason ? <span className="text-muted-foreground"> · {booking.price_override_reason}</span> : null}
+          {booking.discount_per_person > 0 ? (
+            <span className="text-muted-foreground">
+              {" "}
+              · {formatMoney(booking.tier_price ?? booking.price_per_person + booking.discount_per_person, { compact: true })} less {formatMoney(booking.discount_per_person, { compact: true })}
+              {booking.discount_reason ? ` (${booking.discount_reason})` : ""}
+            </span>
+          ) : null}
         </Field>
         <Field label="Area">{booking.area ?? <span className="text-muted-foreground">—</span>}</Field>
         {booking.customer_notes ? (

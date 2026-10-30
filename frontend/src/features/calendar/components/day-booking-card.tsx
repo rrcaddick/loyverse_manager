@@ -3,7 +3,7 @@
  * targets, the numbers that matter in big type, and the actions in one row.
  */
 
-import { ArrowUpRight, Banknote, Mail, MessageCircle, Phone, RefreshCw, Ticket, UserCheck, UserX } from "lucide-react";
+import { ArrowUpRight, Banknote, Mail, MessageCircle, Phone, Ticket, UserX } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -11,16 +11,13 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useFetchArrivals, useSetStatus } from "@/features/bookings/api";
-import { ArrivalsDialog } from "@/features/bookings/components/arrivals-dialog";
+import { useSetStatus } from "@/features/bookings/api";
 import { RecordPaymentDialog } from "@/features/bookings/components/record-payment-dialog";
 import { useGroupTypeLabel } from "@/features/bookings/lib";
-import type { ArrivalSource, DayViewBooking } from "@/features/bookings/types";
+import type { DayViewBooking } from "@/features/bookings/types";
 import { useAuth } from "@/lib/auth";
-import { errorMessage } from "@/lib/api";
 import { formatDate, formatMoney, formatNumber, formatPhone, formatTime, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -32,9 +29,7 @@ interface DayBookingCardProps {
 export function DayBookingCard({ booking, date }: DayBookingCardProps) {
   const { isAdmin } = useAuth();
   const groupType = useGroupTypeLabel();
-  const fetchArrivals = useFetchArrivals(booking.id);
   const setStatus = useSetStatus(booking.id);
-  const [arrivals, setArrivals] = useState<{ open: boolean; initial: { count: number; source: ArrivalSource } | null }>({ open: false, initial: null });
   const [payment, setPayment] = useState(false);
   const [noShow, setNoShow] = useState(false);
   const [noShowReason, setNoShowReason] = useState("");
@@ -42,15 +37,6 @@ export function DayBookingCard({ booking, date }: DayBookingCardProps) {
   const finance = booking.finance;
   const canNoShow = isAdmin && booking.status === "confirmed" && date < todayIso();
   const closed = booking.status === "cancelled" || booking.status === "lapsed";
-
-  async function fetchFromLoyverse() {
-    try {
-      const result = await fetchArrivals.mutateAsync();
-      setArrivals({ open: true, initial: { count: result.count, source: "loyverse" } });
-    } catch (err) {
-      toast.error(errorMessage(err, "Loyverse could not be reached"));
-    }
-  }
 
   const title = isAdmin ? (
     <Link to={`/bookings/${booking.id}`} className="truncate text-lg font-semibold text-foreground underline-offset-3 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm">
@@ -70,9 +56,6 @@ export function DayBookingCard({ booking, date }: DayBookingCardProps) {
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {booking.group_type ? <span>{groupType(booking.group_type)}</span> : null}
-          {booking.arrival_time ? <span>Arrives {booking.arrival_time}</span> : null}
-          {booking.vehicles ? <span className="tabular">{booking.vehicles} {booking.vehicles === 1 ? "vehicle" : "vehicles"}</span> : null}
-          {booking.gazebos ? <span className="tabular">{booking.gazebos} {booking.gazebos === 1 ? "gazebo" : "gazebos"}</span> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-foreground">{booking.contact_name}</span>
@@ -115,14 +98,6 @@ export function DayBookingCard({ booking, date }: DayBookingCardProps) {
         </dl>
         {!closed ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-10" onClick={fetchFromLoyverse} disabled={fetchArrivals.isPending}>
-              {fetchArrivals.isPending ? <Spinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}
-              Fetch from Loyverse
-            </Button>
-            <Button variant="outline" className="h-10" onClick={() => setArrivals({ open: true, initial: null })}>
-              <UserCheck data-icon="inline-start" />
-              Enter arrivals
-            </Button>
             <Button className="h-10" onClick={() => setPayment(true)}>
               <Banknote data-icon="inline-start" />
               Record gate payment
@@ -145,7 +120,6 @@ export function DayBookingCard({ booking, date }: DayBookingCardProps) {
         ) : null}
       </div>
 
-      <ArrivalsDialog open={arrivals.open} onOpenChange={(open) => setArrivals((s) => ({ ...s, open }))} booking={booking} initial={arrivals.initial} />
       <RecordPaymentDialog open={payment} onOpenChange={setPayment} booking={booking} mode="gate" />
       {canNoShow ? (
         <ConfirmDialog

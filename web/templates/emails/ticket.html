@@ -8,9 +8,7 @@
   ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else none,
   ("Reference", booking.reference),
   ("Visit date", booking.visit_date_long),
-  ("Arrival", booking.arrival_time),
   ("Group size", booking.people_booked|plural("visitor")),
-  ("Vehicles", booking.vehicles if booking.vehicles else none),
 ], "Your visit") }}
 <h2>At the gate</h2>
 <ul>
@@ -21,5 +19,5 @@
   {% endif %}
   <li>Please read the park rules before your visit: <a href="{{ rules_url }}">{{ rules_url }}</a></li>
 </ul>
-<p class="small muted">If your numbers or vehicles change, let us know and we will update the booking.</p>
+<p class="small muted">If your numbers change, let us know and we will update the booking.</p>
 {% endblock %}

@@ -25,8 +25,6 @@ def booking(id, visit_date, status, people, **extra):
         "group_type": "school",
         "contact_name": "Someone",
         "visit_date": visit_date,
-        "arrival_time": None,
-        "vehicles": 1,
     }
     row.update(extra)
     return row
@@ -73,8 +71,6 @@ def test_people_are_split_by_status(s):
         "people_booked",
         "group_type",
         "contact_name",
-        "arrival_time",
-        "vehicles",
     }
 
 
@@ -95,7 +91,7 @@ def test_day_flags_and_labels(s):
     }
     days = {d["date"]: d for d in aggregate_calendar(date(2026, 12, 23), date(2026, 12, 26), [], s, season)}
     assert days["2026-12-23"]["is_avoid"] is True  # Wednesday
-    assert days["2026-12-23"]["in_no_discount_window"] is True
+    assert days["2026-12-23"]["is_school_holiday"] is True
     assert days["2026-12-24"]["is_closed"] is True
     assert days["2026-12-24"]["label"] == "Christmas Eve"
     assert days["2026-12-25"]["is_peak"] is True

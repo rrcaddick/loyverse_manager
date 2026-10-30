@@ -97,15 +97,18 @@ id, reference VARCHAR(16) UNIQUE   -- "FY1703", assigned on creation
 doc_number INT UNIQUE               -- 1703; proforma FY1703, invoice INV1703
 status ENUM('enquiry','proforma_sent','confirmed','completed','cancelled','lapsed','no_show')
 group_name, group_type VARCHAR(32), area, contact_name, contact_email, contact_mobile (E164 digits, no +)
-visit_date DATE, alternative_date DATE NULL, arrival_time VARCHAR(20) NULL
-people_booked INT (visitors; the public field is `visitors`), vehicles INT, gazebos INT
+visit_date DATE, alternative_date DATE NULL
+people_booked INT (visitors; the public field is `visitors`)
 (adults/children columns remain but are unused: a booking counts visitors only; school parents
 pay at the gate through Loyverse and are not part of the booking)
-price_tier_code VARCHAR(32) NULL, price_per_person DECIMAL(12,2),
-price_overridden TINYINT(1), price_override_reason VARCHAR(255) NULL
+price_tier_code VARCHAR(32) NULL      -- the rate (children_weekday | group_weekday | group_weekend | public_weekend | peak)
+tier_price DECIMAL(12,2) NULL         -- the rate's price when the booking was priced
+price_per_person DECIMAL(12,2)        -- the net: tier_price − discount_per_person
+discount_per_person DECIMAL(12,2), discount_reason VARCHAR(255) NULL   -- never negative; a reason while > 0
+minimum_waived_by INT NULL            -- the other booking that let a small weekday group have the group rate
 deposit_due DECIMAL(12,2), deposit_overridden TINYINT(1), deposit_waived TINYINT(1),
 deposit_override_reason VARCHAR(255) NULL
-arrived_count INT NULL, arrived_source ENUM('loyverse','manual') NULL, arrived_at DATETIME NULL
+arrived_count INT NULL, arrived_source ENUM('loyverse') NULL   -- Loyverse is the only count (scripts/poll_arrivals.py)
 barcode VARCHAR(64) UNIQUE          -- EAN-13, src/services/barcode.py
 source ENUM('form','email','import','manual')
 enquiry_date DATE, hold_expires_on DATE NULL
@@ -113,8 +116,15 @@ customer_notes TEXT NULL, internal_notes TEXT NULL
 email_thread_id BIGINT NULL         -- Gmail X-GM-THRID of the primary thread
 proforma_sent_at, invoice_sent_at, final_invoice_sent_at, ticket_sent_at (WhatsApp),
 ticket_emailed_at, confirmed_at, completed_at, cancelled_at, lapsed_at  (DATETIME NULL)
-legacy_sheet_row JSON NULL, created_by INT NULL
+created_by INT NULL
 ```
+Migration 016 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
+`arrived_at`, `price_overridden`, `price_override_reason` and
+`legacy_sheet_row`; gazebos return later as invoice line items.
+
+### booking_legacy_rows
+`booking_id` (PK, FK), `sheet_row JSON`, `imported_at`. The original sheet row
+behind an imported booking, kept whole and never read by the app.
 Computed in the service, never stored: `total_amount = people_booked × price`,
 `paid_total = Σ payments`, `balance_due`, `final_amount = arrived_count × price`.
 
@@ -207,13 +217,33 @@ enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorde
   clicks Confirm. Admin can also Confirm manually with a reason.
 - Reopen: cancelled/lapsed → enquiry (admin).
 - `hold_expires_on = visit_date − reminders.lapse_days_before`, editable.
-- Day type: `weekend` if Sat/Sun or SA public holiday (`src/utils/holidays.py`),
-  else `weekday`. In the no-discount window group tiers are unavailable: price
-  defaults to `public_weekend_price`, peak days to `peak_price`.
-- Deposit: `max(min_people × price, round(people × percent/100) × price)`,
-  capped at `total_amount`; 0 when waived. Overrides are explicit flags with a
-  reason and are preserved on recalculation.
-- Price and deposit recalculate when people/date/tier change **unless** overridden.
+- **Rates (30 Oct 2026, `pricing.decide_tier`):** three group rates plus the
+  public and peak prices, all in `price_tiers`. Children's groups (a `children`
+  flag on the group type: school, crèche, aftercare, youth club) pay
+  `children_weekday` on a term-time weekday; every other group pays
+  `group_weekday` on a term-time weekday and `group_weekend` on a weekend or a
+  school-holiday weekday (`season.school_holidays`, inclusive ISO ranges).
+  Public holidays are `public_weekend` for everyone; peak days (`season_days`
+  kind `peak`) are `peak`. Under `pricing.group_minimum` (40) the public rate
+  applies: a hard rule on weekends and school holidays, and on a term-time
+  weekday waived when another live booking is on the day
+  (`bookings.minimum_waived_by`). Group types are information otherwise.
+- **Discounts:** an agreed price below the rate is `discount_per_person` with a
+  `discount_reason`; `price_per_person = tier_price − discount`. A discount is
+  never negative (a higher price means a different rate), needs a reason while
+  it is more than zero, and survives recalculation in rands. Documents show the
+  rate line and a discount line. `GET /bookings/quote` returns the rate decision
+  for a date, kind of group and headcount (the Edit dialog's live line).
+- Deposit: `max(min_people × price, round(people × percent/100) × price)` on the
+  net price, capped at `total_amount`; 0 when waived. Deposit overrides are
+  explicit flags with a reason and are preserved on recalculation.
+- The rate recalculates when people, date or kind of group change, or when
+  `price_tier_code` is set explicitly; the discount stays.
+- **Arrivals** are real time from Loyverse: `scripts/poll_arrivals.py` (worker,
+  every two minutes through opening hours) reads the day's receipts once and
+  records each visiting booking's count when it changes
+  (`arrivals.poll_arrivals` → `booking.record_arrivals`, source `loyverse`;
+  the first arrival completes a confirmed booking). There is no manual count.
 - Document numbers: `doc_number` is taken from `documents.next_number` at booking
   creation inside a transaction and the setting is incremented. Imported rows
   keep their sheet number when present.
@@ -234,7 +264,7 @@ Helpers in `web/api/__init__.py` (lead): `api_bp`, `ok(data, status=200)`,
 | auth | `GET /auth/session`, `POST /auth/login {email,password}`, `POST /auth/logout`, `POST /auth/change-password` | lead |
 | users | `GET /users`, `POST /users`, `PATCH /users/:id`, `POST /users/:id/reset-password` → temp password | lead |
 | settings | `GET /settings`, `PUT /settings/:section`, `GET/PUT /settings/price-tiers`, `GET/PUT /settings/season-days` | lead |
-| bookings | `GET /bookings?status&from&to&q&page&page_size&sort`, `GET /bookings/counts`, `POST /bookings`, `GET /bookings/:id`, `PATCH /bookings/:id`, `POST /bookings/:id/status {status, reason}`, `POST /bookings/:id/notes {text}`, `POST /bookings/:id/questions {question}`, `POST /bookings/:id/questions/:qid {answer}`, `POST /bookings/:id/payments`, `DELETE /bookings/:id/payments/:pid`, `GET /bookings/:id/arrivals` (Loyverse fetch), `POST /bookings/:id/arrivals {count, source}`, `GET /bookings/:id/events`, `GET /bookings/:id/emails` | bookings agent |
+| bookings | `GET /bookings?status&from&to&q&page&page_size&sort`, `GET /bookings/counts`, `POST /bookings`, `GET /bookings/:id`, `PATCH /bookings/:id`, `POST /bookings/:id/status {status, reason}`, `POST /bookings/:id/notes {text}`, `POST /bookings/:id/questions {question}`, `POST /bookings/:id/questions/:qid {answer}`, `POST /bookings/:id/payments`, `DELETE /bookings/:id/payments/:pid`, `GET /bookings/quote?group_type&visit_date&people&exclude` (the rate decision), `GET /bookings/:id/events`, `GET /bookings/:id/emails` | bookings agent |
 | booking actions | `POST /bookings/:id/actions/<action>` where action ∈ `send-acknowledgement, issue-proforma, send-proforma, send-invoice, send-final-invoice, send-ticket-email, send-ticket-whatsapp, send-payment-confirmation, send-reminder {kind}, send-expiry, send-answers, confirm {reason}`; `POST /bookings/:id/emails/reply {subject?, body_html, attach_document_ids[]}` | bookings agent (orchestrates services from documents + mail agents) |
 | documents | `GET /documents/:id/pdf`, `GET /bookings/:id/documents`, `POST /bookings/:id/documents/preview {kind}` → PDF bytes | documents agent |
 | calendar | `GET /calendar?from&to` → `{days:[{date, day_type, is_closed, is_avoid, is_peak, label, total_people, confirmed_people, tentative_people, capacity_warning, bookings:[{id,reference,group_name,status,people_booked,group_type}]}]}`; `GET /days/:date` (manager-allowed) → bookings with arrivals/payments summary | bookings agent |
@@ -255,8 +285,10 @@ next_document_number() -> int         # atomic increment
 
 # src/services/pricing.py (bookings agent)
 day_type(d: date, s: Settings) -> Literal["weekday","weekend"]
-is_closed(d, s) / is_avoid(d, s) / is_peak(d, s) / in_no_discount_window(d, s)
-default_price(tier_code: str | None, d: date, s: Settings) -> Decimal
+is_closed(d, s) / is_avoid(d, s) / is_peak(d, s) / is_school_holiday(d, s)
+rate_day(d, s) -> "peak" | "public_holiday" | "weekend" | "school_holiday" | "weekday"
+decide_tier(group_type, d, people, s, *, other_group_on_day=False) -> TierDecision(tier_code, rate_day, under_minimum, minimum_waived)
+price_for_tier(tier_code) -> Decimal                          # the table price; unknown → public
 deposit_for(people: int, price: Decimal, s: Settings) -> Decimal
 
 # src/services/booking.py (bookings agent)
@@ -299,6 +331,7 @@ confirm_match(tx_id, booking_id, actor) -> Payment           # creates payment v
 
 # src/services/arrivals.py (bookings agent)
 fetch_loyverse_arrivals(booking) -> int                     # receipts on visit_date whose line sku == barcode
+poll_arrivals(day=None) -> dict                             # every booking visiting the day, written when the count changed
 
 # src/services/reminders.py (ops agent)
 recompute_reminders() -> int                                 # fills booking_reminders from settings + booking state
@@ -344,21 +377,13 @@ arrivals), `lapsing` (hold_expires_on ≤ today + 3, unpaid).
 
 ## 9. Seeds (migration)
 
-Price tiers 2026/27 (code, label, day_type, price, min size):
-`school_weekday` Schools & children's groups weekday 70 (incl. teachers);
-`adult_small_weekday` Approved adult groups under 40 weekday 95;
-`adult_large_weekday` Approved adult groups 40+ weekday 90;
-`pensioners_weekday` Pensioner groups weekday 90;
-`church_weekend` Church & approved groups 40+ weekend 95 (min 40);
-`nonprofit_kids_weekend` Non-profit kids & youth 40+ weekend 95 (min 40);
-`nonprofit_adults_weekend` Non-profit adults & families 40+ weekend 100 (min 40);
-`public_weekend` Public weekend 115; `peak` Peak days 130.
-Group type → default tier: school→school_weekday / nonprofit_kids_weekend,
-creche→school_weekday / nonprofit_kids_weekend, church→adult_large_weekday /
-church_weekend, nonprofit→adult_large_weekday / nonprofit_adults_weekend,
-family→adult_small_weekday / nonprofit_adults_weekend, corporate→
-adult_small_weekday / public_weekend, pensioners→pensioners_weekday /
-public_weekend, other→adult_small_weekday / public_weekend (weekday / weekend).
+Price tiers 2026/27 since migration 016 (code, price): `children_weekday` 70,
+`group_weekday` 95, `group_weekend` 95, `public_weekend` 115, `peak` 130. The
+older tiers (school parents, adult small/large, pensioners, church, non-profit
+kids/adults) were mapped onto these and deleted; `scripts/reprice_bookings.py`
+re-derives every booking's rate under the rules and keeps the agreed price as
+a discount. Group types: school, creche, aftercare, youth_club (children),
+church, nonprofit, family, corporate, pensioners, other.
 
 Users seeded by `scripts/create_user.py`, not the migration.
 

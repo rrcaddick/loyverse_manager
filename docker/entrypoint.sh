@@ -3,7 +3,7 @@
 # Role dispatcher for the farmyard-manager image.
 #
 #   web                 gunicorn serving the JSON API and the React app
-#   worker              supercronic: mail sync, bank poll, reminders, nightly backup
+#   worker              supercronic: mail sync, bank poll, arrivals poll, reminders, nightly backup
 #   scheduler           supercronic: the daily Loyverse inventory jobs
 #   migrate             apply migrations/*.sql, then exit
 #   add-inventory       one-off run of the morning sync
@@ -56,11 +56,13 @@ case "${1:-web}" in
   worker)
     : "${MAIL_SYNC_CRON:=* * * * *}"
     : "${BANK_POLL_CRON:=*/5 * * * *}"
+    : "${ARRIVALS_POLL_CRON:=*/2 7-19 * * *}"
     : "${REMINDERS_CRON:=30 6 * * *}"
     : "${BACKUP_CRON:=15 2 * * *}"
     run_supercronic \
       "${MAIL_SYNC_CRON} cd /app && python -m scripts.sync_mail" \
       "${BANK_POLL_CRON} cd /app && python -m scripts.poll_bank" \
+      "${ARRIVALS_POLL_CRON} cd /app && python -m scripts.poll_arrivals" \
       "${REMINDERS_CRON} cd /app && python -m scripts.recompute_reminders" \
       "${BACKUP_CRON} cd /app && bash scripts/backup_db.sh"
     ;;
@@ -83,6 +85,7 @@ case "${1:-web}" in
   hide-quicket-event)  exec python -m scripts.hide_quicket_event ;;
   sync-mail)           exec python -m scripts.sync_mail ;;
   poll-bank)           exec python -m scripts.poll_bank ;;
+  poll-arrivals)       exec python -m scripts.poll_arrivals ;;
   recompute-reminders) exec python -m scripts.recompute_reminders ;;
   backup)              exec bash scripts/backup_db.sh ;;
   import-sheet)        shift; exec python -m scripts.import_sheet "$@" ;;

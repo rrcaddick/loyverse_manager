@@ -27,7 +27,6 @@ import { REMINDER_KIND_LABELS, type BookingDetail } from "./types";
 export type StepVerb =
   | { kind: "send"; action: ActionId; label: string }
   | { kind: "record-payment"; label: string }
-  | { kind: "record-arrivals"; label: string }
   | { kind: "edit"; focus: "contact" | "pricing" | null; label: string }
   | { kind: "status"; target: BookingStatus; label: string; destructive?: boolean }
   | { kind: "extend-hold"; label: string };
@@ -45,7 +44,6 @@ const money = (n: number) => formatMoney(n, { compact: true });
 
 const send = (action: ActionId, label = ACTION_LABELS[action]): StepVerb => ({ kind: "send", action, label });
 const recordPayment: StepVerb = { kind: "record-payment", label: ACTION_LABELS["record-payment"] };
-const recordArrivals: StepVerb = { kind: "record-arrivals", label: ACTION_LABELS["record-arrivals"] };
 const addEmail: StepVerb = { kind: "edit", focus: "contact", label: "Add email address" };
 const addContact: StepVerb = { kind: "edit", focus: "contact", label: "Add contact details" };
 const extendHold: StepVerb = { kind: "extend-hold", label: "Extend hold" };
@@ -120,20 +118,20 @@ export function nextStep(b: BookingDetail): NextStep {
       return {
         urgency: "red",
         icon: UserCheck,
-        title: `Visited ${formatDateShort(b.visit_date)} — record the arrivals`,
-        detail: join(`${relativeDays(toVisit)}`, `${formatNumber(b.people_booked)} booked`, balance),
-        primary: recordArrivals,
-        secondary: [statusVerb(b, "no_show")].filter((v): v is StepVerb => !!v),
+        title: `Visited ${formatDateShort(b.visit_date)} — no arrivals counted`,
+        detail: join(`${relativeDays(toVisit)}`, `${formatNumber(b.people_booked)} booked`, "nothing sold against the ticket at the gate", balance),
+        primary: statusVerb(b, "no_show"),
+        secondary: [],
       };
     }
     if (toVisit === 0) {
       return {
         urgency: "blue",
         icon: UserCheck,
-        title: `Visiting today — ${pluralise(b.people_booked, "visitor")}${b.arrival_time ? ` from ${b.arrival_time}` : ""}`,
-        detail: join(ticketSent ? "ticket sent" : "ticket not sent", `paid ${money(f.paid_total)}`, balance),
-        primary: recordArrivals,
-        secondary: ticketSent ? [] : [send("send-ticket", "Send ticket")],
+        title: `Visiting today — ${pluralise(b.people_booked, "visitor")}${b.arrived_count !== null ? ` · ${formatNumber(b.arrived_count)} arrived so far` : ""}`,
+        detail: join(ticketSent ? "ticket sent" : "ticket not sent", `paid ${money(f.paid_total)}`, balance, "arrivals count themselves from the gate"),
+        primary: ticketSent ? null : send("send-ticket", "Send ticket"),
+        secondary: [],
       };
     }
     if (!ticketSent) {

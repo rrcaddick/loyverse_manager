@@ -10,7 +10,7 @@ from src.services import booking as bs
 from src.services import pricing
 from src.services.settings import DEFAULTS, Settings
 
-TIERS = {"school_weekday": 70, "public_weekend": 115}
+TIERS = {"children_weekday": 70, "group_weekday": 95, "group_weekend": 95, "public_weekend": 115, "peak": 130}
 
 
 @pytest.fixture
@@ -126,7 +126,7 @@ def test_payload_is_coerced(s):
             "contact_mobile": "082 123 4567",
             "price_per_person": "70",
             "deposit_waived": "true",
-            "price_tier_code": "school_weekday",
+            "price_tier_code": "children_weekday",
             "unknown_key": "ignored",
         },
         partial=False,
@@ -169,23 +169,25 @@ def test_derive_pricing_on_create(s):
     fields = bs._derive_pricing(
         {}, {"visit_date": date(2026, 11, 12), "group_type": "school", "people_booked": 55}, s
     )
-    assert fields["price_tier_code"] == "school_weekday"
+    assert fields["price_tier_code"] == "children_weekday"
+    assert fields["tier_price"] == Decimal("70.00")
     assert fields["price_per_person"] == Decimal("70.00")
-    assert fields["price_overridden"] == 0
+    assert fields["discount_per_person"] == Decimal("0.00") and fields["discount_reason"] is None
+    assert fields["minimum_waived_by"] is None
     assert fields["deposit_due"] == Decimal("2800.00")
     assert fields["deposit_overridden"] == 0
 
 
-def test_explicit_price_equal_to_default_is_not_an_override(s):
+def test_agreed_price_at_the_rate_is_no_discount(s):
     fields = bs._derive_pricing(
         {},
         {"visit_date": date(2026, 11, 12), "group_type": "school", "people_booked": 55, "price_per_person": Decimal("70")},
         s,
     )
-    assert fields["price_overridden"] == 0
+    assert fields["discount_per_person"] == Decimal("0.00") and fields["discount_reason"] is None
 
 
-def test_explicit_different_price_is_an_override_and_survives_date_change(s):
+def test_agreed_price_below_the_rate_is_a_discount_that_survives_a_date_change(s):
     base = bs._derive_pricing(
         {},
         {
@@ -193,18 +195,51 @@ def test_explicit_different_price_is_an_override_and_survives_date_change(s):
             "group_type": "school",
             "people_booked": 55,
             "price_per_person": Decimal("60"),
-            "price_override_reason": "Returning group",
+            "discount_reason": "Returning group",
         },
         s,
     )
-    assert base["price_overridden"] == 1 and base["price_per_person"] == Decimal("60.00")
+    assert base["discount_per_person"] == Decimal("10.00") and base["price_per_person"] == Decimal("60.00")
+    assert base["tier_price"] == Decimal("70.00") and base["discount_reason"] == "Returning group"
     assert base["deposit_due"] == Decimal("2400.00")  # 40 × 60
     row = {**base, "visit_date": date(2026, 11, 12), "group_type": "school", "people_booked": 55}
-    moved = bs._derive_pricing(row, {"visit_date": date(2026, 12, 17)}, s)  # no-discount window
-    assert moved["price_overridden"] == 1 and moved["price_per_person"] == Decimal("60.00")
-    assert moved["price_tier_code"] == "public_weekend"
-    cleared = bs._derive_pricing(row, {"price_overridden": False}, s)
-    assert cleared["price_overridden"] == 0 and cleared["price_per_person"] == Decimal("70.00")
+    # Moved into the school holidays: the group rate applies, the R10 off stays.
+    moved = bs._derive_pricing(row, {"visit_date": date(2026, 12, 17)}, s)
+    assert moved["price_tier_code"] == "group_weekend" and moved["tier_price"] == Decimal("95.00")
+    assert moved["discount_per_person"] == Decimal("10.00") and moved["price_per_person"] == Decimal("85.00")
+    cleared = bs._derive_pricing(row, {"discount_per_person": Decimal("0")}, s)
+    assert cleared["discount_per_person"] == Decimal("0.00") and cleared["price_per_person"] == Decimal("70.00")
+    assert cleared["discount_reason"] is None
+
+
+def test_discount_needs_a_reason_and_is_never_negative(s):
+    changes = {"visit_date": date(2026, 11, 12), "group_type": "school", "people_booked": 55}
+    with pytest.raises(bs.BookingError) as exc:
+        bs._derive_pricing({}, {**changes, "price_per_person": Decimal("60")}, s)
+    assert "discount_reason" in exc.value.fields
+    with pytest.raises(bs.BookingError) as exc:
+        bs._derive_pricing({}, {**changes, "price_per_person": Decimal("80")}, s)
+    assert "price_per_person" in exc.value.fields  # above the rate is another rate, not a discount
+    with pytest.raises(bs.BookingError):
+        bs._derive_pricing({}, {**changes, "discount_per_person": Decimal("-5"), "discount_reason": "x"}, s)
+    with pytest.raises(bs.BookingError):
+        bs._derive_pricing({}, {**changes, "discount_per_person": Decimal("75"), "discount_reason": "x"}, s)
+
+
+def test_explicit_tier_pins_the_rate(s):
+    fields = bs._derive_pricing(
+        {}, {"visit_date": date(2026, 11, 14), "group_type": "church", "people_booked": 60, "price_tier_code": "public_weekend"}, s
+    )
+    assert fields["price_tier_code"] == "public_weekend" and fields["price_per_person"] == Decimal("115.00")
+
+
+def test_weekday_minimum_waived_when_another_group_opens_the_park(s):
+    alone = bs._derive_pricing({}, {"visit_date": date(2026, 11, 12), "group_type": "church", "people_booked": 30}, s, other_group_on_day=False)
+    assert alone["price_tier_code"] == "public_weekend" and alone["minimum_waived_by"] is None
+    joined = bs._derive_pricing({}, {"visit_date": date(2026, 11, 12), "group_type": "church", "people_booked": 30}, s, other_group_on_day=True)
+    assert joined["price_tier_code"] == "group_weekday"
+    weekend = bs._derive_pricing({}, {"visit_date": date(2026, 11, 14), "group_type": "church", "people_booked": 30}, s, other_group_on_day=True)
+    assert weekend["price_tier_code"] == "public_weekend"  # hard rule at the weekend
 
 
 def test_deposit_override_and_waiver(s):
@@ -212,9 +247,10 @@ def test_deposit_override_and_waiver(s):
         "visit_date": date(2026, 11, 12),
         "group_type": "school",
         "people_booked": 55,
-        "price_tier_code": "school_weekday",
+        "price_tier_code": "children_weekday",
+        "tier_price": Decimal("70.00"),
         "price_per_person": Decimal("70.00"),
-        "price_overridden": 0,
+        "discount_per_person": Decimal("0.00"),
         "deposit_due": Decimal("2800.00"),
         "deposit_overridden": 0,
         "deposit_waived": 0,
@@ -234,16 +270,17 @@ def test_people_change_recalculates_deposit_when_not_overridden(s):
         "visit_date": date(2026, 11, 12),
         "group_type": "school",
         "people_booked": 55,
-        "price_tier_code": "school_weekday",
+        "price_tier_code": "children_weekday",
+        "tier_price": Decimal("70.00"),
         "price_per_person": Decimal("70.00"),
-        "price_overridden": 0,
+        "discount_per_person": Decimal("0.00"),
         "deposit_due": Decimal("2800.00"),
         "deposit_overridden": 0,
         "deposit_waived": 0,
     }
     out = bs._derive_pricing(row, {"people_booked": 200}, s)
     assert out["deposit_due"] == Decimal("4200.00")
-    assert out["price_tier_code"] == "school_weekday"  # tier kept: date/type unchanged
+    assert out["price_tier_code"] == "children_weekday"  # still a children's group on a term-time Thursday
 
 
 def test_finance_from_row(s):

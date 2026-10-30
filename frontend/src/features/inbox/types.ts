@@ -122,9 +122,6 @@ export interface ExtractedFields {
   adults: number | null;
   children: number | null;
   people_booked: number | null;
-  vehicles: number | null;
-  gazebos: number | null;
-  arrival_time: string | null;
   questions: string[] | null;
   notes: string | null;
 }

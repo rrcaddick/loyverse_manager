@@ -203,9 +203,6 @@ def _group_card(item: dict) -> dict:
         "balance_due": finance.get("balance_due", 0.0),
         "contact_name": item.get("contact_name"),
         "contact_mobile": item.get("contact_mobile"),
-        "vehicles": int(item.get("vehicles") or 0),
-        "gazebos": int(item.get("gazebos") or 0),
-        "arrival_time": item.get("arrival_time"),
     }
 
 

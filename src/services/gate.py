@@ -41,8 +41,7 @@ FAILURE_PREFIXES = ("Error:",)
 
 BOOKING_FIELDS = (
     "id", "reference", "group_name", "group_type", "status", "status_label",
-    "people_booked", "arrival_time", "vehicles", "gazebos",
-    "arrived_count", "arrived_source", "arrived_at", "barcode",
+    "people_booked", "arrived_count", "arrived_source", "barcode",
     "contact_name", "contact_mobile", "ticket_sent_at", "ticket_emailed_at",
 )
 
@@ -64,7 +63,7 @@ def arrivals(today: date) -> dict:
             "deposit_covered": fin.get("deposit_covered"),
         }
         rows.append(item)
-    rows.sort(key=lambda r: (r.get("arrival_time") or "99:99", r.get("group_name") or ""))
+    rows.sort(key=lambda r: (r.get("group_name") or ""))
     totals = dict(day.get("totals") or {})
     return {
         "is_closed": day.get("is_closed"),

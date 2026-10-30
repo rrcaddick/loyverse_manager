@@ -157,12 +157,9 @@ function CheckScreen({ config }: { config: FormConfig }) {
     { field: "visit_date", label: "Preferred date", value: visitIso ? readBack(visitIso, config) : draft.visit_date || <Missing />, step: "visit" },
     { field: "alternative_date", label: "Alternative date", value: altIso ? readBack(altIso, config) : draft.alternative_date || <None text="None" />, step: "visit" },
     { field: "visitors", label: "Visitors", value: draft.visitors ? formatNumber(draft.visitors) : <Missing />, step: "visit" },
-    { field: "arrival_time", label: "Arrival time", value: draft.arrival_time || <None text="Not given" />, step: "visit" },
     { field: "group_name", label: "Group name", value: draft.group_name || <Missing />, step: "group" },
     { field: "group_type", label: "Kind of group", value: groupLabel ?? <Missing />, step: "group" },
     { field: "area", label: "Area or town", value: draft.area || <None text="Not given" />, step: "group" },
-    { field: "vehicles", label: "Vehicles", value: draft.vehicles || <None text="Not given" />, step: "group" },
-    { field: "gazebos", label: "Gazebos to hire", value: draft.gazebos || <None text="None" />, step: "group" },
     {
       field: "questions-0",
       label: "Questions for us",

@@ -1,6 +1,6 @@
 /**
  * /request/group — Step 2 of 3, "Tell us about your group": group name,
- * kind of group, area, vehicles, gazebos, questions, anything else.
+ * kind of group, area, questions, anything else.
  */
 
 import { Plus, X } from "lucide-react";
@@ -17,7 +17,7 @@ import { StepShell } from "@/features/public/step-shell";
 import { useStepForm } from "@/features/public/use-step-form";
 import type { FormConfig } from "@/features/public/types";
 
-const FIELDS = ["group_name", "group_type", "area", "vehicles", "gazebos", "questions", "customer_notes"] as const;
+const FIELDS = ["group_name", "group_type", "area", "questions", "customer_notes"] as const;
 
 export default function RequestGroupPage() {
   return <ConfigGate>{(config) => <GroupStep config={config} />}</ConfigGate>;
@@ -67,14 +67,6 @@ function GroupStep({ config }: { config: FormConfig }) {
 
       <Field id="area" label="Area or town" optional error={errors.area?.message}>
         {(a11y) => <TextInput {...a11y} autoComplete="address-level2" maxLength={255} {...register("area")} />}
-      </Field>
-
-      <Field id="vehicles" label="Vehicles" optional hint="Buses, taxis and cars; the count goes on your vehicle ticket." error={errors.vehicles?.message}>
-        {(a11y) => <TextInput {...a11y} inputMode="numeric" autoComplete="off" className="max-w-[8rem] tabular" {...register("vehicles")} />}
-      </Field>
-
-      <Field id="gazebos" label="Gazebos to hire" optional hint={`Shaded spots. We have ${config.max_gazebos}, first come first served.`} error={errors.gazebos?.message}>
-        {(a11y) => <TextInput {...a11y} inputMode="numeric" autoComplete="off" className="max-w-[8rem] tabular" {...register("gazebos")} />}
       </Field>
 
       <fieldset className="flex flex-col gap-3">

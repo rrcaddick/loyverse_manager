@@ -10,14 +10,9 @@ from src.services import pricing
 from src.services.settings import DEFAULTS, Settings
 
 TIERS = {
-    "school_weekday": 70,
-    "school_parents_weekday": 90,
-    "adult_small_weekday": 95,
-    "adult_large_weekday": 90,
-    "pensioners_weekday": 90,
-    "church_weekend": 95,
-    "nonprofit_kids_weekend": 95,
-    "nonprofit_adults_weekend": 100,
+    "children_weekday": 70,
+    "group_weekday": 95,
+    "group_weekend": 95,
     "public_weekend": 115,
     "peak": 130,
 }
@@ -96,87 +91,83 @@ def test_avoid_and_peak(s):
     assert not pricing.is_peak(THU, s)
 
 
-def test_no_discount_window_wraps_the_year(s):
-    assert not pricing.in_no_discount_window(date(2026, 12, 12), s)
-    assert pricing.in_no_discount_window(date(2026, 12, 13), s)
-    assert pricing.in_no_discount_window(date(2026, 12, 31), s)
-    assert pricing.in_no_discount_window(date(2027, 1, 1), s)
-    assert pricing.in_no_discount_window(date(2027, 1, 11), s)
-    assert not pricing.in_no_discount_window(date(2027, 1, 12), s)
+def test_school_holidays_from_settings(s):
+    assert pricing.is_school_holiday(date(2026, 12, 10), s)
+    assert pricing.is_school_holiday(date(2027, 1, 12), s)
+    assert not pricing.is_school_holiday(date(2026, 12, 9), s)
+    assert not pricing.is_school_holiday(date(2027, 1, 13), s)
+    s.season["school_holidays"] = [{"from": "2027-03-01", "to": "2027-03-10", "label": "Test"}]
+    assert pricing.is_school_holiday(date(2027, 3, 5), s)
+    assert not pricing.is_school_holiday(date(2026, 12, 15), s)
 
 
-def test_no_discount_window_without_wrap(s):
-    s.season["no_discount_start"] = "03-01"
-    s.season["no_discount_end"] = "03-10"
-    assert pricing.in_no_discount_window(date(2027, 3, 5), s)
-    assert not pricing.in_no_discount_window(date(2027, 2, 28), s)
-    assert not pricing.in_no_discount_window(date(2027, 3, 11), s)
+def test_rate_day_most_specific_first(s):
+    assert pricing.rate_day(THU, s) == "weekday"
+    assert pricing.rate_day(SAT, s) == "weekend"
+    assert pricing.rate_day(SUN, s) == "weekend"
+    assert pricing.rate_day(RECONCILIATION_DAY, s) == "public_holiday"
+    assert pricing.rate_day(date(2026, 12, 17), s) == "school_holiday"  # a Thursday in the holidays
+    assert pricing.rate_day(date(2026, 12, 25), s) == "peak"  # peak beats the public holiday
+    assert pricing.rate_day(date(2026, 12, 19), s) == "weekend"  # Saturday in the holidays
 
 
 # ---------------------------------------------------------------- tiers ---
 
-@pytest.mark.parametrize(
-    "group_type, weekday_tier, weekend_tier",
-    [
-        ("school", "school_weekday", "nonprofit_kids_weekend"),
-        ("creche", "school_weekday", "nonprofit_kids_weekend"),
-        ("church", "adult_large_weekday", "church_weekend"),
-        ("nonprofit", "adult_large_weekday", "nonprofit_adults_weekend"),
-        ("family", "adult_small_weekday", "nonprofit_adults_weekend"),
-        ("corporate", "adult_small_weekday", "public_weekend"),
-        ("pensioners", "pensioners_weekday", "public_weekend"),
-        ("other", "adult_small_weekday", "public_weekend"),
-    ],
-)
-def test_default_tier_for(s, group_type, weekday_tier, weekend_tier):
-    assert pricing.default_tier_for(group_type, THU, s) == weekday_tier
-    assert pricing.default_tier_for(group_type, SAT, s) == weekend_tier
-    # A public holiday counts as a weekend.
-    assert pricing.default_tier_for(group_type, RECONCILIATION_DAY, s) == weekend_tier
+@pytest.mark.parametrize("group_type, children", [("school", True), ("creche", True), ("aftercare", True), ("youth_club", True), ("church", False), ("nonprofit", False), ("family", False), ("corporate", False), ("pensioners", False), ("other", False)])
+def test_children_groups_are_a_flag_on_the_type(s, group_type, children):
+    assert pricing.is_children_group(group_type, s) is children
 
 
-def test_default_tier_for_unknown_type(s):
-    assert pricing.default_tier_for("zoo", THU, s) is None
-    assert pricing.default_tier_for(None, THU, s) is None
+def test_unknown_type_is_not_a_children_group(s):
+    assert pricing.is_children_group("zoo", s) is False
+    assert pricing.is_children_group(None, s) is False
 
 
-def test_effective_tier(s):
-    assert pricing.effective_tier("school_weekday", THU, s) == "school_weekday"
-    assert pricing.effective_tier("school_weekday", date(2026, 12, 17), s) == "public_weekend"
-    assert pricing.effective_tier("public_weekend", date(2026, 12, 17), s) == "public_weekend"
-    assert pricing.effective_tier("school_weekday", date(2026, 12, 25), s) == "peak"
-    assert pricing.effective_tier(None, THU, s) is None
+def test_decide_tier_term_time_weekday(s):
+    assert pricing.decide_tier("school", THU, 60, s).tier_code == "children_weekday"
+    assert pricing.decide_tier("church", THU, 60, s).tier_code == "group_weekday"
+    assert pricing.decide_tier("zoo", THU, 60, s).tier_code == "group_weekday"
+
+
+def test_decide_tier_weekend_and_school_holiday_are_the_group_rate(s):
+    assert pricing.decide_tier("church", SAT, 60, s).tier_code == "group_weekend"
+    assert pricing.decide_tier("school", SAT, 60, s).tier_code == "group_weekend"  # no children's rate at the weekend
+    assert pricing.decide_tier("school", date(2026, 12, 17), 60, s).tier_code == "group_weekend"  # nor in the holidays
+
+
+def test_decide_tier_public_holiday_and_peak_are_public_for_everyone(s):
+    assert pricing.decide_tier("church", RECONCILIATION_DAY, 200, s).tier_code == "public_weekend"
+    assert pricing.decide_tier("school", date(2026, 12, 25), 200, s).tier_code == "peak"
+
+
+def test_decide_tier_minimum_is_hard_on_weekends_and_waivable_on_weekdays(s):
+    weekend = pricing.decide_tier("church", SAT, 30, s)
+    assert weekend.tier_code == "public_weekend" and weekend.under_minimum and not weekend.minimum_waived
+    alone = pricing.decide_tier("church", THU, 30, s)
+    assert alone.tier_code == "public_weekend" and alone.under_minimum and not alone.minimum_waived
+    joined = pricing.decide_tier("church", THU, 30, s, other_group_on_day=True)
+    assert joined.tier_code == "group_weekday" and joined.minimum_waived
+    kids = pricing.decide_tier("school", THU, 24, s, other_group_on_day=True)
+    assert kids.tier_code == "children_weekday" and kids.minimum_waived
+    assert pricing.decide_tier("church", THU, 40, s).under_minimum is False
+
+
+def test_group_minimum_follows_settings(s):
+    s.pricing["group_minimum"] = 20
+    assert pricing.decide_tier("church", SAT, 25, s).tier_code == "group_weekend"
 
 
 # ---------------------------------------------------------------- price ---
 
-def test_default_price_uses_tier_table(s):
-    assert pricing.default_price("school_weekday", THU, s) == Decimal("70.00")
-    assert pricing.default_price("nonprofit_adults_weekend", SAT, s) == Decimal("100.00")
+def test_price_for_tier_uses_the_table(s):
+    assert pricing.price_for_tier("children_weekday") == Decimal("70.00")
+    assert pricing.price_for_tier("group_weekend") == Decimal("95.00")
+    assert pricing.price_for_tier("peak") == Decimal("130.00")
 
 
-def test_default_price_peak_day(s):
-    assert pricing.default_price("school_weekday", date(2026, 12, 25), s) == Decimal("130.00")
-    assert pricing.default_price(None, date(2027, 1, 2), s) == Decimal("130.00")
-
-
-def test_default_price_no_discount_window(s):
-    in_window = date(2026, 12, 17)  # Thursday
-    assert pricing.default_price("school_weekday", in_window, s) == Decimal("115.00")
-    assert pricing.default_price("public_weekend", in_window, s) == Decimal("115.00")
-    assert pricing.default_price("peak", in_window, s) == Decimal("130.00")
-
-
-def test_default_price_unknown_tier_falls_back_to_public(s):
-    assert pricing.default_price("no_such_tier", THU, s) == Decimal("115.00")
-    assert pricing.default_price(None, THU, s) == Decimal("115.00")
-
-
-def test_default_price_follows_settings_not_table(s):
-    s.pricing["peak_price"] = 150
-    s.pricing["public_weekend_price"] = 120
-    assert pricing.default_price("school_weekday", date(2026, 12, 25), s) == Decimal("150.00")
-    assert pricing.default_price("school_weekday", date(2026, 12, 17), s) == Decimal("120.00")
+def test_price_for_unknown_tier_falls_back_to_public(s):
+    assert pricing.price_for_tier("no_such_tier") == Decimal("115.00")
+    assert pricing.price_for_tier(None) == Decimal("115.00")
 
 
 # -------------------------------------------------------------- deposit ---

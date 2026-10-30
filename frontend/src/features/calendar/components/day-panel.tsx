@@ -31,7 +31,7 @@ import { useDay } from "../api";
 import { relativeDayLabel } from "../month";
 import { SplitCaption } from "./split-caption";
 
-type DayFlagsInput = Pick<CalendarDay, "day_type" | "is_closed" | "is_avoid" | "is_peak" | "in_no_discount_window" | "label" | "capacity_warning">;
+type DayFlagsInput = Pick<CalendarDay, "day_type" | "is_closed" | "is_avoid" | "is_peak" | "is_school_holiday" | "label" | "capacity_warning">;
 
 export function DayFlags({ day, className }: { day: DayFlagsInput; className?: string }) {
   return (
@@ -40,7 +40,7 @@ export function DayFlags({ day, className }: { day: DayFlagsInput; className?: s
       {day.is_closed ? <StatusPill tone="neutral" label={day.label ? `Closed · ${day.label}` : "Closed"} /> : day.label ? <StatusPill tone="blue" label={day.label} /> : null}
       {day.is_peak ? <StatusPill tone="amber" label="Peak day" /> : null}
       {day.is_avoid ? <StatusPill tone="neutral" label="Avoid" /> : null}
-      {day.in_no_discount_window && !day.is_peak ? <StatusPill tone="amber" label="No group discounts" /> : null}
+      {day.is_school_holiday && !day.is_peak ? <StatusPill tone="amber" label="School holidays" /> : null}
       {day.capacity_warning ? <StatusPill tone="red" label="Over capacity" /> : null}
     </div>
   );
@@ -54,13 +54,9 @@ interface DayPanelProps {
   onAddBooking: (date: string) => void;
 }
 
-/** Arrival time first (unknown last), then the biggest group. */
+/** The biggest group first, then by name. */
 function sortBookings(items: CalendarDayBooking[]): CalendarDayBooking[] {
-  return [...items].sort((a, b) => {
-    if (a.arrival_time && b.arrival_time && a.arrival_time !== b.arrival_time) return a.arrival_time < b.arrival_time ? -1 : 1;
-    if (!!a.arrival_time !== !!b.arrival_time) return a.arrival_time ? -1 : 1;
-    return b.people_booked - a.people_booked || a.group_name.localeCompare(b.group_name);
-  });
+  return [...items].sort((a, b) => b.people_booked - a.people_booked || a.group_name.localeCompare(b.group_name));
 }
 
 export function DayPanel({ date, day, today, onClose, onAddBooking }: DayPanelProps) {
@@ -115,7 +111,7 @@ export function DayPanel({ date, day, today, onClose, onAddBooking }: DayPanelPr
             {bookings.map((b) => {
               const more = rich.get(b.id);
               const meta = BOOKING_STATUS_META[b.status];
-              const details = [b.arrival_time ? `arrives ${b.arrival_time}` : null, b.group_type ? groupType(b.group_type) : null, b.reference].filter(Boolean).join(" · ");
+              const details = [b.group_type ? groupType(b.group_type) : null, b.reference].filter(Boolean).join(" · ");
               const body = (
                 <>
                   <StatusDot tone={meta.tone} label={meta.label} className="mt-[0.3rem] shrink-0 self-start" />

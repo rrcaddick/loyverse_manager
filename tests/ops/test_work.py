@@ -14,7 +14,7 @@ import pytest
 
 from src.models.base import dumps, execute, query, query_one
 from src.services import reminders, work
-from src.services.public_form import _fallback_create_booking
+from src.services.public_form import create_booking_compat
 from src.utils.date import get_today
 from tests.ops.conftest import delete_test_bookings
 
@@ -28,7 +28,7 @@ ROW_KEYS = {
 
 
 def make(group, visit, status, **cols):
-    booking = _fallback_create_booking(
+    booking = create_booking_compat(
         {
             "group_name": group,
             "group_type": "church",
@@ -39,7 +39,6 @@ def make(group, visit, status, **cols):
             "adults": 50,
             "children": 10,
             "people_booked": 60,
-            "price_per_person": "95.00",
         },
         "manual",
         None,

@@ -38,6 +38,7 @@ RUNNABLE: dict[str, tuple[str, str]] = {
     "hide_quicket_event": ("scripts.hide_quicket_event", "hide_quicket_event"),
     "sync_mail": ("src.services.mail_ingest", "sync_mailbox"),
     "poll_bank": ("src.services.bank", "poll_transactions"),
+    "poll_arrivals": ("src.services.arrivals", "poll_arrivals"),
     "recompute_reminders": ("src.services.reminders", "recompute_reminders"),
 }
 

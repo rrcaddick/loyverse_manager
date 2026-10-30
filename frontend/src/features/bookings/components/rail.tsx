@@ -16,7 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { errorMessage } from "@/lib/api";
-import { formatDate, formatDateLong, formatDateTime, formatNumber, formatPhone, humanise, pluralise } from "@/lib/format";
+import { formatDate, formatDateLong, formatDateTime, formatNumber, formatPhone, humanise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { availability, latestDocument, type ActionId } from "../actions";
@@ -101,17 +101,7 @@ function DetailsCard({ booking }: { booking: BookingDetail }) {
               </span>
             ),
           },
-          { label: "Arrival", value: booking.arrival_time ?? <span className="text-muted-foreground">Not given</span> },
           { label: "Visitors", value: formatNumber(booking.people_booked), numeric: true },
-          {
-            label: "Vehicles",
-            value: (
-              <span className="tabular">
-                {formatNumber(booking.vehicles)}
-                <span className="text-muted-foreground"> · {pluralise(booking.gazebos, "gazebo")}</span>
-              </span>
-            ),
-          },
           { label: "Area", value: booking.area ?? <span className="text-muted-foreground">—</span> },
           { label: "Kind", value: groupType(booking.group_type) },
         ]}

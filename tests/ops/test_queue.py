@@ -9,7 +9,7 @@ import pytest
 
 from src.models.base import execute, query, query_one
 from src.services import reminders
-from src.services.public_form import _fallback_create_booking, _fallback_record_payment
+from src.services.public_form import create_booking_compat, record_payment_compat
 from src.utils.date import get_today
 from tests.ops.conftest import delete_test_bookings
 
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.usefixtures("db")
 
 
 def make(group, visit, status, **cols):
-    booking = _fallback_create_booking(
+    booking = create_booking_compat(
         {
             "group_name": group,
             "group_type": "church",
@@ -28,7 +28,6 @@ def make(group, visit, status, **cols):
             "adults": 50,
             "children": 10,
             "people_booked": 60,
-            "price_per_person": "95.00",
         },
         "manual",
         None,
@@ -123,7 +122,7 @@ def test_queue_sections_and_reminders(rows):
     assert reminders.dismiss_reminder(999999999, None) is None
 
     # deposit arrives -> confirmed; unpaid reminders go, final_details appears
-    _fallback_record_payment(b["id"], "eft", Decimal("3800.00"), get_today(), "TEST EFT", None, None)
+    record_payment_compat(b["id"], "eft", Decimal("3800.00"), get_today(), "TEST EFT", None, None)
     assert query_one("SELECT status FROM bookings WHERE id = %s", (b["id"],))["status"] == "confirmed"
     reminders.recompute_reminders()
     kinds_now = {r["kind"]: r["status"] for r in query("SELECT kind, status FROM booking_reminders WHERE booking_id = %s", (b["id"],))}
@@ -142,6 +141,6 @@ def test_arrivals_to_record_uses_past_confirmed(rows):
     old = make("TEST Yesterday Church", today - timedelta(days=1), "confirmed")
     queue = reminders.build_queue()
     assert old["reference"] in refs(section(queue, "arrivals_to_record"))
-    execute("UPDATE bookings SET arrived_count = 40, arrived_source = 'manual' WHERE id = %s", (old["id"],))
+    execute("UPDATE bookings SET arrived_count = 40, arrived_source = 'loyverse' WHERE id = %s", (old["id"],))
     queue = reminders.build_queue()
     assert old["reference"] not in refs(section(queue, "arrivals_to_record"))

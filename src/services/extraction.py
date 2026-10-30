@@ -37,9 +37,6 @@ FIELD_KEYS = (
     "adults",
     "children",
     "people_booked",
-    "vehicles",
-    "gazebos",
-    "arrival_time",
     "questions",
     "notes",
 )
@@ -61,9 +58,6 @@ SCHEMA: dict[str, Any] = {
         "adults": _nullable_int,
         "children": _nullable_int,
         "people_booked": _nullable_int,
-        "vehicles": _nullable_int,
-        "gazebos": _nullable_int,
-        "arrival_time": _nullable_string,
         "questions": {"type": "array", "items": {"type": "string"}},
         "notes": _nullable_string,
     },
@@ -79,8 +73,6 @@ Fill the JSON fields from the email only. Use null for anything not stated; neve
 - contact_email / contact_mobile: the customer's details as written (the signature usually has them).
 - visit_date and alternative_date: ISO dates (YYYY-MM-DD). Today is {today}; resolve relative dates ("next Saturday", "the 14th") to the next such date on or after today. If only a month is given, leave the field null and mention it in notes.
 - adults, children: counts if stated. people_booked: the total headcount if stated or clearly implied (adults + children); otherwise null.
-- vehicles: buses/cars/taxis the group arrives in. gazebos: gazebos requested.
-- arrival_time: as written, e.g. "09:30" or "around 10am".
 - questions: each distinct question the customer asks, as a short self-contained sentence. Empty list if none.
 - notes: anything else the booking team should know, in one or two sentences. Null if nothing.
 Ignore quoted earlier messages and our own replies when they conflict with the customer's latest words."""
@@ -109,7 +101,7 @@ def _clean(data: dict) -> dict:
         value = data.get(key)
         if key == "questions":
             out[key] = [str(q).strip() for q in (value or []) if str(q).strip()]
-        elif key in ("adults", "children", "people_booked", "vehicles", "gazebos"):
+        elif key in ("adults", "children", "people_booked"):
             try:
                 out[key] = int(value) if value is not None else None
             except (TypeError, ValueError):

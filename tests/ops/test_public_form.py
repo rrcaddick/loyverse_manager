@@ -28,9 +28,6 @@ def payload(**overrides):
         "alternative_date": "2026-11-06",
         "adults": "12",
         "children": 88,
-        "vehicles": 2,
-        "gazebos": 0,
-        "arrival_time": "09:30",
         "customer_notes": "Two buses.",
         "questions": ["Is there a kids' pool?", "  ", "Can we braai?"],
         "policy_accepted": True,
@@ -148,27 +145,6 @@ def test_visitors_wins_over_adults_and_children(settings):
     assert errors == {} and clean["people_booked"] == 45 and "visitors" not in clean
 
 
-def test_arrival_time_must_be_a_slot(settings):
-    clean, errors = validate(settings, arrival_time="09:30")
-    assert errors == {} and clean["arrival_time"] == "09:30"
-    clean, errors = validate(settings, arrival_time="Not sure yet")
-    assert errors == {} and clean["arrival_time"] == "Not sure yet"
-    _, errors = validate(settings, arrival_time="about ten")
-    assert errors["arrival_time"] == "Choose an arrival time from the list"
-    clean, errors = validate(settings, arrival_time="")
-    assert errors == {} and clean["arrival_time"] is None
-    settings["form"]["arrival_slots"] = ["08:00"]
-    _, errors = validate(settings, arrival_time="09:30")
-    assert "arrival_time" in errors
-
-
-def test_gazebos_capped_at_the_park_fleet(settings):
-    clean, errors = validate(settings, gazebos=7)
-    assert errors == {} and clean["gazebos"] == 7
-    _, errors = validate(settings, gazebos=8)
-    assert errors["gazebos"] == "We have 7 gazebos to hire"
-
-
 def test_next_open_day_after(settings):
     assert next_open_day_after(date(2026, 11, 2), settings, CLOSED, TODAY) == date(2026, 11, 4)
     assert next_open_day_after(date(2026, 12, 23), settings, CLOSED, TODAY) == date(2026, 12, 25)
@@ -176,11 +152,10 @@ def test_next_open_day_after(settings):
 
 
 def test_counts_must_be_whole_non_negative(settings):
-    _, errors = validate(settings, adults="twelve", children=-1, vehicles=1.5, gazebos=True)
+    _, errors = validate(settings, adults="twelve", children=-1)
     assert errors["adults"] == "Enter a whole number"
     assert errors["children"] == "Must be 0 or more"
-    assert errors["vehicles"] == "Enter a whole number"
-    assert errors["gazebos"] == "Enter a whole number"
+    assert "vehicles" not in errors and "gazebos" not in errors  # no longer captured
 
 
 def test_question_limits(settings):
@@ -195,8 +170,7 @@ def test_question_limits(settings):
 
 
 def test_text_lengths(settings):
-    _, errors = validate(settings, arrival_time="x" * 21, customer_notes="y" * 2001, group_name="z" * 256)
-    assert errors["arrival_time"] == "Keep this under 20 characters"
+    _, errors = validate(settings, customer_notes="y" * 2001, group_name="z" * 256)
     assert errors["customer_notes"] == "Keep this under 2000 characters"
     assert errors["group_name"] == "Keep this under 255 characters"
 

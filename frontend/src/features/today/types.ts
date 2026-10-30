@@ -28,9 +28,6 @@ export interface TodayGroup {
   balance_due: number;
   contact_name: string | null;
   contact_mobile: string | null;
-  vehicles: number;
-  gazebos: number;
-  arrival_time: string | null;
 }
 
 export interface StripDay {
@@ -94,12 +91,8 @@ export interface DayGroupRow {
   group_type: string | null;
   status: BookingStatus;
   people_booked: number;
-  arrival_time: string | null;
-  vehicles: number;
-  gazebos: number;
   arrived_count: number | null;
   arrived_source: ArrivalSource | null;
-  arrived_at: string | null;
   ticket_sent: boolean;
   paid_total: number;
   balance_due: number;

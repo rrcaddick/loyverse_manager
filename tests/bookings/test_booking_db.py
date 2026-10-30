@@ -59,7 +59,8 @@ def test_create_assigns_everything(created):
     assert len(b["barcode"]) == 13
     assert b["status"] == "enquiry"
     assert b["people_booked"] == 55
-    assert b["price_tier_code"] == "school_weekday"
+    assert b["price_tier_code"] == "children_weekday"
+    assert b["tier_price"] == Decimal("70.00") and b["discount_per_person"] == Decimal("0.00")
     assert b["price_per_person"] == Decimal("70.00")
     assert b["deposit_due"] == Decimal("2800.00")
     assert b["hold_expires_on"] == VISIT - timedelta(days=7)
@@ -74,8 +75,8 @@ def test_update_recalculates_and_logs(created):
     b = make(created)
     b = bs.update_booking(b["id"], {"people_booked": 200}, actor=None)
     assert b["deposit_due"] == Decimal("4200.00")
-    b = bs.update_booking(b["id"], {"visit_date": "2026-11-14"}, actor=None)  # Saturday
-    assert b["price_tier_code"] == "nonprofit_kids_weekend"
+    b = bs.update_booking(b["id"], {"visit_date": "2026-11-14"}, actor=None)  # Saturday: the group rate, no children's rate
+    assert b["price_tier_code"] == "group_weekend"
     assert b["price_per_person"] == Decimal("95.00")
     kinds = [e["kind"] for e in bs.get_booking_detail(b["id"])["events"]]
     assert kinds == ["created", "updated", "updated"]
@@ -103,9 +104,11 @@ def test_invalid_transition_raises(created):
 def test_arrivals_complete_a_confirmed_booking(created):
     b = make(created, deposit_waived=True)
     bs.set_status(b["id"], "confirmed", None, reason="Deposit waived")
-    b = bs.record_arrivals(b["id"], 48, "manual", None)
+    b = bs.record_arrivals(b["id"], 48, "loyverse", None)
     assert b["status"] == "completed"
-    assert b["arrived_count"] == 48 and b["arrived_source"] == "manual"
+    assert b["arrived_count"] == 48 and b["arrived_source"] == "loyverse"
+    with pytest.raises(bs.BookingError):
+        bs.record_arrivals(b["id"], 50, "manual", None)  # no manual counts: Loyverse or nothing
     assert bs.booking_finance(b)["final_amount"] == Decimal("3360.00")
 
 

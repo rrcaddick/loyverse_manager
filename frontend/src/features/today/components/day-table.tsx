@@ -4,12 +4,12 @@
  * Arrived (count, source, inline Enter) · Balance [admin] · Status · ⋯.
  * Rows are 56 px (48 px compact), sorted by the caller, and a group that
  * has arrived is tinted the lightest green. One ⋯ per row: Fetch from
- * Loyverse, Enter arrivals, Record gate payment, Open booking [admin].
+ * Record gate payment, Open booking [admin]. Arrivals come in from Loyverse on their own.
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Banknote, Check, ExternalLink, Hash, MoreHorizontal, RefreshCw, TicketX } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { Banknote, Check, ExternalLink, MoreHorizontal, TicketX } from "lucide-react";
+import { type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { StatusPill } from "@/components/status-pill";
@@ -22,12 +22,11 @@ import { useBooking } from "@/features/bookings/api";
 import { RecordPaymentDialog } from "@/features/bookings/components/record-payment-dialog";
 import { useGroupTypeLabel } from "@/features/bookings/lib";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
-import { formatMoney, formatNumber, formatTime, pluralise } from "@/lib/format";
+import { formatMoney, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { invalidateDayWorld } from "../api";
 import type { DayGroupRow } from "../types";
-import { ArrivalsPopover } from "./arrivals-popover";
 
 export interface DayTableProps {
   rows: DayGroupRow[];
@@ -44,10 +43,6 @@ export interface DayTableProps {
 
 export function DayTable({ rows, loading = false, compact = false, showMoney, canOpenBooking, emptyState, className }: DayTableProps) {
   const groupType = useGroupTypeLabel();
-  const [arrivals, setArrivals] = useState<{ id: number; fetch: boolean } | null>(null);
-  // From the ⋯ menu the popover opens once the menu has closed (onCloseAutoFocus),
-  // otherwise the menu's focus return would dismiss it at once.
-  const pendingArrivals = useRef<{ id: number; fetch: boolean } | null>(null);
   const payment = useSubjectDialog<DayGroupRow>();
   const rowHeight = compact ? "h-row-lg" : "h-row-queue";
   const columns = showMoney ? 6 : 5;
@@ -88,7 +83,6 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
             rows.map((row) => {
               const arrived = row.arrived_count !== null && row.arrived_count > 0;
               const ticketMissing = (row.status === "confirmed" || row.status === "completed") && !row.ticket_sent;
-              const open = arrivals?.id === row.id;
               return (
                 <TableRow key={row.id} className={cn(rowHeight, arrived && "bg-green-soft/40 hover:bg-green-soft/60")}>
                   <TableCell className="py-1">
@@ -111,39 +105,23 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
 
                   <TableCell className="py-1">
                     <div className="text-body font-medium text-foreground tabular">{formatNumber(row.people_booked)}</div>
-                    <div className="truncate text-xs text-muted-foreground tabular">
-                      {row.arrival_time ? `arrives ${row.arrival_time}` : "time not set"}
-                      {row.vehicles ? ` · ${pluralise(row.vehicles, "vehicle")}` : ""}
-                    </div>
+                    <div className="truncate text-xs text-muted-foreground tabular">booked</div>
                   </TableCell>
 
                   <TableCell className="py-1">
-                    <ArrivalsPopover
-                      row={row}
-                      open={open}
-                      autoFetch={open && !!arrivals?.fetch}
-                      onOpenChange={(next) => setArrivals(next ? { id: row.id, fetch: false } : null)}
-                      anchor={
-                        <div className="flex min-w-0 items-center gap-2">
-                          {row.arrived_count !== null ? (
-                            <div className="min-w-0">
-                              <div className={cn("text-body font-medium tabular", arrived ? "text-green-text" : "text-foreground")}>{formatNumber(row.arrived_count)}</div>
-                              <div className="truncate text-xs text-muted-foreground tabular">
-                                {row.arrived_source === "loyverse" ? "Loyverse" : "Entered"}
-                                {row.arrived_at ? ` · ${formatTime(row.arrived_at)}` : ""}
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <span className="text-body text-faint-foreground">—</span>
-                              <Button variant="outline" size="sm" onClick={() => setArrivals({ id: row.id, fetch: false })} aria-label={`Enter arrivals for ${row.reference}`}>
-                                Enter
-                              </Button>
-                            </>
-                          )}
+                    <div className="flex min-w-0 items-center gap-2">
+                      {row.arrived_count !== null ? (
+                        <div className="min-w-0">
+                          <div className={cn("text-body font-medium tabular", arrived ? "text-green-text" : "text-foreground")}>{formatNumber(row.arrived_count)}</div>
+                          <div className="truncate text-xs text-muted-foreground tabular">Loyverse</div>
                         </div>
-                      }
-                    />
+                      ) : (
+                        <div className="min-w-0">
+                          <span className="text-body text-faint-foreground">—</span>
+                          <div className="truncate text-xs text-muted-foreground">none yet</div>
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
 
                   {showMoney ? (
@@ -188,30 +166,7 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
                       <DropdownMenuContent
                         align="end"
                         className="w-56"
-                        onCloseAutoFocus={(event) => {
-                          if (pendingArrivals.current) {
-                            event.preventDefault();
-                            setArrivals(pendingArrivals.current);
-                            pendingArrivals.current = null;
-                          }
-                        }}
                       >
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            pendingArrivals.current = { id: row.id, fetch: true };
-                          }}
-                        >
-                          <RefreshCw />
-                          Fetch from Loyverse
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            pendingArrivals.current = { id: row.id, fetch: false };
-                          }}
-                        >
-                          <Hash />
-                          Enter arrivals
-                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => payment.show(row)}>
                           <Banknote />
                           Record gate payment

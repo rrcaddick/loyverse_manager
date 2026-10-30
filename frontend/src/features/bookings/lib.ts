@@ -4,6 +4,7 @@
  * relative-day phrasing for facts lines.
  */
 
+import { useSettings } from "@/features/settings/api";
 import { useQuery } from "@tanstack/react-query";
 
 import { daysBetween } from "@/features/calendar/month";
@@ -33,6 +34,15 @@ export function useGroupTypeLabel(): (code: string | null | undefined) => string
   return (code) => {
     if (!code) return "—";
     return types?.find((t) => t.code === code)?.label ?? humanise(code);
+  };
+}
+
+/** Rate code → label, from the price tiers in settings. */
+export function useTierLabel(): (code: string | null | undefined) => string {
+  const tiers = useSettings().data?.price_tiers;
+  return (code) => {
+    if (!code) return "—";
+    return tiers?.find((t) => t.code === code)?.label ?? humanise(code);
   };
 }
 

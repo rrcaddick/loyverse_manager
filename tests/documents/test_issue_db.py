@@ -20,11 +20,11 @@ def test_booking_id():
     bid = execute(
         """
         INSERT INTO bookings (reference, doc_number, status, group_name, area, contact_name, contact_email,
-            contact_mobile, visit_date, arrival_time, adults, children, people_booked, vehicles, gazebos,
-            price_tier_code, price_per_person, deposit_due, barcode, source, enquiry_date, hold_expires_on)
+            contact_mobile, visit_date, adults, children, people_booked,
+            price_tier_code, tier_price, price_per_person, deposit_due, barcode, source, enquiry_date, hold_expires_on)
         VALUES ('TST9902', 9902, 'enquiry', 'TEST documents pytest', 'Kuils River', 'Thandi Mokoena',
-            'thandi@example.org', '27821234567', '2026-11-07', '10:00', 40, 27, 67, 3, 1, 'church_weekend',
-            95.00, 3800.00, 'TEST9902000001', 'manual', '2026-09-29', '2026-10-31')
+            'thandi@example.org', '27821234567', '2026-11-07', 40, 27, 67, 'group_weekend',
+            95.00, 95.00, 3800.00, 'TEST9902000001', 'manual', '2026-09-29', '2026-10-31')
         """
     )
     try:
@@ -50,7 +50,7 @@ def test_issue_versions_events_and_bytes(test_booking_id):
     assert (inv["number"], inv["version"], inv["paid"], inv["due"]) == ("FY9902-S", 1, 3800.0, 2565.0)
     assert inv["filename"] == "FY9902-S Invoice.pdf" and inv["label"] == "Invoice"
 
-    execute("UPDATE bookings SET arrived_count = 61, arrived_source = 'manual' WHERE id = %s", (bid,))
+    execute("UPDATE bookings SET arrived_count = 61, arrived_source = 'loyverse' WHERE id = %s", (bid,))
     fin = d.issue_document(bid, "final_invoice", actor=None)
     # The only tax invoice, numbered INV9902 from version 1.
     assert (fin["number"], fin["version"], fin["total"], fin["due"]) == ("INV9902", 1, 5795.0, 1995.0)

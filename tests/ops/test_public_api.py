@@ -19,9 +19,6 @@ PAYLOAD = {
     "contact_mobile": "082 706 9415",
     "visit_date": "2026-11-05",
     "visitors": 42,
-    "arrival_time": "10:00",
-    "vehicles": 1,
-    "gazebos": 2,
     "questions": ["Is there shade?"],
     "policy_accepted": True,
     "website": "",
@@ -50,8 +47,8 @@ def test_form_config_carries_the_new_fields(client):
     r = client.get("/api/v1/public/form-config")
     assert r.status_code == 200
     body = r.get_json()
-    assert body["arrival_slots"][0] == "09:00" and body["arrival_slots"][-1] == "Not sure yet"
-    assert body["max_gazebos"] == 7 and body["max_group_size"] == 900 and body["min_group_size"] == 10
+    assert "arrival_slots" not in body and "max_gazebos" not in body
+    assert body["max_group_size"] == 900 and body["min_group_size"] == 10
     assert body["acknowledgement_enabled"] is False
     assert r.headers["Cache-Control"] == "no-store"
 
@@ -62,8 +59,8 @@ def test_submit_then_fetch_receipt(client):
     body = r.get_json()
     assert set(body) >= {"id", "token", "reference", "group_name", "visit_date", "contact_email", "visitors", "acknowledged"}
     assert body["visitors"] == 42 and body["acknowledged"] is False and body["visit_date"] == "2026-11-05"
-    row = query_one("SELECT people_booked, arrival_time, gazebos, status, source FROM bookings WHERE id = %s", (body["id"],))
-    assert (row["people_booked"], row["arrival_time"], row["gazebos"], row["status"], row["source"]) == (42, "10:00", 2, "requested", "form")
+    row = query_one("SELECT people_booked, status, source FROM bookings WHERE id = %s", (body["id"],))
+    assert (row["people_booked"], row["status"], row["source"]) == (42, "requested", "form")
     # Nothing was emailed: the toggle is off by default.
     assert query_one("SELECT COUNT(*) AS n FROM email_messages WHERE booking_id = %s", (body["id"],))["n"] == 0
 
@@ -80,14 +77,12 @@ def test_submit_then_fetch_receipt(client):
 
 
 def test_validation_messages_reach_the_client(client):
-    bad = {**PAYLOAD, "visit_date": "2026-11-02", "visitors": 5, "arrival_time": "noon", "gazebos": 9, "policy_accepted": False}
+    bad = {**PAYLOAD, "visit_date": "2026-11-02", "visitors": 5, "policy_accepted": False}
     r = client.post("/api/v1/public/booking-request", json=bad)
     assert r.status_code == 422
     fields = r.get_json()["error"]["fields"]
     assert fields["visit_date"].endswith("The next open day is Wednesday 4 November.")
     assert fields["visitors"].endswith("buy day tickets on Quicket.")
-    assert fields["arrival_time"] == "Choose an arrival time from the list"
-    assert fields["gazebos"] == "We have 7 gazebos to hire"
     assert fields["policy_accepted"] == "Agree to the booking terms to send your request"
 
 

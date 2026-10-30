@@ -77,7 +77,6 @@ export function WorkDetailPanel({ row, onClose, onAction, className }: WorkDetai
               <div className="text-body text-foreground tabular">
                 {formatDate(b.visit_date)} · {pluralise(b.people_booked, "person", "people")}
                 {b.group_type ? ` · ${groupType(b.group_type)}` : ""}
-                {b.arrival_time ? ` · arrives ${b.arrival_time}` : ""}
               </div>
               <div className="truncate">
                 {b.contact_name}

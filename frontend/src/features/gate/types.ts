@@ -15,12 +15,8 @@ export interface GateBooking {
   status: BookingStatus;
   status_label: string;
   people_booked: number;
-  arrival_time: string | null;
-  vehicles: number;
-  gazebos: number;
   arrived_count: number | null;
   arrived_source: ArrivalSource | null;
-  arrived_at: string | null;
   arrived: boolean;
   barcode: string | null;
   contact_name: string | null;

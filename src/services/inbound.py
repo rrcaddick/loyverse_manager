@@ -92,6 +92,22 @@ def _is_own(address: str | None) -> bool:
     return mt.is_park_address(address, _own())
 
 
+def _learn_contacts(booking_id: int, row: dict) -> None:
+    """Every outside address on an inbound email becomes a learned contact of
+    the booking: the sender with their name, and whoever was on the To or Cc
+    line (the office is often copied in, and so are colleagues). Learned
+    contacts are for the record; only a primary receives correspondence."""
+    sender = (row.get("from_email") or "").lower()
+    seen: set[str] = set()
+    for address, name in [(sender, row.get("from_name"))] + [
+        (str(a).lower(), None) for a in list(row.get("to_emails") or []) + list(row.get("cc_emails") or [])
+    ]:
+        if not address or address in seen or _is_own(address) or mt.is_noreply(address):
+            continue
+        seen.add(address)
+        booking_contact.upsert(booking_id, address, name=name, role="learned", source="inbound")
+
+
 def _now() -> datetime:
     return datetime.now().replace(microsecond=0)
 
@@ -332,9 +348,7 @@ def attach_to_booking(message_id: int, row: dict, booking: dict, method: str) ->
         em.set_booking_thread_if_null(bid, int(thrid))
         em.link_unlinked_in_thread(int(thrid), bid, "thread")
         conversations.refresh_thread(int(thrid))
-    sender = (row.get("from_email") or "").lower()
-    if sender and not _is_own(sender) and not mt.is_noreply(sender):
-        booking_contact.upsert(bid, sender, name=row.get("from_name"), role="learned", source="inbound")
+    _learn_contacts(bid, row)
     if not row.get("is_auto_generated"):
         em.insert_booking_event(
             bid, "email_received", (row.get("subject") or "(no subject)")[:255],

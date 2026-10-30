@@ -7,7 +7,7 @@ import { BookingLine, Facts, type Fact } from "@/features/queue/booking-line";
 import { useBookingAction } from "@/features/queue/bookings";
 import type { QueueSection, TicketItem } from "@/features/queue/types";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
-import { formatDateTime, formatPhone, formatRelativeDay, pluralise } from "@/lib/format";
+import { formatDateTime, formatPhone, formatRelativeDay } from "@/lib/format";
 
 import { QueueList, QueueRow, QueueSectionCard, relativeDays } from "../shared";
 
@@ -28,7 +28,6 @@ export function TicketsToSendSection({ section }: { section: Section }) {
           const facts: Fact[] = [
             { label: "Visit", value: relativeDays(item.days_to_visit), tone: item.days_to_visit <= 2 ? "warning" : "default" },
             { label: "Confirmed", value: formatRelativeDay(item.confirmed_at), title: item.confirmed_at ? formatDateTime(item.confirmed_at) : undefined },
-            { label: "Vehicles", value: item.vehicles > 0 ? pluralise(item.vehicles, "vehicle") : "not stated", tone: item.vehicles > 0 ? "default" : "muted" },
             { label: "Mobile", value: item.contact_mobile ? formatPhone(item.contact_mobile) : "none", tone: item.contact_mobile ? "default" : "danger" },
             { label: "Email", value: item.contact_email ?? "none", tone: item.contact_email ? "default" : "danger" },
           ];

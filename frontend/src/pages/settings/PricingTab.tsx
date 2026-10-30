@@ -1,12 +1,17 @@
-import { ArrowDown, ArrowUp, Plus, Tags, Trash2 } from "lucide-react";
+/**
+ * Settings › Pricing: the rates, the group minimum, VAT and the deposit rule.
+ *
+ * There are three group rates and the public and peak prices
+ * (src/services/pricing.py). Which one a booking gets follows the date, the
+ * kind of group and the headcount; the prices themselves are set here.
+ */
+
 import { useState } from "react";
 import { useFieldArray } from "react-hook-form";
 import { z } from "zod";
 
-import { EmptyState } from "@/components/empty-state";
-import { FieldRow, MoneyField, NumberField, SelectField, SwitchField, TextField, useZodForm } from "@/components/form";
+import { FieldRow, MoneyField, NumberField, SwitchField, TextField, useZodForm } from "@/components/form";
 import { Section } from "@/components/section";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { depositFor, useReplacePriceTiers, useUpdateSection } from "@/features/settings/api";
@@ -14,48 +19,38 @@ import { formatMoney, formatNumber, pluralise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import type { SettingsTabProps } from "./SettingsPage";
-import { SettingsForm, code, count, dirtyKeys, money, pick, requiredText, runSave } from "./shared";
+import { SettingsForm, count, dirtyKeys, money, pick, runSave } from "./shared";
 
-const DAY_TYPE_OPTIONS = [
-  { value: "weekday", label: "Weekday" },
-  { value: "weekend", label: "Weekend & holidays" },
-];
+/** What each rate is for, in the office's words; the label is editable, this is not. */
+const RATE_RULES: Record<string, string> = {
+  children_weekday: "Schools, crèches, aftercare and youth clubs on a weekday in term time.",
+  group_weekday: "Any other group on a weekday in term time; parents joining a school group pay this too.",
+  group_weekend: "Groups on a weekend or a school-holiday weekday.",
+  public_weekend: "The gate and online price: public holidays, and any group under the minimum.",
+  peak: "The public price on the peak days marked on the Season tab.",
+};
 
-const schema = z
-  .object({
-    pricing: z.object({
-      public_weekend_price: money,
-      peak_price: money,
-      vat_rate: z.number({ error: "Enter the VAT rate" }).min(0).max(100, "A percentage between 0 and 100"),
+const schema = z.object({
+  pricing: z.object({
+    vat_rate: z.number({ error: "Enter the VAT rate" }).min(0).max(100, "A percentage between 0 and 100"),
+    group_minimum: count("Enter a number of people").min(1, "At least 1"),
+  }),
+  deposit: z.object({
+    min_people: count("Enter a number of people"),
+    percent: z.number({ error: "Enter a percentage" }).int("Whole percent").min(0).max(100, "A percentage between 0 and 100"),
+  }),
+  price_tiers: z.array(
+    z.object({
+      code: z.string(),
+      label: z.string().trim().min(1, "Enter a label"),
+      day_type: z.enum(["weekday", "weekend"]),
+      price: money,
+      min_group_size: z.number(),
+      notes: z.string().trim().max(255, "Keep notes short"),
+      is_active: z.boolean(),
     }),
-    deposit: z.object({
-      min_people: count("Enter a number of people"),
-      percent: z.number({ error: "Enter a percentage" }).int("Whole percent").min(0).max(100, "A percentage between 0 and 100"),
-    }),
-    price_tiers: z.array(
-      z.object({
-        code,
-        label: requiredText("Enter a label"),
-        day_type: z.enum(["weekday", "weekend"]),
-        price: money,
-        min_group_size: count("Enter a group size"),
-        notes: z.string().trim().max(255, "Keep notes short"),
-        is_active: z.boolean(),
-        isNew: z.boolean(),
-      }),
-    ),
-  })
-  .superRefine((value, ctx) => {
-    const seen = new Map<string, number>();
-    value.price_tiers.forEach((tier, index) => {
-      const first = seen.get(tier.code);
-      if (first !== undefined) {
-        ctx.addIssue({ code: "custom", path: ["price_tiers", index, "code"], message: `Duplicate of row ${first + 1}` });
-      } else {
-        seen.set(tier.code, index);
-      }
-    });
-  });
+  ),
+});
 
 type FormValues = z.input<typeof schema>;
 
@@ -65,25 +60,28 @@ export default function PricingTab({ data }: SettingsTabProps) {
   const saveTiers = useReplacePriceTiers();
   const [error, setError] = useState<string | null>(null);
 
+  const toTierValues = (tiers: SettingsTabProps["data"]["price_tiers"]) =>
+    tiers.map((t) => ({
+      code: t.code,
+      label: t.label,
+      day_type: t.day_type,
+      price: Number(t.price),
+      min_group_size: t.min_group_size ?? 0,
+      notes: t.notes ?? "",
+      is_active: !!t.is_active,
+    }));
+
   const form = useZodForm({
     schema,
     defaultValues: {
-      pricing: data.settings.pricing,
+      pricing: { vat_rate: data.settings.pricing.vat_rate, group_minimum: data.settings.pricing.group_minimum ?? 40 },
       deposit: data.settings.deposit,
-      price_tiers: data.price_tiers.map((t) => ({
-        code: t.code,
-        label: t.label,
-        day_type: t.day_type,
-        price: Number(t.price),
-        min_group_size: t.min_group_size ?? 0,
-        notes: t.notes ?? "",
-        is_active: !!t.is_active,
-        isNew: false,
-      })),
+      price_tiers: toTierValues(data.price_tiers),
     },
   });
   const tiers = useFieldArray({ control: form.control, name: "price_tiers" });
   const deposit = form.watch("deposit");
+  const minimum = form.watch("pricing.group_minimum");
 
   async function onSubmit(values: z.output<typeof schema>) {
     const dirty = form.formState.dirtyFields;
@@ -106,16 +104,7 @@ export default function PricingTab({ data }: SettingsTabProps) {
               is_active: t.is_active,
             })),
           );
-          values.price_tiers = saved.price_tiers.map((t) => ({
-            code: t.code,
-            label: t.label,
-            day_type: t.day_type,
-            price: Number(t.price),
-            min_group_size: t.min_group_size ?? 0,
-            notes: t.notes ?? "",
-            is_active: !!t.is_active,
-            isNew: false,
-          }));
+          values.price_tiers = toTierValues(saved.price_tiers);
         }
         form.reset(values as FormValues);
       }),
@@ -126,12 +115,30 @@ export default function PricingTab({ data }: SettingsTabProps) {
 
   return (
     <SettingsForm form={form} onSubmit={onSubmit} saving={saving} error={error}>
-      <Section title="Public prices" description="What a visitor pays at the gate. Groups fall back to these when no tier applies.">
-        <div className="grid gap-5 sm:grid-cols-3">
-          <MoneyField control={form.control} name="pricing.public_weekend_price" label="Public weekend" description="Per person, incl. VAT" />
-          <MoneyField control={form.control} name="pricing.peak_price" label="Peak day" description="Christmas, New Year and other peak days" />
-          <NumberField control={form.control} name="pricing.vat_rate" label="VAT rate" suffix="%" min={0} max={100} description="Shown on proformas and invoices" />
-        </div>
+      <Section title="Rates" description="Per visitor, VAT included. A booking's rate follows the date, the kind of group and the headcount; an agreed price below it is recorded as a discount." flush>
+        <ul className="divide-y divide-border">
+          {tiers.fields.map((field, index) => {
+            const active = form.watch(`price_tiers.${index}.is_active`);
+            const label = form.watch(`price_tiers.${index}.label`) || field.code;
+            return (
+              <li key={field.id} className={cn("grid gap-x-4 gap-y-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_6.5rem_auto]", !active && "text-muted-foreground")}>
+                <div className="min-w-0">
+                  <TextField control={form.control} name={`price_tiers.${index}.label`} label={`Label for ${label}`} hideLabel />
+                  <p className="mt-1.5 text-sm text-muted-foreground">{RATE_RULES[field.code] ?? field.code}</p>
+                </div>
+                <MoneyField control={form.control} name={`price_tiers.${index}.price`} label={`Price for ${label}`} hideLabel />
+                <SwitchField control={form.control} name={`price_tiers.${index}.is_active`} label={<span className="sr-only">Active for {label}</span>} boxed={false} className="h-9 items-center" />
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+
+      <Section title="Group minimum and VAT" description="Fewer people than the minimum is not a group booking: the public rate applies. On a term-time weekday the minimum is waived when another group has already booked that day, since the park opens for them anyway.">
+        <FieldRow>
+          <NumberField control={form.control} name="pricing.group_minimum" label="Group minimum" suffix="people" integer min={1} description={`Under ${formatNumber(Number(minimum) || 0)} people pays the public rate.`} />
+          <NumberField control={form.control} name="pricing.vat_rate" label="VAT rate" suffix="%" min={0} max={100} description="Shown on proformas and invoices." />
+        </FieldRow>
       </Section>
 
       <Section title="Deposit" description="The deposit secures the date. It is the larger of a minimum head count and a percentage of the group, never more than the total.">
@@ -142,96 +149,6 @@ export default function PricingTab({ data }: SettingsTabProps) {
           </FieldRow>
           <DepositExample minPeople={Number(deposit.min_people) || 0} percent={Number(deposit.percent) || 0} />
         </div>
-      </Section>
-
-      <Section
-        title="Price tiers"
-        description="Per-person prices by group type and day. Tiers are matched by code; a tier that bookings refer to should be deactivated, not deleted."
-        flush
-        actions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => tiers.append({ code: "", label: "", day_type: "weekday", price: Number.NaN, min_group_size: 0, notes: "", is_active: true, isNew: true })}
-          >
-            <Plus data-icon="inline-start" />
-            Add tier
-          </Button>
-        }
-      >
-        {tiers.fields.length === 0 ? (
-          <EmptyState compact icon={Tags} title="No price tiers" description="Add the group tiers from the price policy." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[76rem] table-fixed text-sm">
-              <thead className="text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                <tr className="border-b border-border">
-                  <th scope="col" className="w-16 px-3 py-2 pl-5">Order</th>
-                  <th scope="col" className="w-56 px-3 py-2">Code</th>
-                  <th scope="col" className="px-3 py-2">Label</th>
-                  <th scope="col" className="w-40 px-3 py-2">Day type</th>
-                  <th scope="col" className="w-28 px-3 py-2">Price</th>
-                  <th scope="col" className="w-24 px-3 py-2">Min size</th>
-                  <th scope="col" className="w-48 px-3 py-2">Notes</th>
-                  <th scope="col" className="w-16 px-3 py-2">Active</th>
-                  <th scope="col" className="w-12 px-2 py-2 pr-5">
-                    <span className="sr-only">Remove</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {tiers.fields.map((field, index) => {
-                  const isNew = form.watch(`price_tiers.${index}.isNew`);
-                  const active = form.watch(`price_tiers.${index}.is_active`);
-                  const label = form.watch(`price_tiers.${index}.label`) || `row ${index + 1}`;
-                  return (
-                    <tr key={field.id} className={cn("align-top", !active && "bg-muted/30 text-muted-foreground")}>
-                      <td className="px-3 py-2 pl-5">
-                        <div className="flex gap-0.5">
-                          <Button type="button" variant="ghost" size="icon-xs" disabled={index === 0} onClick={() => tiers.move(index, index - 1)} aria-label={`Move ${label} up`}>
-                            <ArrowUp />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon-xs" disabled={index === tiers.fields.length - 1} onClick={() => tiers.move(index, index + 1)} aria-label={`Move ${label} down`}>
-                            <ArrowDown />
-                          </Button>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <TextField control={form.control} name={`price_tiers.${index}.code`} label={`Code for ${label}`} hideLabel mono disabled={!isNew} placeholder="school_weekday" />
-                      </td>
-                      <td className="px-3 py-2">
-                        <TextField control={form.control} name={`price_tiers.${index}.label`} label={`Label for ${label}`} hideLabel placeholder="Schools & children's groups" />
-                      </td>
-                      <td className="px-3 py-2">
-                        <SelectField control={form.control} name={`price_tiers.${index}.day_type`} label={`Day type for ${label}`} hideLabel options={DAY_TYPE_OPTIONS} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <MoneyField control={form.control} name={`price_tiers.${index}.price`} label={`Price for ${label}`} hideLabel />
-                      </td>
-                      <td className="px-3 py-2">
-                        <NumberField control={form.control} name={`price_tiers.${index}.min_group_size`} label={`Minimum group size for ${label}`} hideLabel integer min={0} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <TextField control={form.control} name={`price_tiers.${index}.notes`} label={`Notes for ${label}`} hideLabel placeholder="incl. teachers" />
-                      </td>
-                      <td className="px-3 py-2">
-                        <SwitchField control={form.control} name={`price_tiers.${index}.is_active`} label={<span className="sr-only">Active for {label}</span>} boxed={false} className="h-8 items-center" />
-                      </td>
-                      <td className="px-3 py-2 pr-5">
-                        {isNew ? (
-                          <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" onClick={() => tiers.remove(index)} aria-label={`Remove ${label}`}>
-                            <Trash2 />
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </Section>
     </SettingsForm>
   );

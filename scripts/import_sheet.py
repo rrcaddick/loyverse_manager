@@ -46,6 +46,9 @@ import phonenumbers
 from dateutil import parser as dateparser
 
 from config.settings import BASE_DIR
+from src.models import booking_legacy_row as legacy_model
+from src.services import pricing
+from src.services.booking import BookingError
 from src.models.base import dumps, execute, query_one, transaction
 from src.services.settings import bump_document_number_past
 from src.utils.date import get_today
@@ -438,17 +441,17 @@ def booking_data(b: SheetBooking, today: date) -> dict[str, Any]:
         "adults": 0,
         "children": 0,
         "people_booked": b.people_booked,
-        "vehicles": 0,
-        "gazebos": 0,
         "enquiry_date": (b.enquiry_date or today).isoformat(),
         "customer_notes": b.comment,
         "internal_notes": f"Imported from the 2026/27 booking sheet on {today.isoformat()} (row {b.row_number})",
         "legacy_sheet_row": b.raw,
     }
     if b.price_per_person is not None:
+        # The sheet's agreed price. Below the rate it becomes a discount with the
+        # import as its reason; above the rate the booking is created at the rate
+        # and listed for review (the reprice report shows the gap).
         data["price_per_person"] = str(b.price_per_person)
-        data["price_overridden"] = True
-        data["price_override_reason"] = IMPORT_REFERENCE
+        data["discount_reason"] = IMPORT_REFERENCE
     status = b.status
     data["status"] = status
     if status in ("proforma_sent", "confirmed"):
@@ -478,7 +481,6 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
                 completed_at = %s,
                 enquiry_date = %s,
                 internal_notes = %s,
-                legacy_sheet_row = %s,
                 customer_notes = COALESCE(customer_notes, %s)
             WHERE id = %s
             """,
@@ -491,12 +493,12 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
                 completed_at,
                 b.enquiry_date or today,
                 f"Imported from the 2026/27 booking sheet on {today.isoformat()} (row {b.row_number})",
-                dumps(b.raw),
                 b.comment,
                 booking_id,
             ),
             conn=conn,
         )
+        legacy_model.set_row(booking_id, b.raw, conn=conn)
         if final_status != "enquiry":
             execute(
                 """
@@ -516,7 +518,21 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
 def import_one(b: SheetBooking, today: date) -> dict:
     from src.services.public_form import create_booking_compat, record_payment_compat
 
-    booking = create_booking_compat(booking_data(b, today), source="import", actor=None, doc_number=b.doc_number)
+    data = booking_data(b, today)
+    try:
+        booking = create_booking_compat(data, source="import", actor=None, doc_number=b.doc_number)
+    except BookingError as exc:
+        if "price_per_person" not in exc.fields:
+            raise
+        # The sheet price is above the rate the rules give this booking. Keep
+        # the agreed price by booking it at the public rate less a discount,
+        # and say so: the reprice report lists these for review.
+        data["price_tier_code"] = pricing.PUBLIC_TIER
+        booking = create_booking_compat(data, source="import", actor=None, doc_number=b.doc_number)
+        b.warnings.append(
+            f"Sheet price R{b.price_per_person:.0f} is above the rate for this booking; "
+            "created at the public rate less a discount. Review."
+        )
     booking_id = int(booking["id"])
     if b.deposit and b.deposit > 0:
         record_payment_compat(

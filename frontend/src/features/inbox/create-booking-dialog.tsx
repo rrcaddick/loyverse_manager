@@ -42,11 +42,8 @@ const schema = z
     contact_mobile: z.string().trim(),
     visit_date: isoDate,
     alternative_date: isoDate.or(z.literal("")),
-    arrival_time: z.string().trim().max(20, "Keep it short, e.g. 10:00"),
     adults: count,
     children: count,
-    vehicles: count,
-    gazebos: count,
     questions: z.string(),
     customer_notes: z.string().trim(),
     internal_notes: z.string().trim(),
@@ -66,11 +63,8 @@ function defaultsFrom(fields: Partial<ExtractedFields> | null, message: FullMess
     contact_mobile: fields?.contact_mobile ?? "",
     visit_date: fields?.visit_date ?? "",
     alternative_date: fields?.alternative_date ?? "",
-    arrival_time: fields?.arrival_time ?? "",
     adults: adults ?? 0,
     children: fields?.children ?? 0,
-    vehicles: fields?.vehicles ?? 0,
-    gazebos: fields?.gazebos ?? 0,
     questions: (fields?.questions ?? []).join("\n"),
     customer_notes: fields?.notes ?? "",
     internal_notes: "",
@@ -161,11 +155,8 @@ function CreateBookingForm({
       contact_mobile: values.contact_mobile || null,
       visit_date: values.visit_date,
       alternative_date: values.alternative_date || null,
-      arrival_time: values.arrival_time || null,
       adults: values.adults,
       children: values.children,
-      vehicles: values.vehicles,
-      gazebos: values.gazebos,
       customer_notes: values.customer_notes || null,
       internal_notes: values.internal_notes || null,
       questions,
@@ -212,13 +203,10 @@ function CreateBookingForm({
           <DateField control={form.control} name="visit_date" label="Visit date" required />
           <DateField control={form.control} name="alternative_date" label="Alternative date" clearable />
         </FieldRow>
-        <FieldRow className="sm:grid-cols-4">
+        <FieldRow>
           <NumberField control={form.control} name="adults" label="Adults" integer min={0} />
           <NumberField control={form.control} name="children" label="Children" integer min={0} />
-          <NumberField control={form.control} name="vehicles" label="Vehicles" integer min={0} />
-          <NumberField control={form.control} name="gazebos" label="Gazebos" integer min={0} />
         </FieldRow>
-        <TextField control={form.control} name="arrival_time" label="Arrival time" placeholder="10:00" autoComplete="off" className="sm:max-w-xs" />
         <TextareaField control={form.control} name="questions" label="Questions from the customer" rows={3} description="One per line. They can be answered from the booking." />
         <TextareaField control={form.control} name="customer_notes" label="Customer notes" rows={3} />
         <TextareaField control={form.control} name="internal_notes" label="Internal notes" rows={2} />

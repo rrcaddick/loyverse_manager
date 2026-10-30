@@ -9,9 +9,6 @@
   ("Visit date", booking.visit_date_long),
   ("Alternative date", booking.alternative_date|date_long if booking.alternative_date else none),
   ("Visitors", booking.people_booked|plural("visitor")),
-  ("Arrival", booking.arrival_time),
-  ("Vehicles", booking.vehicles if booking.vehicles else none),
-  ("Gazebos", booking.gazebos if booking.gazebos else none),
   ("Contact", booking.contact_name ~ (", " ~ booking.contact_mobile_display if booking.contact_mobile_display else "")),
 ], "Your request") }}
 <h2>What happens next</h2>

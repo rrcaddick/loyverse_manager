@@ -2,8 +2,6 @@
  * Today / day view data.
  *
  *   useToday(date)              → ["today", date]      GET /today?date= (manager allowed)
- *   useRecordArrivalsFor(id)    POST /bookings/:id/arrivals, then every day-shaped cache refreshes
- *   useFetchArrivalsFor(id)     GET  /bookings/:id/arrivals (reports only; records nothing)
  *
  * `/today` groups carry no group type or arrival source; `mergeDayRows`
  * folds those in from GET /days/:date (features/calendar `useDay`) when it
@@ -11,9 +9,9 @@
  * "Loyverse · 10:12" without a third request shape.
  */
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-query";
 
-import type { ArrivalSource, ArrivalsCheck, BookingDetail, DayView } from "@/features/bookings/types";
+import type { BookingDetail, DayView } from "@/features/bookings/types";
 import { api } from "@/lib/api";
 
 import type { DayGroupRow, TodayGroup, TodayResponse } from "./types";
@@ -41,22 +39,6 @@ export function invalidateDayWorld(qc: QueryClient, detail?: BookingDetail) {
   }
 }
 
-export function useRecordArrivalsFor(bookingId: number) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { count: number; source: ArrivalSource }) => api.post<BookingDetail>(`/bookings/${bookingId}/arrivals`, input),
-    meta: { silent: true },
-    onSuccess: (detail) => invalidateDayWorld(qc, detail),
-  });
-}
-
-export function useFetchArrivalsFor(bookingId: number) {
-  return useMutation({
-    mutationFn: () => api.get<ArrivalsCheck>(`/bookings/${bookingId}/arrivals`),
-    meta: { silent: true },
-  });
-}
-
 // ----------------------------------------------------------------- shaping
 
 export function rowsFromToday(groups: TodayGroup[]): DayGroupRow[] {
@@ -67,12 +49,8 @@ export function rowsFromToday(groups: TodayGroup[]): DayGroupRow[] {
     group_type: null,
     status: g.status,
     people_booked: g.people_booked,
-    arrival_time: g.arrival_time,
-    vehicles: g.vehicles,
-    gazebos: g.gazebos,
     arrived_count: g.arrived_count,
     arrived_source: null,
-    arrived_at: null,
     ticket_sent: g.ticket_sent,
     paid_total: g.paid_total,
     balance_due: g.balance_due,
@@ -92,18 +70,11 @@ export function mergeDayRows(rows: DayGroupRow[], day: DayView | undefined): Day
       ...row,
       group_type: rich.group_type,
       arrived_source: rich.arrived_source,
-      arrived_at: rich.arrived_at,
-      arrival_time: row.arrival_time ?? rich.arrival_time,
     };
   });
 }
 
-/** Arrival time first (unset last), then the larger group. */
+/** The larger group first, then by name. */
 export function sortDayRows(rows: DayGroupRow[]): DayGroupRow[] {
-  return [...rows].sort((a, b) => {
-    const ta = a.arrival_time ?? "99:99";
-    const tb = b.arrival_time ?? "99:99";
-    if (ta !== tb) return ta < tb ? -1 : 1;
-    return b.people_booked - a.people_booked;
-  });
+  return [...rows].sort((a, b) => b.people_booked - a.people_booked || a.group_name.localeCompare(b.group_name));
 }

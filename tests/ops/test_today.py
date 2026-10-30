@@ -117,7 +117,7 @@ def test_today_tiles_maths(visit_day):
     card = page["groups"][0]
     assert set(card) == {
         "id", "reference", "group_name", "status", "people_booked", "arrived_count", "ticket_sent",
-        "paid_total", "balance_due", "contact_name", "contact_mobile", "vehicles", "gazebos", "arrival_time",
+        "paid_total", "balance_due", "contact_name", "contact_mobile",
     }
     assert card["ticket_sent"] is True and card["paid_total"] == 2000.0 and card["balance_due"] == 7500.0
     assert page["next_visit_day"] is None  # today has groups
@@ -129,7 +129,7 @@ def test_today_tiles_maths(visit_day):
     assert "work_counts" in page
 
     # arrivals recorded on the confirmed group: balance is now against the final amount
-    execute("UPDATE bookings SET arrived_count = 80, arrived_source = 'manual' WHERE id = %s", (visit_day["confirmed"]["id"],))
+    execute("UPDATE bookings SET arrived_count = 80, arrived_source = 'loyverse' WHERE id = %s", (visit_day["confirmed"]["id"],))
     page = today_service.today(d)
     assert page["tiles"]["groups"] == {"total": 2, "arrived": 1}
     assert page["tiles"]["owed_at_gate"] == {"total": 5600.0 + 4750.0, "paid": 2000.0}

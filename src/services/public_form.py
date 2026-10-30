@@ -29,7 +29,6 @@ from email_validator import EmailNotValidError, validate_email
 
 import jwt
 
-from config.constants import GAZEBOS
 from config.settings import IMAGE_TOKEN_SECRET, SECRET_KEY, TURNSTILE_SECRET_KEY
 from src.models.base import dumps, execute, query, query_one, serialize_row, transaction
 from src.services.barcode import generate_barcode
@@ -44,16 +43,9 @@ TURNSTILE_TIMEOUT_SECONDS = 10
 RATE_LIMIT_PER_HOUR = 5
 
 MAX_TEXT = 255
-MAX_ARRIVAL_TIME = 20
 MAX_NOTES = 2000
 MAX_QUESTION = 500
-# The park has a fixed set of gazebos to hire (config/constants.py).
-MAX_GAZEBOS = len(GAZEBOS) or 7
 DEFAULT_MAX_GROUP_SIZE = 900
-DEFAULT_ARRIVAL_SLOTS = (
-    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-    "12:00", "12:30", "13:00", "13:30", "14:00", "Not sure yet",
-)
 # How far ahead to look for the next open day in a closed-day error.
 NEXT_OPEN_DAY_HORIZON = 60
 
@@ -256,12 +248,6 @@ def validate_request(
     text("contact_name", required=True, max_len=MAX_TEXT)
     text("customer_notes", required=False, max_len=MAX_NOTES)
 
-    # arrival time: one of the configured slots (no free text to normalise)
-    slots = [str(x) for x in (form.get("arrival_slots") or DEFAULT_ARRIVAL_SLOTS)]
-    arrival = text("arrival_time", required=False, max_len=MAX_ARRIVAL_TIME)
-    if arrival is not None and slots and arrival not in slots:
-        errors["arrival_time"] = "Choose an arrival time from the list"
-
     # group type: must be a configured code
     codes = {str(g.get("code")) for g in (form.group_types or []) if isinstance(g, Mapping)}
     group_type = text("group_type", required=True, max_len=32)
@@ -336,10 +322,6 @@ def validate_request(
     visitors = count("visitors", default=None) if data.get("visitors") not in (None, "") else None
     adults = count("adults", default=0)
     children = count("children", default=0)
-    count("vehicles", default=0)
-    gazebos = count("gazebos", default=0)
-    if gazebos is not None and gazebos > MAX_GAZEBOS:
-        errors["gazebos"] = f"We have {MAX_GAZEBOS} gazebos to hire"
     min_size = int(form.get("min_group_size") or 0)
     max_size = int(form.get("max_group_size") or DEFAULT_MAX_GROUP_SIZE)
     phone = str(settings["email"].get("phone") or "").strip()
@@ -582,43 +564,23 @@ def send_acknowledgement_if_enabled(booking: Mapping[str, Any], settings: Settin
 
 
 def _booking_service():
-    try:
-        from src.services import booking as booking_service  # noqa: WPS433 (lazy by design)
-    except ModuleNotFoundError as exc:
-        if exc.name in ("src.services.booking", "src.services.pricing"):
-            return None
-        raise
+    from src.services import booking as booking_service  # lazy: booking imports this module
+
     return booking_service
 
 
 def create_booking_compat(
     data: dict[str, Any], source: str, actor: int | None, doc_number: int | None = None
 ) -> dict:
-    """``booking.create_booking`` when available, else a plain row insert.
-
-    ``data["questions"]`` (list of str) is stored with the booking on both paths.
-    """
-    service = _booking_service()
-    if service is not None and hasattr(service, "create_booking"):
-        booking = service.create_booking(data, source=source, actor=actor, doc_number=doc_number)
-        return dict(booking) if isinstance(booking, Mapping) else _row(int(booking["id"]))
-    logger.warning("src.services.booking not available; using the fallback insert")
-    return _fallback_create_booking(data, source, actor, doc_number)
+    """``booking.create_booking`` by its public-form name (the fallback insert
+    from the parallel build is gone; ``data["questions"]`` is stored with it)."""
+    booking = _booking_service().create_booking(data, source=source, actor=actor, doc_number=doc_number)
+    return dict(booking) if isinstance(booking, Mapping) else _row(int(booking["id"]))
 
 
 def add_question_compat(booking_id: int, question: str, actor: int | None = None) -> int:
-    service = _booking_service()
-    if service is not None and hasattr(service, "add_question"):
-        result = service.add_question(booking_id, question, actor)
-        return int(result["id"]) if isinstance(result, Mapping) else int(result or 0)
-    row = query_one(
-        "SELECT COALESCE(MAX(sort_order), 0) AS n FROM booking_questions WHERE booking_id = %s",
-        (booking_id,),
-    )
-    return execute(
-        "INSERT INTO booking_questions (booking_id, question, sort_order) VALUES (%s, %s, %s)",
-        (booking_id, question, int(row["n"]) + 1 if row else 1),
-    )
+    result = _booking_service().add_question(booking_id, question, actor)
+    return int(result["id"]) if isinstance(result, Mapping) else int(result or 0)
 
 
 def record_payment_compat(
@@ -630,11 +592,8 @@ def record_payment_compat(
     note: str | None,
     actor: int | None,
 ) -> dict:
-    service = _booking_service()
-    if service is not None and hasattr(service, "record_payment"):
-        payment = service.record_payment(booking_id, kind, amount, paid_on, reference, note, actor)
-        return dict(payment) if isinstance(payment, Mapping) else {"id": payment}
-    return _fallback_record_payment(booking_id, kind, amount, paid_on, reference, note, actor)
+    payment = _booking_service().record_payment(booking_id, kind, amount, paid_on, reference, note, actor)
+    return dict(payment) if isinstance(payment, Mapping) else {"id": payment}
 
 
 def _row(booking_id: int) -> dict:
@@ -648,222 +607,3 @@ def booking_row(booking_id: int) -> dict | None:
     return query_one("SELECT * FROM bookings WHERE id = %s", (booking_id,))
 
 
-def _money(value: Any) -> Decimal:
-    return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
-def _fallback_price(data: Mapping[str, Any], visit: date, settings: Settings) -> tuple[Decimal, str | None]:
-    """Approximate the pricing service: tier by group type and weekday/weekend.
-
-    Public holidays are not considered here (that is the pricing service's job);
-    the fallback exists so a row can be written at all.
-    """
-    pricing = settings["pricing"]
-    peak = season_days_by_kind("peak")
-    if visit in peak:
-        return _money(pricing.peak_price), "peak"
-    season = settings["season"]
-    try:
-        nd_start = tuple(int(x) for x in str(season.no_discount_start).split("-"))
-        nd_end = tuple(int(x) for x in str(season.no_discount_end).split("-"))
-        md = (visit.month, visit.day)
-        in_window = (md >= nd_start or md <= nd_end) if nd_start > nd_end else nd_start <= md <= nd_end
-    except (ValueError, AttributeError):
-        in_window = False
-    if in_window:
-        return _money(pricing.public_weekend_price), "public_weekend"
-    weekend = visit.weekday() >= 5
-    tier_code = None
-    for g in settings["form"].group_types or []:
-        if isinstance(g, Mapping) and g.get("code") == data.get("group_type"):
-            tier_code = g.get("weekend_tier" if weekend else "weekday_tier")
-            break
-    if tier_code:
-        tier = query_one("SELECT price FROM price_tiers WHERE code = %s AND is_active = 1", (tier_code,))
-        if tier:
-            return _money(tier["price"]), str(tier_code)
-    return _money(pricing.public_weekend_price), "public_weekend"
-
-
-def _fallback_deposit(people: int, price: Decimal, settings: Settings) -> Decimal:
-    dep = settings["deposit"]
-    total = _money(people * price)
-    by_min = _money(int(dep.min_people) * price)
-    by_pct = _money(int(Decimal(people * int(dep.percent)) / 100 + Decimal("0.5")) * price)
-    return min(max(by_min, by_pct), total) if total > 0 else Decimal("0.00")
-
-
-def _fallback_create_booking(
-    data: dict[str, Any], source: str, actor: int | None, doc_number: int | None = None
-) -> dict:
-    settings = get_settings()
-    visit = parse_iso_date(data.get("visit_date"))
-    if visit is None:
-        raise ValueError("visit_date is required")
-    people = int(data.get("people_booked") or (int(data.get("adults") or 0) + int(data.get("children") or 0)))
-    if data.get("price_per_person") not in (None, ""):
-        price = _money(data["price_per_person"])
-        tier_code = data.get("price_tier_code")
-    else:
-        price, tier_code = _fallback_price(data, visit, settings)
-    waived = int(bool(data.get("deposit_waived")))
-    deposit = Decimal("0.00") if waived else _fallback_deposit(people, price, settings)
-    if doc_number is None:
-        doc_number = next_document_number()
-    reference = f"{settings["documents"].proforma_prefix}{doc_number}"
-    hold = visit - timedelta(days=int(settings["reminders"].lapse_days_before))
-    enquiry = parse_iso_date(data.get("enquiry_date")) or get_today()
-
-    barcode = generate_barcode()
-    for _ in range(5):
-        if query_one("SELECT 1 FROM bookings WHERE barcode = %s", (barcode,)) is None:
-            break
-        barcode = generate_barcode()
-
-    legacy = data.get("legacy_sheet_row")
-    with transaction() as conn:
-        booking_id = execute(
-            """
-            INSERT INTO bookings
-                (reference, doc_number, status, group_name, group_type, area, contact_name,
-                 contact_email, contact_mobile, visit_date, alternative_date, arrival_time,
-                 adults, children, people_booked, vehicles, gazebos, price_tier_code,
-                 price_per_person, price_overridden, price_override_reason, deposit_due,
-                 deposit_waived, barcode, source, enquiry_date, hold_expires_on,
-                 customer_notes, internal_notes, legacy_sheet_row, created_by)
-            VALUES (%s, %s, 'enquiry', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                reference,
-                doc_number,
-                data.get("group_name"),
-                data.get("group_type"),
-                data.get("area"),
-                data.get("contact_name") or data.get("group_name"),
-                data.get("contact_email"),
-                data.get("contact_mobile"),
-                visit,
-                parse_iso_date(data.get("alternative_date")),
-                data.get("arrival_time"),
-                int(data.get("adults") or 0),
-                int(data.get("children") or 0),
-                people,
-                int(data.get("vehicles") or 0),
-                int(data.get("gazebos") or 0),
-                tier_code,
-                price,
-                int(bool(data.get("price_overridden"))),
-                data.get("price_override_reason"),
-                deposit,
-                waived,
-                barcode,
-                source,
-                enquiry,
-                hold,
-                data.get("customer_notes"),
-                data.get("internal_notes"),
-                dumps(legacy) if legacy is not None else None,
-                actor,
-            ),
-            conn=conn,
-        )
-        execute(
-            """
-            INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
-            VALUES (%s, 'created', %s, %s, %s)
-            """,
-            (booking_id, f"Booking {reference} created from {source}", dumps({"source": source}), actor),
-            conn=conn,
-        )
-        questions = data.get("questions") or []
-        for i, question in enumerate([str(q).strip() for q in questions if str(q).strip()], start=1):
-            execute(
-                "INSERT INTO booking_questions (booking_id, question, sort_order) VALUES (%s, %s, %s)",
-                (booking_id, question, i),
-                conn=conn,
-            )
-    return _row(booking_id)
-
-
-def _fallback_record_payment(
-    booking_id: int,
-    kind: str,
-    amount: Decimal,
-    paid_on: date,
-    reference: str | None,
-    note: str | None,
-    actor: int | None,
-) -> dict:
-    amount = _money(amount)
-    with transaction() as conn:
-        payment_id = execute(
-            """
-            INSERT INTO payments (booking_id, kind, amount, paid_on, reference, note, recorded_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (booking_id, kind, amount, paid_on, reference, note, actor),
-            conn=conn,
-        )
-        execute(
-            """
-            INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
-            VALUES (%s, 'payment_recorded', %s, %s, %s)
-            """,
-            (
-                booking_id,
-                f"Payment of R{amount:,.2f} recorded ({kind})",
-                dumps({"payment_id": payment_id, "amount": amount, "kind": kind, "paid_on": paid_on}),
-                actor,
-            ),
-            conn=conn,
-        )
-        booking = query_one(
-            """
-            SELECT b.status, b.deposit_due, b.deposit_waived,
-                   (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.booking_id = b.id) AS paid_total
-            FROM bookings b WHERE b.id = %s
-            """,
-            (booking_id,),
-            conn=conn,
-        )
-        if booking and booking["status"] in ("enquiry", "proforma_sent"):
-            covered = booking["deposit_waived"] or Decimal(booking["paid_total"]) >= Decimal(booking["deposit_due"])
-            if covered:
-                execute(
-                    "UPDATE bookings SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, NOW()) WHERE id = %s",
-                    (booking_id,),
-                    conn=conn,
-                )
-                execute(
-                    """
-                    INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
-                    VALUES (%s, 'status_changed', 'Confirmed: deposit covered', %s, %s)
-                    """,
-                    (booking_id, dumps({"from": booking["status"], "to": "confirmed"}), actor),
-                    conn=conn,
-                )
-    row = query_one("SELECT * FROM payments WHERE id = %s", (payment_id,))
-    return serialize_row(row) or {"id": payment_id}
-
-
-__all__ = [
-    "validate_request",
-    "date_problem",
-    "next_open_day_after",
-    "request_receipt_token",
-    "verify_request_receipt_token",
-    "public_summary",
-    "acknowledgement_sent",
-    "send_acknowledgement_if_enabled",
-    "normalise_email",
-    "normalise_mobile",
-    "parse_iso_date",
-    "season_days_by_kind",
-    "verify_turnstile",
-    "rate_limited",
-    "record_submission",
-    "create_booking_compat",
-    "add_question_compat",
-    "record_payment_compat",
-]

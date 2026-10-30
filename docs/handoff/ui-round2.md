@@ -136,3 +136,31 @@ read the finance figures under the wrong names (`due`, `total` instead of
 `balance_due`, `total_amount`), so its cap was R1 000 and nothing larger
 ever showed; covered by `tests/payments/test_payment_search.py`.
 
+## Schema pass (30 Oct 2026)
+
+Agreed with the owner and done in one pass (migration 016, `scripts/reprice_bookings.py`):
+
+- **Dropped** arrival time, vehicles, gazebos (back later as invoice line
+  items), arrived-at and the manual arrivals source; the sheet row moved to
+  `booking_legacy_rows`. The public form, the Edit dialog, the record, Today,
+  Calendar, Work, the queue and the documents and emails no longer show them.
+- **Three rates** (children's groups R70 on term-time weekdays, groups R95,
+  public R115, peak R130) with the group minimum of 40 (hard on weekends and
+  school holidays, waived on a weekday when another group is booked) and
+  school-holiday ranges on the Season tab in place of the no-discount window.
+  Group types carry a children's flag only; aftercare and youth club added.
+- **Discounts** replace price overrides: the agreed price per visitor is typed
+  in the Edit dialog, the gap below the rate is the discount with its reason,
+  documents show the rate line and a discount line. The Edit dialog's price
+  line is a live quote (`GET /bookings/quote`).
+- **Arrivals are real time**: the worker polls Loyverse receipts every two
+  minutes through opening hours (`ARRIVALS_POLL_CRON`), the day and record
+  pages refresh themselves, and every count button and manual entry is gone.
+  The poll is also runnable from Ops.
+- **Contacts**: every outside address on an inbound email (sender, To and Cc)
+  becomes a learned contact; only a primary receives correspondence.
+- Reprice of the 69 imported bookings: 16 changed; FY1724 (R100 agreed against
+  the R95 group rate) sits on the public rate less R15 for review.
+- To confirm: the default school-holiday ranges (10 Dec 2026 to 12 Jan 2027,
+  25 Mar to 5 Apr 2027) against the Western Cape calendar.
+

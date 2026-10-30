@@ -7,10 +7,7 @@
 {{ summary([
   ("Balance due at the gate", finance.due_display, true) if finance.due > 0 else ("Balance", "Paid in full", true),
   ("Visit date", booking.visit_date_long),
-  ("Arrival", booking.arrival_time),
   ("Group size", booking.people_booked|plural("visitor")),
-  ("Vehicles", booking.vehicles if booking.vehicles else none),
-  ("Gazebos reserved", booking.gazebos if booking.gazebos else none),
 ], "Your visit") }}
 <h2>Before you arrive</h2>
 <ul>

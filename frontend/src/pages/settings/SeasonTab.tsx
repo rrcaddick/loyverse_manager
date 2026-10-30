@@ -1,22 +1,22 @@
-import { CalendarOff, Plus, Trash2 } from "lucide-react";
+import { CalendarOff, Plus, School, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useFieldArray } from "react-hook-form";
 import { z } from "zod";
 
-import { DateField, FieldRow, MonthDayField, NumberField, SelectField, TextField, WeekdayToggleField, useZodForm } from "@/components/form";
+import { DateField, FieldRow, NumberField, SelectField, TextField, WeekdayToggleField, useZodForm } from "@/components/form";
 import { EmptyState } from "@/components/empty-state";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { useReplaceSeasonDays, useUpdateSection } from "@/features/settings/api";
-import { WEEKDAYS, formatDate, formatMonthDay, formatWeekday, todayIso } from "@/lib/format";
+import { WEEKDAYS, formatDate, formatWeekday, todayIso } from "@/lib/format";
 import type { SeasonDay } from "@/types/api";
 
 import type { SettingsTabProps } from "./SettingsPage";
-import { SettingsForm, count, dirtyKeys, isoDate, monthDay, pick, runSave } from "./shared";
+import { SettingsForm, count, dirtyKeys, isoDate, pick, runSave } from "./shared";
 
 const KIND_OPTIONS = [
   { value: "closed", label: "Closed", description: "No bookings on this day" },
-  { value: "peak", label: "Peak", description: "Peak price applies, no group discounts" },
+  { value: "peak", label: "Peak", description: "The peak price for everyone" },
   { value: "open", label: "Open", description: "Open even if the weekday is normally closed" },
 ];
 
@@ -27,8 +27,13 @@ const schema = z
       end: isoDate,
       closed_weekdays: z.array(z.number().int().min(0).max(6)),
       avoid_weekdays: z.array(z.number().int().min(0).max(6)),
-      no_discount_start: monthDay,
-      no_discount_end: monthDay,
+      school_holidays: z.array(
+        z.object({
+          from: isoDate,
+          to: isoDate,
+          label: z.string().trim().max(80, "Keep labels short"),
+        }),
+      ),
     }),
     capacity: z.object({
       daily_warning_people: count("Enter the number of people"),
@@ -53,6 +58,9 @@ const schema = z
         message: `${overlap.map((d) => WEEKDAYS[d]?.label).join(", ")} is already closed`,
       });
     }
+    value.season.school_holidays.forEach((r, index) => {
+      if (r.to < r.from) ctx.addIssue({ code: "custom", path: ["season", "school_holidays", index, "to"], message: "Ends before it starts" });
+    });
     const seen = new Map<string, number>();
     value.season_days.forEach((d, index) => {
       const first = seen.get(d.day);
@@ -75,12 +83,16 @@ export default function SeasonTab({ data }: SettingsTabProps) {
   const form = useZodForm({
     schema,
     defaultValues: {
-      season: data.settings.season,
+      season: {
+        ...data.settings.season,
+        school_holidays: (data.settings.season.school_holidays ?? []).map((r) => ({ from: r.from, to: r.to, label: r.label ?? "" })),
+      },
       capacity: data.settings.capacity,
       season_days: data.season_days.map((d) => ({ day: d.day, kind: d.kind, label: d.label ?? "" })),
     },
   });
   const days = useFieldArray({ control: form.control, name: "season_days" });
+  const holidays = useFieldArray({ control: form.control, name: "season.school_holidays" });
   const season = form.watch("season");
 
   async function onSubmit(values: z.output<typeof schema>) {
@@ -88,7 +100,13 @@ export default function SeasonTab({ data }: SettingsTabProps) {
     setError(
       await runSave(async () => {
         const seasonKeys = dirtyKeys(values.season, dirty.season);
-        if (seasonKeys.length) await saveSeason.mutateAsync(pick(values.season, seasonKeys));
+        if (seasonKeys.length) {
+          const payload = pick(values.season, seasonKeys) as Record<string, unknown>;
+          if ("school_holidays" in payload) {
+            payload.school_holidays = [...values.season.school_holidays].sort((a, b) => a.from.localeCompare(b.from)).map((r) => ({ from: r.from, to: r.to, label: r.label || null }));
+          }
+          await saveSeason.mutateAsync(payload);
+        }
         const capacityKeys = dirtyKeys(values.capacity, dirty.capacity);
         if (capacityKeys.length) await saveCapacity.mutateAsync(pick(values.capacity, capacityKeys));
         if (dirty.season_days) {
@@ -132,16 +150,32 @@ export default function SeasonTab({ data }: SettingsTabProps) {
       </Section>
 
       <Section
-        title="No-discount window"
-        description="Over the festive period group tiers are unavailable and everyone pays the public weekend price (peak days pay the peak price)."
+        title="School holidays"
+        description="Weekdays in these ranges price as weekends: the group rate for groups, and no children's rate. Public holidays and peak days are handled on their own."
+        flush
+        actions={
+          <Button type="button" variant="outline" size="sm" onClick={() => holidays.append({ from: todayIso(), to: todayIso(), label: "" })}>
+            <Plus data-icon="inline-start" />
+            Add a range
+          </Button>
+        }
       >
-        <FieldRow>
-          <MonthDayField control={form.control} name="season.no_discount_start" label="From" />
-          <MonthDayField control={form.control} name="season.no_discount_end" label="To (inclusive)" />
-        </FieldRow>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Currently {formatMonthDay(season.no_discount_start)} to {formatMonthDay(season.no_discount_end)}, every season. The window may run across New Year.
-        </p>
+        {holidays.fields.length === 0 ? (
+          <EmptyState compact icon={School} title="No school holidays listed" description="Add the term breaks for the season; the dates come from the provincial school calendar." />
+        ) : (
+          <ul className="divide-y divide-border">
+            {holidays.fields.map((field, index) => (
+              <li key={field.id} className="grid grid-cols-1 gap-3 px-5 py-3 sm:grid-cols-[11rem_11rem_minmax(0,1fr)_auto] sm:items-start">
+                <DateField control={form.control} name={`season.school_holidays.${index}.from`} label="From" />
+                <DateField control={form.control} name={`season.school_holidays.${index}.to`} label="To (inclusive)" />
+                <TextField control={form.control} name={`season.school_holidays.${index}.label`} label="Label" placeholder="Summer holidays" />
+                <Button type="button" variant="ghost" size="icon-sm" className="mt-6 text-muted-foreground hover:text-destructive" onClick={() => holidays.remove(index)} aria-label={`Remove range ${index + 1}`}>
+                  <Trash2 />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       <Section

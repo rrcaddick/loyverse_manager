@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from src.models.base import execute, loads, query, query_one, serialize_row
+from src.models.base import execute, query, query_one, serialize_row
 
 STATUSES = (
     "requested",
@@ -53,23 +53,21 @@ WRITABLE_COLUMNS = frozenset(
         "contact_mobile",
         "visit_date",
         "alternative_date",
-        "arrival_time",
         "adults",
         "children",
         "people_booked",
-        "vehicles",
-        "gazebos",
         "price_tier_code",
+        "tier_price",
         "price_per_person",
-        "price_overridden",
-        "price_override_reason",
+        "discount_per_person",
+        "discount_reason",
+        "minimum_waived_by",
         "deposit_due",
         "deposit_overridden",
         "deposit_waived",
         "deposit_override_reason",
         "arrived_count",
         "arrived_source",
-        "arrived_at",
         "barcode",
         "source",
         "enquiry_date",
@@ -89,12 +87,11 @@ WRITABLE_COLUMNS = frozenset(
         "completed_at",
         "cancelled_at",
         "lapsed_at",
-        "legacy_sheet_row",
         "created_by",
     }
 )
 
-BOOL_COLUMNS = ("price_overridden", "deposit_overridden", "deposit_waived")
+BOOL_COLUMNS = ("deposit_overridden", "deposit_waived")
 
 SORTABLE = {
     "visit_date": "b.visit_date",
@@ -154,6 +151,22 @@ def update_fields(booking_id: int, fields: dict, conn=None) -> int:
 
 def get(booking_id: int, conn=None) -> dict | None:
     return query_one("SELECT * FROM bookings WHERE id = %s", (booking_id,), conn=conn)
+
+
+def another_group_on_day(visit_date: date, exclude_id: int | None = None, conn=None) -> int | None:
+    """The id of another live booking on ``visit_date`` (the park is open for
+    it anyway), or None. Used for the weekday minimum rule."""
+    row = query_one(
+        """
+        SELECT id FROM bookings
+        WHERE visit_date = %s AND status IN ('enquiry', 'proforma_sent', 'confirmed', 'completed')
+          AND id <> %s
+        ORDER BY people_booked DESC, id LIMIT 1
+        """,
+        (visit_date, int(exclude_id or 0)),
+        conn=conn,
+    )
+    return int(row["id"]) if row else None
 
 
 def get_for_update(booking_id: int, conn) -> dict | None:
@@ -240,7 +253,7 @@ def list_by_date_range(
     where, params = _where(list(statuses) if statuses else None, from_date, to_date, None)
     return query(
         f"SELECT b.*, {_PAID_SUBQUERY} AS paid_total FROM bookings b {where} "
-        "ORDER BY b.visit_date, b.arrival_time, b.id",
+        "ORDER BY b.visit_date, b.group_name, b.id",
         tuple(params),
     )
 
@@ -279,8 +292,6 @@ def serialize(row: dict | None) -> dict | None:
     for col in BOOL_COLUMNS:
         if col in out:
             out[col] = bool(out[col])
-    if "legacy_sheet_row" in out:
-        out["legacy_sheet_row"] = loads(row.get("legacy_sheet_row"))
     if "paid_total" in out and isinstance(row.get("paid_total"), Decimal):
         out["paid_total"] = float(row["paid_total"])
     return out

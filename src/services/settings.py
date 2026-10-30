@@ -26,13 +26,18 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "end": "2027-04-30",
         "closed_weekdays": [0, 1],  # Monday, Tuesday (Python weekday numbers)
         "avoid_weekdays": [2],  # Wednesday: open but discouraged
-        "no_discount_start": "12-13",  # MM-DD, inclusive
-        "no_discount_end": "01-11",
+        # School holidays price as weekends (the group rate, no children's rate).
+        # Inclusive ISO date ranges; the operator keeps them current on Settings.
+        "school_holidays": [
+            {"from": "2026-12-10", "to": "2027-01-12", "label": "Summer holidays"},
+            {"from": "2027-03-25", "to": "2027-04-05", "label": "Autumn holidays"},
+        ],
     },
     "pricing": {
-        "public_weekend_price": 115.00,
-        "peak_price": 130.00,
         "vat_rate": 15,
+        # Fewer people than this is not a group: the public rate applies, except
+        # on a term-time weekday when another group already opens the park.
+        "group_minimum": 40,
     },
     "deposit": {
         "min_people": 40,
@@ -93,15 +98,19 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "skipped_days": 7,
     },
     "form": {
+        # Group types are information. The one thing a type decides is whether
+        # the children's rate applies on a term-time weekday (``children``).
         "group_types": [
-            {"code": "school", "label": "School", "weekday_tier": "school_weekday", "weekend_tier": "nonprofit_kids_weekend"},
-            {"code": "creche", "label": "Crèche or children's group", "weekday_tier": "school_weekday", "weekend_tier": "nonprofit_kids_weekend"},
-            {"code": "church", "label": "Church group", "weekday_tier": "adult_large_weekday", "weekend_tier": "church_weekend"},
-            {"code": "nonprofit", "label": "Non-profit or club", "weekday_tier": "adult_large_weekday", "weekend_tier": "nonprofit_adults_weekend"},
-            {"code": "family", "label": "Family or friends", "weekday_tier": "adult_small_weekday", "weekend_tier": "nonprofit_adults_weekend"},
-            {"code": "corporate", "label": "Corporate or team building", "weekday_tier": "adult_small_weekday", "weekend_tier": "public_weekend"},
-            {"code": "pensioners", "label": "Pensioners", "weekday_tier": "pensioners_weekday", "weekend_tier": "public_weekend"},
-            {"code": "other", "label": "Other", "weekday_tier": "adult_small_weekday", "weekend_tier": "public_weekend"},
+            {"code": "school", "label": "School", "children": True},
+            {"code": "creche", "label": "Crèche", "children": True},
+            {"code": "aftercare", "label": "Aftercare", "children": True},
+            {"code": "youth_club", "label": "Youth club", "children": True},
+            {"code": "church", "label": "Church group", "children": False},
+            {"code": "nonprofit", "label": "Non-profit or club", "children": False},
+            {"code": "family", "label": "Family or friends", "children": False},
+            {"code": "corporate", "label": "Corporate or team building", "children": False},
+            {"code": "pensioners", "label": "Pensioners", "children": False},
+            {"code": "other", "label": "Other", "children": False},
         ],
         "max_questions": 5,
         "min_group_size": 10,
@@ -110,11 +119,6 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         # Email an acknowledgement as soon as a request arrives. Off by default:
         # nothing sends automatically unless the operator turns this on.
         "acknowledgement_enabled": False,
-        # The arrival-time choices on the public form (half-hour slots plus "Not sure yet").
-        "arrival_slots": [
-            "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-            "12:00", "12:30", "13:00", "13:30", "14:00", "Not sure yet",
-        ],
     },
     "templates": {
         # Canned snippets for the mail composer. ``key`` is stable; title and
@@ -177,10 +181,35 @@ def _merge(defaults: dict, stored: dict | None) -> dict:
     return out
 
 
+_CHILDREN_CODES = ("school", "creche", "aftercare", "youth_club")
+
+
+def _normalise_group_types(entries) -> list[dict]:
+    """Stored group types from before 30 Oct 2026 carried a tier per day type;
+    now each carries ``children`` only, and the four children's types exist."""
+    out: list[dict] = []
+    for e in entries or []:
+        if not isinstance(e, dict) or not e.get("code"):
+            continue
+        entry = {"code": str(e["code"]), "label": e.get("label") or str(e["code"])}
+        if "children" in e:
+            entry["children"] = bool(e["children"])
+        else:
+            entry["children"] = e.get("weekday_tier") == "school_weekday" or entry["code"] in _CHILDREN_CODES
+        out.append(entry)
+    have = {e["code"] for e in out}
+    for d in DEFAULTS["form"]["group_types"]:
+        if d["code"] not in have and d["code"] in _CHILDREN_CODES:
+            out.append(dict(d))
+    return out
+
+
 def get_settings() -> Settings:
     rows = query("SELECT setting_key, value FROM app_settings")
     stored = {r["setting_key"]: loads(r["value"]) or {} for r in rows}
-    return Settings({k: _merge(v, stored.get(k)) for k, v in DEFAULTS.items()})
+    data = {k: _merge(v, stored.get(k)) for k, v in DEFAULTS.items()}
+    data["form"]["group_types"] = _normalise_group_types(data["form"].get("group_types"))
+    return Settings(data)
 
 
 def update_settings(section: str, data: dict, user_id: int | None) -> Settings:

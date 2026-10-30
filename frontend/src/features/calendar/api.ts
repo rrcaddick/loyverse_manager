@@ -8,6 +8,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useCallback } from "react";
 
 import { api } from "@/lib/api";
+import { todayIso } from "@/lib/format";
 
 import type { CalendarResponse, DayView } from "@/features/bookings/types";
 
@@ -45,5 +46,7 @@ export function useDay(date: string, enabled = true) {
     queryFn: () => api.get<DayView>(`/days/${date}`),
     enabled: enabled && /^\d{4}-\d{2}-\d{2}$/.test(date),
     placeholderData: keepPreviousData,
+    // Arrivals land from Loyverse through the day.
+    refetchInterval: date === todayIso() ? 60_000 : false,
   });
 }

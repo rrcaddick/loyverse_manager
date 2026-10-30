@@ -55,14 +55,20 @@ export interface SeasonSettings {
   end: string;
   closed_weekdays: number[];
   avoid_weekdays: number[];
-  no_discount_start: string; // MM-DD
-  no_discount_end: string;
+  /** Inclusive ISO date ranges that price as weekends (the group rate, no children's rate). */
+  school_holidays: SchoolHoliday[];
+}
+
+export interface SchoolHoliday {
+  from: string; // YYYY-MM-DD
+  to: string;
+  label?: string | null;
 }
 
 export interface PricingSettings {
-  public_weekend_price: number;
-  peak_price: number;
   vat_rate: number;
+  /** Fewer people than this is not a group: public rate, unless another group opens the park that weekday. */
+  group_minimum: number;
 }
 
 export interface DepositSettings {
@@ -114,8 +120,8 @@ export interface EmailSettings {
 export interface GroupType {
   code: string;
   label: string;
-  weekday_tier: string;
-  weekend_tier: string;
+  /** The children's rate can apply on a term-time weekday. */
+  children: boolean;
 }
 
 export interface FormSettings {

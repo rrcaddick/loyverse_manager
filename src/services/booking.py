@@ -27,6 +27,7 @@ import pymysql
 from phonenumbers import NumberParseException
 
 from src.models import booking as booking_model
+from src.models import booking_legacy_row as legacy_model
 from src.models import booking_event as event_model
 from src.models import booking_question as question_model
 from src.models import payment as payment_model
@@ -56,7 +57,7 @@ TWO_PLACES = Decimal("0.01")
 ZERO = Decimal("0.00")
 
 SOURCES = ("form", "email", "import", "manual")
-ARRIVAL_SOURCES = ("loyverse", "manual")
+ARRIVAL_SOURCES = ("loyverse",)  # the customer app joins this list when it is ready
 PAYMENT_KINDS = payment_model.KINDS
 GROUP_TYPE_FALLBACK = "other"
 
@@ -111,16 +112,15 @@ FIELD_LABELS = {
     "contact_mobile": "mobile",
     "visit_date": "visit date",
     "alternative_date": "alternative date",
-    "arrival_time": "arrival time",
     "adults": "adults",
     "children": "children",
     "people_booked": "people",
-    "vehicles": "vehicles",
-    "gazebos": "gazebos",
-    "price_tier_code": "price tier",
+    "price_tier_code": "rate",
+    "tier_price": "rate price",
     "price_per_person": "price per person",
-    "price_overridden": "price override",
-    "price_override_reason": "price override reason",
+    "discount_per_person": "discount per person",
+    "discount_reason": "discount reason",
+    "minimum_waived_by": "minimum waived",
     "deposit_due": "deposit",
     "deposit_overridden": "deposit override",
     "deposit_waived": "deposit waived",
@@ -296,16 +296,15 @@ _TEXT_FIELDS = {
     "billing_address": 500,
     "customer_vat_number": 32,
     "contact_name": 255,
-    "arrival_time": 20,
-    "price_override_reason": 255,
+    "discount_reason": 255,
     "deposit_override_reason": 255,
     "customer_notes": None,
     "internal_notes": None,
 }
 _DATE_FIELDS = ("visit_date", "alternative_date", "hold_expires_on", "enquiry_date")
-_INT_FIELDS = ("adults", "children", "people_booked", "vehicles", "gazebos")
-_MONEY_FIELDS = ("price_per_person", "deposit_due")
-_BOOL_FIELDS = ("price_overridden", "deposit_overridden", "deposit_waived")
+_INT_FIELDS = ("adults", "children", "people_booked")
+_MONEY_FIELDS = ("price_per_person", "discount_per_person", "deposit_due")
+_BOOL_FIELDS = ("deposit_overridden", "deposit_waived")
 _CREATE_ONLY_STAMPS = (
     "proforma_sent_at",
     "invoice_sent_at",
@@ -360,9 +359,11 @@ def validate_booking_data(
     if "price_tier_code" in data:
         code = parse_text(data["price_tier_code"], "price_tier_code", 32)
         if code and pricing.get_price_tier(code) is None:
-            errors["price_tier_code"] = "Unknown price tier"
+            errors["price_tier_code"] = "Unknown rate"
         else:
             clean["price_tier_code"] = code
+    if clean.get("discount_per_person") is not None and clean["discount_per_person"] < 0:
+        errors["discount_per_person"] = "A discount cannot be negative"
 
     if clean.get("group_type") is not None:
         if pricing.group_type_config(clean["group_type"], settings) is None:
@@ -392,12 +393,11 @@ def validate_booking_data(
                 attempt(field, parse_datetime, data[field], field)
         if "arrived_count" in data and data["arrived_count"] is not None:
             attempt("arrived_count", parse_int, data["arrived_count"], "arrived_count")
-            source = data.get("arrived_source") or "manual"
+            source = data.get("arrived_source") or "loyverse"
             if source not in ARRIVAL_SOURCES:
-                errors["arrived_source"] = "Must be loyverse or manual"
+                errors["arrived_source"] = "Must be loyverse"
             else:
                 clean["arrived_source"] = source
-                clean["arrived_at"] = parse_datetime(data.get("arrived_at"), "arrived_at") or now_local()
 
     if errors:
         raise BookingError("Validation failed", errors)
@@ -406,11 +406,24 @@ def validate_booking_data(
 
 # ----------------------------------------------------------------- pricing ----
 
-def _derive_pricing(base: Mapping[str, Any], changes: Mapping[str, Any], s: Settings) -> dict:
-    """Price, tier and deposit columns after ``changes`` are applied to ``base``.
+def _derive_pricing(
+    base: Mapping[str, Any],
+    changes: Mapping[str, Any],
+    s: Settings,
+    *,
+    other_group_on_day: bool | None = None,
+) -> dict:
+    """Rate, discount and deposit columns after ``changes`` are applied to ``base``.
 
-    Overrides are explicit flags with a reason and survive recalculation; the
-    computed values are re-derived whenever people, date or tier change.
+    The rate follows the day, the group type and the headcount
+    (``pricing.decide_tier``) and is re-derived whenever one of them changes; an
+    explicit ``price_tier_code`` pins it. The discount is rands per person and
+    survives recalculation: it is set from ``discount_per_person`` or derived
+    from an agreed ``price_per_person``, is never negative (a price above the
+    rate means a different rate, not a negative discount) and needs a reason
+    while it is more than zero. The deposit rules are unchanged.
+
+    ``other_group_on_day`` short-circuits the weekday-minimum lookup (tests).
     """
     merged = {**base, **changes}
     visit_date: date = merged["visit_date"]
@@ -418,33 +431,47 @@ def _derive_pricing(base: Mapping[str, Any], changes: Mapping[str, Any], s: Sett
     people = int(merged.get("people_booked") or 0)
     is_create = not base
 
-    date_or_type_changed = any(
-        k in changes and changes[k] != base.get(k) for k in ("visit_date", "group_type")
+    inputs_changed = any(
+        k in changes and changes[k] != base.get(k) for k in ("visit_date", "group_type", "people_booked")
     )
+    waived_by = base.get("minimum_waived_by")
     if changes.get("price_tier_code"):
-        requested_tier = changes["price_tier_code"]
-    elif is_create or date_or_type_changed or not base.get("price_tier_code"):
-        requested_tier = pricing.default_tier_for(group_type, visit_date, s)
+        tier = changes["price_tier_code"]
+        waived_by = None
+    elif is_create or inputs_changed or not base.get("price_tier_code"):
+        other: int | None = None
+        if people < pricing.group_minimum(s) and pricing.rate_day(visit_date, s) == "weekday":
+            if other_group_on_day is None:
+                other = booking_model.another_group_on_day(visit_date, base.get("id"))
+            elif other_group_on_day:
+                other = -1  # known to exist, identity not given
+        decision = pricing.decide_tier(group_type, visit_date, people, s, other_group_on_day=other is not None)
+        tier = decision.tier_code
+        waived_by = (other if other and other > 0 else None) if decision.minimum_waived else None
     else:
-        requested_tier = base["price_tier_code"]
+        tier = base["price_tier_code"]
+    tier_price = pricing.price_for_tier(tier)
 
-    effective_tier = pricing.effective_tier(requested_tier, visit_date, s)
-    computed_price = pricing.default_price(requested_tier, visit_date, s)
-
-    if "price_overridden" in changes and changes["price_overridden"] is False:
-        price, price_overridden = computed_price, False
+    if changes.get("discount_per_person") is not None:
+        discount = Decimal(str(changes["discount_per_person"]))
     elif changes.get("price_per_person") is not None:
-        price = changes["price_per_person"]
-        price_overridden = bool(changes.get("price_overridden")) or price != computed_price
-    elif base.get("price_overridden"):
-        price, price_overridden = Decimal(str(base["price_per_person"])), True
+        discount = tier_price - Decimal(str(changes["price_per_person"]))
+        if discount < 0:
+            raise BookingError(
+                "The agreed price is above the rate",
+                {"price_per_person": f"The rate is R{tier_price:.2f}. A higher price means a different rate, not a discount"},
+            )
     else:
-        price, price_overridden = computed_price, False
-    price_reason = (
-        changes.get("price_override_reason", base.get("price_override_reason"))
-        if price_overridden
-        else None
-    )
+        discount = Decimal(str(base.get("discount_per_person") or 0))
+    if discount < 0:
+        raise BookingError("A discount cannot be negative", {"discount_per_person": "Cannot be negative"})
+    if discount > tier_price:
+        raise BookingError("The discount is more than the rate", {"discount_per_person": f"The rate is R{tier_price:.2f}"})
+    discount = discount.quantize(TWO_PLACES)
+    reason = changes.get("discount_reason", base.get("discount_reason")) if discount > 0 else None
+    if discount > 0 and not reason:
+        raise BookingError("A discount needs a reason", {"discount_reason": "Say why the price is below the rate"})
+    price = (tier_price - discount).quantize(TWO_PLACES)
 
     waived = bool(changes.get("deposit_waived", base.get("deposit_waived")))
     computed_deposit = pricing.deposit_for(people, price, s)
@@ -466,14 +493,43 @@ def _derive_pricing(base: Mapping[str, Any], changes: Mapping[str, Any], s: Sett
     )
 
     return {
-        "price_tier_code": effective_tier,
-        "price_per_person": price.quantize(TWO_PLACES),
-        "price_overridden": int(price_overridden),
-        "price_override_reason": price_reason,
+        "price_tier_code": tier,
+        "tier_price": tier_price.quantize(TWO_PLACES),
+        "discount_per_person": discount,
+        "discount_reason": reason,
+        "minimum_waived_by": waived_by,
+        "price_per_person": price,
         "deposit_due": deposit.quantize(TWO_PLACES),
         "deposit_overridden": int(deposit_overridden),
         "deposit_waived": int(waived),
         "deposit_override_reason": deposit_reason,
+    }
+
+
+def quote(
+    group_type: str | None,
+    visit_date: date,
+    people: int,
+    *,
+    exclude_id: int | None = None,
+    settings: Settings | None = None,
+) -> dict:
+    """What a booking would be charged: the rate decision, its price, the deposit."""
+    s = settings or get_settings()
+    other: int | None = None
+    if int(people or 0) < pricing.group_minimum(s) and pricing.rate_day(visit_date, s) == "weekday":
+        other = booking_model.another_group_on_day(visit_date, exclude_id)
+    decision = pricing.decide_tier(group_type, visit_date, people, s, other_group_on_day=other is not None)
+    tier_price = pricing.price_for_tier(decision.tier_code)
+    tier = pricing.get_price_tier(decision.tier_code) or {}
+    return {
+        **decision.as_dict(),
+        "tier_label": tier.get("label") or decision.tier_code,
+        "tier_price": float(tier_price),
+        "minimum_waived_by": other if decision.minimum_waived else None,
+        "group_minimum": pricing.group_minimum(s),
+        "total": float(tier_price * int(people or 0)),
+        "deposit_due": float(pricing.deposit_for(int(people or 0), tier_price, s)),
     }
 
 
@@ -623,10 +679,9 @@ def create_booking(
     if not fields.get("hold_expires_on"):
         fields["hold_expires_on"] = pricing.hold_expiry_for(fields["visit_date"], s)
     fields.update(_derive_pricing({}, clean, s))
-    for col in ("adults", "children", "vehicles", "gazebos"):
+    for col in ("adults", "children"):
         fields[col] = int(fields.get(col) or 0)
-    if "legacy_sheet_row" in fields:
-        fields["legacy_sheet_row"] = dumps(fields["legacy_sheet_row"])
+    legacy_row = clean.get("legacy_sheet_row")
     stamp_col = STATUS_STAMPS.get(status)
     if stamp_col and not fields.get(stamp_col):
         fields[stamp_col] = now_local()
@@ -648,7 +703,9 @@ def create_booking(
                 actor,
                 conn=conn,
             )
-            if fields["price_overridden"] or fields["deposit_overridden"] or fields["deposit_waived"]:
+            if legacy_row:
+                legacy_model.set_row(booking_id, legacy_row, conn=conn)
+            if fields["discount_per_person"] > 0 or fields["deposit_overridden"] or fields["deposit_waived"]:
                 add_event(
                     booking_id,
                     "override",
@@ -669,20 +726,27 @@ def create_booking(
 
 def _override_summary(fields: Mapping[str, Any]) -> str:
     parts = []
-    if fields.get("price_overridden"):
-        parts.append(f"price set to R{Decimal(str(fields['price_per_person'])):.2f}")
+    discount = Decimal(str(fields.get("discount_per_person") or 0))
+    if discount > 0:
+        why = f" ({fields['discount_reason']})" if fields.get("discount_reason") else ""
+        parts.append(f"discount R{discount:.2f} per person{why}")
     if fields.get("deposit_waived"):
         parts.append("deposit waived")
     elif fields.get("deposit_overridden"):
         parts.append(f"deposit set to R{Decimal(str(fields['deposit_due'])):.2f}")
-    return "Override: " + ", ".join(parts) if parts else "Override cleared"
+    if not parts:
+        return "Discount removed"
+    text = ", ".join(parts)
+    return text[0].upper() + text[1:]
 
 
 def _override_data(fields: Mapping[str, Any]) -> dict:
     return {
-        "price_overridden": bool(fields.get("price_overridden")),
+        "price_tier_code": fields.get("price_tier_code"),
+        "tier_price": _json_value(fields.get("tier_price")),
+        "discount_per_person": _json_value(fields.get("discount_per_person")),
+        "discount_reason": fields.get("discount_reason"),
         "price_per_person": _json_value(fields.get("price_per_person")),
-        "price_override_reason": fields.get("price_override_reason"),
         "deposit_overridden": bool(fields.get("deposit_overridden")),
         "deposit_waived": bool(fields.get("deposit_waived")),
         "deposit_due": _json_value(fields.get("deposit_due")),
@@ -693,9 +757,12 @@ def _override_data(fields: Mapping[str, Any]) -> dict:
 # ------------------------------------------------------------------ update ----
 
 _OVERRIDE_COLUMNS = (
-    "price_overridden",
+    "price_tier_code",
+    "tier_price",
+    "discount_per_person",
+    "discount_reason",
+    "minimum_waived_by",
     "price_per_person",
-    "price_override_reason",
     "deposit_overridden",
     "deposit_waived",
     "deposit_due",
@@ -735,11 +802,8 @@ def update_booking(booking_id: int, data: Mapping[str, Any], actor: int | None) 
 
     override_diff = {k: v for k, v in diff.items() if k in _OVERRIDE_COLUMNS}
     override_flags_changed = any(
-        k in override_diff for k in ("price_overridden", "deposit_overridden", "deposit_waived")
-    ) or (
-        (updates["price_overridden"] and "price_per_person" in override_diff)
-        or (updates["deposit_overridden"] and "deposit_due" in override_diff)
-    )
+        k in override_diff for k in ("discount_per_person", "discount_reason", "deposit_overridden", "deposit_waived")
+    ) or (updates["deposit_overridden"] and "deposit_due" in override_diff)
 
     with transaction() as conn:
         booking_model.update_fields(booking_id, changed, conn=conn)
@@ -962,15 +1026,13 @@ def add_note(booking_id: int, text: str, actor: int | None) -> dict:
 def record_arrivals(booking_id: int, count: int, source: str, actor: int | None) -> dict:
     booking = _require(booking_id)
     if source not in ARRIVAL_SOURCES:
-        raise BookingError("Unknown arrivals source", {"source": "Must be loyverse or manual"})
+        raise BookingError("Unknown arrivals source", {"source": "Must be loyverse"})
     number = parse_int(count, "count")
     if number is None:
         raise BookingError("A count is required", {"count": "This field is required"})
     with transaction() as conn:
         booking_model.update_fields(
-            booking_id,
-            {"arrived_count": number, "arrived_source": source, "arrived_at": now_local()},
-            conn=conn,
+            booking_id, {"arrived_count": number, "arrived_source": source}, conn=conn
         )
         add_event(
             booking_id,
@@ -995,8 +1057,6 @@ CALENDAR_BOOKING_FIELDS = (
     "people_booked",
     "group_type",
     "contact_name",
-    "arrival_time",
-    "vehicles",
 )
 
 
@@ -1029,7 +1089,7 @@ def aggregate_calendar(
                 "is_closed": pricing.is_closed(d, s, season_days),
                 "is_avoid": pricing.is_avoid(d, s),
                 "is_peak": pricing.is_peak(d, s, season_days),
-                "in_no_discount_window": pricing.in_no_discount_window(d, s),
+                "is_school_holiday": pricing.is_school_holiday(d, s),
                 "label": pricing.day_label(d, season_days) or holiday_name(d),
                 "total_people": total,
                 "confirmed_people": firm,
@@ -1234,7 +1294,8 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
             "allowed_transitions": allowed_transitions(booking["status"], booking["visit_date"], today),
             "day_type": pricing.day_type(booking["visit_date"], s),
             "is_peak": pricing.is_peak(booking["visit_date"], s),
-            "in_no_discount_window": pricing.in_no_discount_window(booking["visit_date"], s),
+            "is_school_holiday": pricing.is_school_holiday(booking["visit_date"], s),
+            "rate_day": pricing.rate_day(booking["visit_date"], s),
             "finance": serialize_row(finance),
             "questions": question_model.list_for_booking(booking_id),
             "payments": payment_model.list_for_booking(booking_id),

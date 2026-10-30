@@ -13,11 +13,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClie
 
 import { API_BASE, ApiError, api, buildQuery } from "@/lib/api";
 import { getCsrfToken } from "@/lib/auth-store";
+import { todayIso } from "@/lib/format";
 import type { BookingStatus, Paginated } from "@/types/api";
 
 import type {
-  ArrivalSource,
-  ArrivalsCheck,
   BookingAction,
   BookingCounts,
   BookingDetail,
@@ -30,6 +29,7 @@ import type {
   PaymentSearchParams,
   PaymentSearchResult,
   RecordPaymentInput,
+  RateQuote,
   ReplyInput,
 } from "./types";
 
@@ -87,6 +87,8 @@ export function useBooking(id: number | null) {
     queryKey: bookingKeys.detail(id ?? -1),
     queryFn: () => api.get<BookingDetail>(`/bookings/${id}`),
     enabled: id !== null && Number.isFinite(id),
+    // Arrivals land from Loyverse through the day: keep a visiting booking fresh.
+    refetchInterval: (query) => (query.state.data?.visit_date === todayIso() ? 60_000 : false),
   });
 }
 
@@ -167,17 +169,21 @@ export function useDeletePayment(id: number) {
   });
 }
 
-export function useRecordArrivals(id: number) {
-  return useDetailMutation<{ count: number; source: ArrivalSource }>(id, (input) =>
-    api.post<BookingDetail>(`/bookings/${id}/arrivals`, input),
-  );
+export interface QuoteParams {
+  group_type: string | null;
+  visit_date: string;
+  people: number;
+  exclude?: number;
 }
 
-/** Asks Loyverse for today's arrivals; records nothing. */
-export function useFetchArrivals(id: number) {
-  return useMutation({
-    mutationFn: () => api.get<ArrivalsCheck>(`/bookings/${id}/arrivals`),
-    meta: { silent: true },
+/** The rate a booking would get for a date, kind of group and headcount. */
+export function useQuote(params: QuoteParams | null) {
+  return useQuery({
+    queryKey: ["bookings", "quote", params] as const,
+    queryFn: () => api.get<RateQuote>("/bookings/quote", { params: { ...params, group_type: params?.group_type ?? undefined } }),
+    enabled: !!params && /^\d{4}-\d{2}-\d{2}$/.test(params.visit_date) && params.people > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 }
 

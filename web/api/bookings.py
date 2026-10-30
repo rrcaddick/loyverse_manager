@@ -26,7 +26,6 @@ from src.models.base import loads, serialize_row
 from src.models.booking import ACTIVE_STATUSES, FIRM_STATUSES, STATUSES, TENTATIVE_STATUSES
 from src.services import booking as booking_service
 from src.services import tickets as ticket_service
-from src.services.arrivals import ArrivalsError, fetch_loyverse_arrivals
 from src.services.booking import BookingError, BookingNotFound, InvalidTransition
 from src.services.settings import get_settings
 from src.utils.date import get_today
@@ -335,38 +334,28 @@ def delete_payment(booking_id: int, payment_id: int):
     return _detail(booking_id)
 
 
-# ------------------------------------------------------------ arrivals -------
+# --------------------------------------------------------------- quote -------
 
-@bp.get("/<int:booking_id>/arrivals")
-@allow_manager
-def fetch_arrivals(booking_id: int):
-    booking = _booking_or_404(booking_id)
+@bp.get("/quote")
+def quote():
+    """The rate a booking would get: ``group_type``, ``visit_date``, ``people``,
+    and ``exclude`` (the booking being edited) for the weekday minimum rule."""
+    visit_date = _arg_date("visit_date")
+    if visit_date is None:
+        raise ApiError("validation_error", "visit_date is required", 422, {"visit_date": "Required"})
     try:
-        count = fetch_loyverse_arrivals(booking)
-    except ArrivalsError as exc:
-        raise ApiError("loyverse_unavailable", str(exc), 502)
+        people = int(request.args.get("people") or 0)
+    except ValueError:
+        raise ApiError("validation_error", "people must be a number", 422, {"people": "A whole number"})
+    exclude = request.args.get("exclude")
     return ok(
-        {
-            "booking_id": booking_id,
-            "visit_date": booking["visit_date"].isoformat(),
-            "count": count,
-            "source": "loyverse",
-            "recorded_count": booking.get("arrived_count"),
-            "recorded_source": booking.get("arrived_source"),
-        }
+        booking_service.quote(
+            request.args.get("group_type") or None,
+            visit_date,
+            people,
+            exclude_id=int(exclude) if exclude and exclude.isdigit() else None,
+        )
     )
-
-
-@bp.post("/<int:booking_id>/arrivals")
-@allow_manager
-def record_arrivals(booking_id: int):
-    data = parse_json()
-    if data.get("count") is None:
-        raise ApiError("validation_error", "Missing required fields", 422, {"count": "This field is required"})
-    booking_service.record_arrivals(
-        booking_id, data["count"], str(data.get("source") or "manual"), current_user_id()
-    )
-    return _detail(booking_id)
 
 
 # ----------------------------------------------------- timeline, emails ------

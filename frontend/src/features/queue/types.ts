@@ -87,7 +87,6 @@ export interface TicketItem {
   booking: BookingSummary;
   contact_mobile: string | null;
   contact_email: string | null;
-  vehicles: number;
   confirmed_at: string | null;
   days_to_visit: number;
 }
@@ -104,9 +103,6 @@ export interface VisitFinance {
 export interface VisitItem {
   booking: BookingSummary;
   group_type: string | null;
-  arrival_time: string | null;
-  vehicles: number;
-  gazebos: number;
   contact_mobile: string | null;
   arrived_count: number | null;
   ticket_sent: boolean;

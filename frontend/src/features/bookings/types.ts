@@ -8,7 +8,8 @@ import type { BookingStatus } from "@/types/api";
 
 export type BookingSource = "form" | "email" | "import" | "manual";
 export type PaymentKind = "eft" | "cash" | "card" | "cash_deposit" | "other";
-export type ArrivalSource = "loyverse" | "manual";
+/** Loyverse is the only count; the customer app joins this when it is ready. */
+export type ArrivalSource = "loyverse";
 export type DocumentKind = "proforma" | "invoice" | "final_invoice";
 export type ReminderKind = "still_interested" | "deposit_reminder" | "final_details" | "lapse";
 export type EmailReminderKind = Exclude<ReminderKind, "lapse">;
@@ -27,23 +28,23 @@ export interface BookingRow {
   contact_mobile: string | null;
   visit_date: string;
   alternative_date: string | null;
-  arrival_time: string | null;
   adults: number;
   children: number;
   people_booked: number;
-  vehicles: number;
-  gazebos: number;
   price_tier_code: string | null;
+  /** The rate's price when the booking was priced; the discount sits below it. */
+  tier_price: number | null;
   price_per_person: number;
-  price_overridden: boolean;
-  price_override_reason: string | null;
+  discount_per_person: number;
+  discount_reason: string | null;
+  /** The other booking that let a small weekday group have the group rate. */
+  minimum_waived_by: number | null;
   deposit_due: number;
   deposit_overridden: boolean;
   deposit_waived: boolean;
   deposit_override_reason: string | null;
   arrived_count: number | null;
   arrived_source: ArrivalSource | null;
-  arrived_at: string | null;
   barcode: string | null;
   source: BookingSource;
   enquiry_date: string | null;
@@ -313,7 +314,7 @@ export interface BookingDetail extends BookingRow {
   allowed_transitions: BookingStatus[];
   day_type: DayType;
   is_peak: boolean;
-  in_no_discount_window: boolean;
+  is_school_holiday: boolean;
   finance: BookingFinance;
   questions: BookingQuestion[];
   payments: Payment[];
@@ -339,8 +340,6 @@ export interface CalendarDayBooking {
   people_booked: number;
   group_type: string | null;
   contact_name: string | null;
-  arrival_time: string | null;
-  vehicles: number;
 }
 
 export interface CalendarDay {
@@ -351,7 +350,7 @@ export interface CalendarDay {
   is_closed: boolean;
   is_avoid: boolean;
   is_peak: boolean;
-  in_no_discount_window: boolean;
+  is_school_holiday: boolean;
   label: string | null;
   total_people: number;
   confirmed_people: number;
@@ -430,14 +429,6 @@ export interface InboxMessage {
 
 // -------------------------------------------------------------- requests
 
-export interface ArrivalsCheck {
-  booking_id: number;
-  visit_date: string;
-  count: number;
-  source: "loyverse";
-  recorded_count: number | null;
-  recorded_source: ArrivalSource | null;
-}
 
 export interface BookingListParams {
   bucket?: BookingBucket;
@@ -460,16 +451,14 @@ export interface BookingInput {
   contact_mobile?: string | null;
   visit_date?: string;
   alternative_date?: string | null;
-  arrival_time?: string | null;
   adults?: number;
   children?: number;
   people_booked?: number;
-  vehicles?: number;
-  gazebos?: number;
   price_tier_code?: string | null;
+  /** The agreed price per visitor; the server turns the gap below the rate into the discount. */
   price_per_person?: number;
-  price_overridden?: boolean;
-  price_override_reason?: string | null;
+  discount_per_person?: number;
+  discount_reason?: string | null;
   deposit_due?: number;
   deposit_overridden?: boolean;
   deposit_waived?: boolean;
@@ -545,3 +534,17 @@ export const REMINDER_KIND_LABELS: Record<ReminderKind, string> = {
   final_details: "Final details",
   lapse: "Hold expiry",
 };
+
+/** GET /bookings/quote: the rate a booking would get (src/services/pricing.py). */
+export interface RateQuote {
+  tier_code: string;
+  tier_label: string;
+  tier_price: number;
+  rate_day: "peak" | "public_holiday" | "weekend" | "school_holiday" | "weekday";
+  under_minimum: boolean;
+  minimum_waived: boolean;
+  minimum_waived_by: number | null;
+  group_minimum: number;
+  total: number;
+  deposit_due: number;
+}

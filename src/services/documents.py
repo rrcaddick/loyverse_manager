@@ -234,6 +234,12 @@ def compute_finance(booking: dict, kind: str, settings, payments: list[dict] | N
     payments = payments or []
     rate = D(settings.pricing.vat_rate)
     price = D(booking.get("price_per_person")).quantize(CENT)
+    # The rate the booking qualified for and the discount below it (per person);
+    # ``price`` is the net. Older rows without a rate price show no discount line.
+    tier_price = D(booking.get("tier_price") if booking.get("tier_price") is not None else price).quantize(CENT)
+    discount = D(booking.get("discount_per_person") or 0).quantize(CENT)
+    if tier_price - discount != price:  # keep the arithmetic honest whatever the row says
+        tier_price, discount = price, Decimal("0.00")
     people_booked = int(booking.get("people_booked") or 0)
     raw_arrived = booking.get("arrived_count")
     arrived: int | None = int(raw_arrived) if raw_arrived is not None and raw_arrived != "" else None
@@ -261,6 +267,11 @@ def compute_finance(booking: dict, kind: str, settings, payments: list[dict] | N
         "people_booked": people_booked,
         "arrived_count": arrived,
         "price": price,
+        "tier_price": tier_price,
+        "discount": discount,
+        "discount_reason": booking.get("discount_reason"),
+        "gross": (tier_price * qty).quantize(CENT),
+        "discount_total": (discount * qty).quantize(CENT),
         "unit_ex_vat": unit_ex_vat,
         "unit_vat": unit_vat,
         "vat_rate": rate,
@@ -307,17 +318,16 @@ def sample_booking() -> dict:
         "contact_mobile": "27821234567",
         "visit_date": date(2026, 11, 7),
         "alternative_date": None,
-        "arrival_time": "10:00",
         "adults": 40,
         "children": 27,
         "people_booked": 67,
-        "vehicles": 3,
-        "gazebos": 1,
         "billing_address": "Hillside Community Church\n14 Protea Avenue\nKuils River\n7580",
         "customer_vat_number": "4123456789",
-        "price_tier_code": "church_weekend",
+        "price_tier_code": "group_weekend",
+        "tier_price": Decimal("95.00"),
         "price_per_person": Decimal("95.00"),
-        "price_overridden": 0,
+        "discount_per_person": Decimal("0.00"),
+        "discount_reason": None,
         "deposit_due": Decimal("3800.00"),
         "deposit_overridden": 0,
         "deposit_waived": 0,
@@ -359,8 +369,6 @@ def booking_display(booking: dict) -> dict:
     b["contact_mobile_display"] = phone_display(b.get("contact_mobile"))
     b["contact_first_name"] = first_name(b.get("contact_name"))
     b["people_booked"] = int(b.get("people_booked") or 0)
-    b["vehicles"] = int(b.get("vehicles") or 0)
-    b["gazebos"] = int(b.get("gazebos") or 0)
     b["price_per_person_display"] = money(b.get("price_per_person"))
     b["deposit_due_display"] = money(b.get("deposit_due"))
     b["billing_address_lines"] = [
@@ -405,14 +413,17 @@ def build_document_context(
     # The supply, described as SARS wants it: what and when, prices as quoted
     # (VAT inclusive), one line per document.
     description = f"Group day admission, {b['visit_date_long']}".rstrip(", ")
-    equation = f"{finance['qty']} × {money(finance['price'])} = {money(finance['total'])}"
+    discounted = finance["discount"] > 0
+    rate_price = finance["tier_price"] if discounted else finance["price"]
+    rate_total = finance["gross"] if discounted else finance["total"]
+    equation = f"{finance['qty']} × {money(rate_price)} = {money(rate_total)}"
     lines = [
         {
             "qty": finance["qty"],
             "description": description,
             "equation": equation,
-            "unit_price": finance["price"],
-            "unit_price_display": money(finance["price"]),
+            "unit_price": rate_price,
+            "unit_price_display": money(rate_price),
             "unit_ex_vat": finance["unit_ex_vat"],
             "unit_ex_vat_display": money(finance["unit_ex_vat"]),
             # One line per document, so the line VAT is the VAT total: it is
@@ -421,10 +432,30 @@ def build_document_context(
             "vat": finance["vat"],
             "vat_display": money(finance["vat"]),
             "unit_vat_display": money(finance["unit_vat"]),
-            "total": finance["total"],
-            "total_display": money(finance["total"]),
+            "total": rate_total,
+            "total_display": money(rate_total),
         }
     ]
+    if discounted:
+        # The agreed price below the rate, shown as what it is: a discount with
+        # its reason, so the rate stays the rate and the totals still add up.
+        why = f" ({finance['discount_reason']})" if finance.get("discount_reason") else ""
+        lines.append(
+            {
+                "qty": finance["qty"],
+                "description": f"Discount{why}",
+                "equation": f"{finance['qty']} × −{money(finance['discount'])} = −{money(finance['discount_total'])}",
+                "unit_price": -finance["discount"],
+                "unit_price_display": f"−{money(finance['discount'])}",
+                "unit_ex_vat": None,
+                "unit_ex_vat_display": "",
+                "vat": None,
+                "vat_display": "",
+                "unit_vat_display": "",
+                "total": -finance["discount_total"],
+                "total_display": f"−{money(finance['discount_total'])}",
+            }
+        )
 
     company = dict(settings.documents)
     company.setdefault("trading_name", company.get("company_name"))

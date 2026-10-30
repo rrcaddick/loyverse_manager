@@ -28,8 +28,7 @@ export type ActionId =
   | "reminder:deposit_reminder"
   | "reminder:final_details"
   | "confirm"
-  | "record-payment"
-  | "record-arrivals";
+  | "record-payment";
 
 export interface Availability {
   enabled: boolean;
@@ -56,7 +55,6 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   "reminder:final_details": "Send final details",
   confirm: "Confirm booking",
   "record-payment": "Find payment",
-  "record-arrivals": "Record arrivals",
 };
 
 export const NO_EMAIL = "Add an email address first";
@@ -115,8 +113,6 @@ export function availability(b: BookingDetail, action: ActionId): Availability {
       return hiddenUnless(b, TENTATIVE_STATUSES) ?? OK;
     case "record-payment":
       return OK;
-    case "record-arrivals":
-      return hiddenUnless(b, FIRM_STATUSES) ?? OK;
     default:
       return OK;
   }

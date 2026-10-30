@@ -511,7 +511,7 @@ def _reminders_due(today: date) -> tuple[list[dict], int]:
 def _tickets_to_send(today: date) -> list[dict]:
     rows = query(
         f"""
-        SELECT {BOOKING_COLUMNS}, b.contact_mobile, b.contact_email, b.vehicles, b.confirmed_at
+        SELECT {BOOKING_COLUMNS}, b.contact_mobile, b.contact_email, b.confirmed_at
         FROM bookings b
         WHERE b.status = 'confirmed' AND b.ticket_sent_at IS NULL AND b.ticket_emailed_at IS NULL
           AND b.visit_date >= %s
@@ -526,7 +526,6 @@ def _tickets_to_send(today: date) -> list[dict]:
                 {
                     "contact_mobile": r["contact_mobile"],
                     "contact_email": r["contact_email"],
-                    "vehicles": r["vehicles"],
                     "confirmed_at": r["confirmed_at"],
                     "days_to_visit": (r["visit_date"] - today).days,
                 }
@@ -540,13 +539,13 @@ def _visits_this_week(today: date) -> list[dict]:
     rows = query(
         f"""
         SELECT {BOOKING_COLUMNS}, b.price_per_person, b.deposit_due, b.deposit_waived,
-               b.arrival_time, b.vehicles, b.gazebos, b.group_type, b.contact_mobile,
+               b.group_type, b.contact_mobile,
                b.arrived_count, b.ticket_sent_at, b.ticket_emailed_at,
                {PAID_TOTAL_SQL} AS paid_total
         FROM bookings b
         WHERE b.status IN ('confirmed', 'proforma_sent', 'enquiry')
           AND b.visit_date BETWEEN %s AND %s
-        ORDER BY b.visit_date, b.arrival_time, b.group_name
+        ORDER BY b.visit_date, b.group_name
         """,
         (today, today + timedelta(days=7)),
     )
@@ -558,9 +557,6 @@ def _visits_this_week(today: date) -> list[dict]:
             {
                 "booking": _booking(r),
                 "group_type": r["group_type"],
-                "arrival_time": r["arrival_time"],
-                "vehicles": r["vehicles"],
-                "gazebos": r["gazebos"],
                 "contact_mobile": r["contact_mobile"],
                 "arrived_count": r["arrived_count"],
                 "ticket_sent": bool(r["ticket_sent_at"] or r["ticket_emailed_at"]),
