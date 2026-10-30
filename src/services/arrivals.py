@@ -1,135 +1,147 @@
-"""Arrivals from Loyverse receipts, kept current through the visit day.
+"""Arrivals, read from what the terminals have already sent.
 
-The morning sync creates a Loyverse item per confirmed booking whose variant
-``sku`` is the booking barcode. Gate staff scan the vehicle ticket, so each
-receipt line for that SKU carries the passenger count as its quantity. We sum
-those for the SAST visit date; if nothing matched by SKU (older items were
-created without one) we fall back to matching on the item name.
+The patched Loyverse terminals (the bridge) post every closed ticket with its
+receipt into ``open_tickets_history``, every group payment into
+``pos_group_payments`` and every conversion of public admissions onto a group
+into ``pos_group_conversions``. Gate staff scan the vehicle ticket, so each
+receipt line for the booking's barcode carries the passenger count as its
+quantity. A booking's arrivals on its visit day are therefore a read of this
+database, not a call to Loyverse: the heads admitted under the ticket plus
+the heads converted onto the group (``PosGroupPaymentService.status``).
 
-Arrivals are real time, not a button: ``poll_arrivals`` runs from the worker
-every couple of minutes through opening hours (scripts/poll_arrivals.py), reads
-the day's receipts once and records each visiting booking's count whenever it
-has changed (``booking.record_arrivals``: an event, and completion on the first
-arrival). Loyverse is the only source of a count; there is no manual entry.
+The count is kept on the booking (``arrived_count``, source ``loyverse``) so
+documents, Work and the lists see it without the join. It is refreshed when
+a page reads a booking visiting today (``refresh_booking`` / ``refresh_rows``)
+and nudged from the two ingest points, a closed ticket and a paid group
+payment (``refresh_for_barcodes``), so it is right the moment a car is through
+the gate. There is no manual count and nothing polls Loyverse.
 
-    count = fetch_loyverse_arrivals(booking_row)   # one booking, raises ArrivalsError
-    summary = poll_arrivals()                       # every booking visiting today
+    count = arrivals_from_terminals(booking_row)   # the figure as of now
+    refresh_booking(booking_row)                    # record it if it changed
+    refresh_day()                                   # every booking visiting today (Ops)
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import date
+from typing import Iterable
 
-import requests
-
-from config.constants import CATEGORIES, GAZEBO_MAP, LOYVERSE_STORE_ID
-from config.settings import LOYVERSE_API_KEY
-from src.clients.loyverse import LoyverseClient
-from src.services.loyverse import LoyverseService
+from src.utils.date import get_today
 from src.utils.logging import setup_logger
 
 logger = setup_logger("arrivals")
 
-SAST = ZoneInfo("Africa/Johannesburg")
+# Bookings whose arrivals are worth counting: the group has a ticket and may turn up.
+ARRIVAL_STATUSES = ("confirmed", "completed")
 
 
 class ArrivalsError(RuntimeError):
-    """Loyverse could not be queried (no key, network, HTTP error)."""
+    """The terminal data could not be read."""
 
 
-def sast_day_bounds_utc(d: date) -> tuple[str, str]:
-    """The SAST calendar day as RFC 3339 UTC instants for created_at_min/max."""
-    start = datetime.combine(d, time.min, tzinfo=SAST).astimezone(timezone.utc)
-    end = start + timedelta(days=1) - timedelta(milliseconds=1)
-    fmt = "%Y-%m-%dT%H:%M:%S.000Z"
-    return start.strftime(fmt), end.strftime(fmt)
+def _service():
+    from src.services.pos_group_payments import PosGroupPaymentService
+
+    return PosGroupPaymentService()
 
 
-def count_arrivals(receipts: list[dict], barcode: str, group_name: str) -> int:
-    """Sum line quantities for ``barcode`` (SKU), else for ``group_name`` (item name).
-
-    Refund receipts subtract. Quantities are summed as floats then rounded, as
-    Loyverse returns them as numbers.
-    """
-    by_sku = 0.0
-    by_name = 0.0
-    sku_seen = False
-    wanted_name = (group_name or "").strip().casefold()
-    for receipt in receipts:
-        sign = -1.0 if receipt.get("receipt_type") == "REFUND" else 1.0
-        for line in receipt.get("line_items") or []:
-            quantity = float(line.get("quantity") or 0) * sign
-            if barcode and str(line.get("sku") or "") == str(barcode):
-                sku_seen = True
-                by_sku += quantity
-            elif wanted_name and str(line.get("item_name") or "").strip().casefold() == wanted_name:
-                by_name += quantity
-    total = by_sku if sku_seen else by_name
-    return max(int(round(total)), 0)
-
-
-def fetch_day_receipts(visit_date: date) -> list[dict]:
-    """Every Loyverse receipt on the SAST calendar day ``visit_date``."""
-    if not LOYVERSE_API_KEY:
-        raise ArrivalsError("Loyverse API key is not configured")
-    created_min, created_max = sast_day_bounds_utc(visit_date)
-    client = LoyverseClient(LOYVERSE_API_KEY)
-    service = LoyverseService(client, LOYVERSE_STORE_ID, CATEGORIES, GAZEBO_MAP)
+def arrivals_from_terminals(booking: dict, day: date | None = None) -> int:
+    """Heads through the gate for ``booking`` on ``day`` (its visit date by
+    default): the group's own ticket sales plus conversions onto the group."""
+    visit = day or booking.get("visit_date")
+    if isinstance(visit, str):
+        visit = date.fromisoformat(visit)
     try:
-        payload = service.get_receipts(created_at_min=created_min, created_at_max=created_max)
-    except requests.RequestException as exc:
-        logger.error(f"Loyverse receipts fetch failed for {visit_date}: {exc}")
-        raise ArrivalsError(f"Loyverse request failed: {exc}") from exc
-    except (KeyError, ValueError) as exc:
-        raise ArrivalsError(f"Unexpected Loyverse response: {exc}") from exc
-    return payload.get("receipts") or []
+        status = _service().status(booking.get("barcode"), booking.get("group_name"), visit)
+    except Exception as exc:  # noqa: BLE001 - the terminal tables are another feature's
+        raise ArrivalsError(f"Terminal data could not be read: {exc}") from exc
+    return max(int(status.get("heads_today") or 0) + int(status.get("heads_converted") or 0), 0)
 
 
-def fetch_loyverse_arrivals(booking: dict) -> int:
-    """Arrivals for ``booking`` from Loyverse receipts on its visit date."""
-    visit_date = booking["visit_date"]
-    if isinstance(visit_date, str):
-        visit_date = date.fromisoformat(visit_date)
-    receipts = fetch_day_receipts(visit_date)
-    count = count_arrivals(receipts, booking.get("barcode"), booking.get("group_name"))
-    logger.info(
-        f"Loyverse arrivals for {booking.get('reference')} on {visit_date}: {count} "
-        f"({len(receipts)} receipts scanned)"
-    )
+def refresh_booking(booking: dict, day: date | None = None) -> int | None:
+    """Record the current count on ``booking`` when it has changed, and return
+    it. A zero before any arrival stays "nothing yet" (NULL), so a no-show
+    still reads as no arrivals rather than a counted zero."""
+    from src.services import booking as booking_service
+
+    count = arrivals_from_terminals(booking, day)
+    current = booking.get("arrived_count")
+    if current is None and count == 0:
+        return None
+    if current is not None and int(current) == count:
+        return count
+    booking_service.record_arrivals(int(booking["id"]), count, "loyverse", None)
+    booking["arrived_count"] = count
+    booking["arrived_source"] = "loyverse"
+    logger.info(f"Arrivals for {booking.get('reference')}: {current} -> {count} (terminals)")
     return count
 
 
-POLL_STATUSES = ("confirmed", "completed")
+def refresh_rows(rows: Iterable[dict], day: date | None = None) -> int:
+    """``refresh_booking`` over the rows visiting ``day`` (today by default),
+    updating them in place. Returns how many changed. Never raises: a page
+    read must not fail because the terminal tables did."""
+    today = day or get_today()
+    changed = 0
+    for row in rows:
+        visit = row.get("visit_date")
+        if isinstance(visit, str):
+            visit = date.fromisoformat(visit)
+        if visit != today or row.get("status") not in ARRIVAL_STATUSES:
+            continue
+        before = row.get("arrived_count")
+        try:
+            after = refresh_booking(row, today)
+        except ArrivalsError as exc:
+            logger.warning(f"Arrivals refresh skipped for {row.get('reference')}: {exc}")
+            continue
+        if after != before:
+            changed += 1
+    return changed
 
 
-def poll_arrivals(day: date | None = None) -> dict:
-    """Record the current Loyverse count for every booking visiting ``day``
-    (today by default). One receipts fetch serves them all; a booking is only
-    written, and only gets an event, when its count has changed. A count of
-    zero before any arrival is left as "nothing yet" (NULL), so a no-show still
-    reads as no arrivals rather than a counted zero."""
+def refresh_day(day: date | None = None) -> dict:
+    """Every booking visiting ``day`` (today by default). The Ops job."""
     from src.models import booking as booking_model
-    from src.services import booking as booking_service
-    from src.utils.date import get_today
 
     visit_date = day or get_today()
-    bookings = booking_model.list_for_date(visit_date, POLL_STATUSES)
-    summary = {"ok": True, "date": visit_date.isoformat(), "bookings": len(bookings), "changed": [], "unchanged": 0}
-    if not bookings:
-        return summary
-    receipts = fetch_day_receipts(visit_date)
-    summary["receipts"] = len(receipts)
-    for b in bookings:
-        count = count_arrivals(receipts, b.get("barcode"), b.get("group_name"))
-        current = b.get("arrived_count")
-        if current is None and count == 0:
-            summary["unchanged"] += 1
+    rows = booking_model.list_for_date(visit_date, ARRIVAL_STATUSES)
+    summary = {"ok": True, "date": visit_date.isoformat(), "bookings": len(rows), "changed": []}
+    for row in rows:
+        before = row.get("arrived_count")
+        try:
+            after = refresh_booking(row, visit_date)
+        except ArrivalsError as exc:
+            summary["ok"] = False
+            summary.setdefault("errors", []).append({"reference": row.get("reference"), "error": str(exc)})
             continue
-        if current is not None and int(current) == count:
-            summary["unchanged"] += 1
-            continue
-        booking_service.record_arrivals(int(b["id"]), count, "loyverse", None)
-        summary["changed"].append({"booking_id": int(b["id"]), "reference": b.get("reference"), "from": current, "to": count})
-        logger.info(f"Arrivals for {b.get('reference')}: {current} -> {count} (Loyverse)")
+        if after != before:
+            summary["changed"].append({"booking_id": int(row["id"]), "reference": row.get("reference"), "from": before, "to": after})
     return summary
+
+
+def refresh_for_barcodes(barcodes: Iterable[str | None], day: date | None = None) -> int:
+    """Nudge from an ingest point: the bookings visiting ``day`` whose barcode
+    is among ``barcodes``. Quiet on any failure (the feed must keep flowing)."""
+    from src.models import booking as booking_model
+
+    wanted = {str(b).strip() for b in barcodes if b}
+    if not wanted:
+        return 0
+    visit_date = day or get_today()
+    try:
+        rows = [r for r in booking_model.list_for_date(visit_date, ARRIVAL_STATUSES) if str(r.get("barcode") or "") in wanted]
+        return refresh_rows(rows, visit_date)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Arrivals nudge failed: {exc}")
+        return 0
+
+
+def barcodes_in_receipt(receipt: dict | None) -> list[str]:
+    """The SKUs on a closed ticket's receipt (the bridge's receipt JSON)."""
+    out: list[str] = []
+    for line in (receipt or {}).get("items") or []:
+        sku = str(line.get("sku") or "").strip()
+        if sku and not line.get("voided"):
+            out.append(sku)
+    return out

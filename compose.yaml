@@ -123,7 +123,6 @@ services:
       <<: *app-env
       MAIL_SYNC_CRON: ${MAIL_SYNC_CRON:-* * * * *}
       BANK_POLL_CRON: ${BANK_POLL_CRON:-*/5 * * * *}
-      ARRIVALS_POLL_CRON: ${ARRIVALS_POLL_CRON:-*/2 7-19 * * *}
       REMINDERS_CRON: ${REMINDERS_CRON:-30 6 * * *}
       BACKUP_CRON: ${BACKUP_CRON:-15 2 * * *}
     depends_on:

@@ -1120,6 +1120,10 @@ def day_detail(d: date) -> dict:
     s = get_settings()
     season_days = pricing.load_season_days(d, d)
     rows = booking_model.list_for_date(d, DAY_VIEW_STATUSES)
+    if d == get_today():
+        from src.services import arrivals  # the terminals' data, read as the page loads
+
+        arrivals.refresh_rows(rows, d)
     items = []
     totals = {
         "bookings": 0,
@@ -1285,8 +1289,13 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
     docs/handoff/bookings.md."""
     booking = _require(booking_id)
     s = settings or get_settings()
-    finance = booking_finance(booking, settings=s)
     today = get_today()
+    if booking["visit_date"] == today and booking["status"] in ("confirmed", "completed"):
+        from src.services import arrivals  # the terminals' data, read as the page loads
+
+        if arrivals.refresh_rows([booking], today):
+            booking = _require(booking_id)  # completion may have followed the first arrival
+    finance = booking_finance(booking, settings=s)
     detail = booking_model.serialize(booking)
     detail.update(
         {

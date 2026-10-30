@@ -239,11 +239,17 @@ enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorde
   explicit flags with a reason and are preserved on recalculation.
 - The rate recalculates when people, date or kind of group change, or when
   `price_tier_code` is set explicitly; the discount stays.
-- **Arrivals** are real time from Loyverse: `scripts/poll_arrivals.py` (worker,
-  every two minutes through opening hours) reads the day's receipts once and
-  records each visiting booking's count when it changes
-  (`arrivals.poll_arrivals` → `booking.record_arrivals`, source `loyverse`;
-  the first arrival completes a confirmed booking). There is no manual count.
+- **Arrivals** are read from what the terminals already sent (the bridge
+  line's tables, on this branch since the 30 Oct merge): heads admitted under
+  the booking's barcode on the closed receipts in `open_tickets_history` plus
+  heads converted onto the group in `pos_group_conversions`
+  (`PosGroupPaymentService.status`). `arrivals.refresh_rows` runs when a page
+  reads a booking visiting today (`day_detail`, `get_booking_detail`) and
+  `refresh_for_barcodes` is nudged by a closed ticket (`/open_tickets/events`)
+  and a paid group payment (`/api/pos/events`), so `arrived_count` (source
+  `loyverse`) is current the moment a car is through; the first arrival
+  completes a confirmed booking. Nothing polls Loyverse; there is no manual
+  count. `refresh_day` is the Ops job.
 - Document numbers: `doc_number` is taken from `documents.next_number` at booking
   creation inside a transaction and the setting is incremented. Imported rows
   keep their sheet number when present.
@@ -330,8 +336,8 @@ match_transaction(tx) -> MatchResult                         # strong (reference
 confirm_match(tx_id, booking_id, actor) -> Payment           # creates payment via booking.record_payment
 
 # src/services/arrivals.py (bookings agent)
-fetch_loyverse_arrivals(booking) -> int                     # receipts on visit_date whose line sku == barcode
-poll_arrivals(day=None) -> dict                             # every booking visiting the day, written when the count changed
+arrivals_from_terminals(booking, day=None) -> int         # heads under the barcode on closed receipts + conversions, from the DB
+refresh_booking(booking) / refresh_rows(rows) / refresh_day() # record the count when it changed; ingest nudges via refresh_for_barcodes
 
 # src/services/reminders.py (ops agent)
 recompute_reminders() -> int                                 # fills booking_reminders from settings + booking state

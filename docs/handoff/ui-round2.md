@@ -153,10 +153,12 @@ Agreed with the owner and done in one pass (migration 024, `scripts/reprice_book
   in the Edit dialog, the gap below the rate is the discount with its reason,
   documents show the rate line and a discount line. The Edit dialog's price
   line is a live quote (`GET /bookings/quote`).
-- **Arrivals are real time**: the worker polls Loyverse receipts every two
-  minutes through opening hours (`ARRIVALS_POLL_CRON`), the day and record
-  pages refresh themselves, and every count button and manual entry is gone.
-  The poll is also runnable from Ops.
+- **Arrivals are real time** from the terminals' own data, not a poll: the
+  bridge already posts every closed ticket, group payment and conversion into
+  this database, so the booking's count is read from those tables when the
+  record or the day is loaded and nudged the moment a ticket closes. Every
+  count button and manual entry is gone; the day and record pages refresh
+  themselves through the visit day. Ops has a "refresh arrivals" job.
 - **Contacts**: every outside address on an inbound email (sender, To and Cc)
   becomes a learned contact; only a primary receives correspondence.
 - Reprice of the 69 imported bookings: 16 changed; FY1724 (R100 agreed against
