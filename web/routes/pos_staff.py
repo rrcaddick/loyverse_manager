@@ -1,0 +1,209 @@
+"""Staff roster and audit endpoints for the patched Loyverse terminals.
+
+Both calls need the shared bridge token *and* the terminal's own enrolment
+(``device_id`` + ``device_secret`` in the body; see ``PosStaffService``). There is no
+management UI here; roles, employees, PINs and devices are managed through the service
+(``scripts/pos_staff.py`` until the portal pages exist).
+
+POST /api/pos/roster
+    {"device_id": "p5-till-1", "device_secret": "<hex>", "known_version": "<sha256>|null"}
+    -> {"version", "generated_at", "auth": {...}, "policy": {...}, "employees": [...]}
+       or {"version": "<same>", "unchanged": true} when known_version still matches
+
+Every call carries ``X-Loyverse-Account: <owner id>`` (the Loyverse account the terminal is
+signed into); rows are stored and read per account (src/models/pos_accounts.py). The roster and
+registration calls also carry ``"account": {"id", "business_name", "email"}``.
+
+POST /api/pos/devices/register
+    {"device_id": "redmi-a3-gate", "device_secret": "<hex the terminal made>", "model": "Xiaomi 23129RAA4G",
+     "account": {"id": "123456", "business_name": "The Farmyard Park", "email": "..."}}
+    -> {"status": "ok", "device_id": ...}   (403 for a revoked device)
+
+POST /api/pos/events
+    {"device_id": ..., "device_secret": ..., "events": [
+        {"uuid": "...", "event": "login", "employee_id": 3, "employee_name": "Thandi",
+         "occurred_at": 1760000000000, "detail": {...}}, ...]}
+    -> {"status": "ok", "accepted": n, "rejected": m}
+    A "refund_disputed" event is also mirrored into pos_refund_disputes (src/services/pos_disputes.py).
+
+POST /api/pos/receipts/cashiers  receipt number -> cashier from every terminal's sale / refund_receipt
+    {"device_id", "device_secret", "after": <received_at cursor, epoch ms>}
+    -> {"cashiers": [{"receipt_no": "#1-0020", "employee_id": 2, "name": "Ray", "at": ms}], "cursor": ms, "more": bool}
+
+POST /api/pos/reentry/check      may a re-entry pass be issued? (src/services/pos_reentry.py)
+    {"device_id", "device_secret", "plate": "CJ90587", "typed": false, "heads": 3}
+    -> {"allowed", "reason", "requires_manager", "anchor_heads", "anchors", "anchor_scanned", "flags"}
+
+POST /api/pos/plates/status      has this car already entered today? (one paid entry a day; then re-entries only)
+    {"device_id", "device_secret", "plate": "CJ90587"}
+    -> {"plate", "entered", "entries": [{"receipt_id", "heads", "closed_at", "time"}], "open_passes"}
+POST /api/pos/reentry/status     is this open pass still good to admit?
+    {"device_id", "device_secret", "plate": "CJ90587", "sync_id": 1791889697637449}
+    -> {"valid", "reason", "heads", "heads_cap", "over_cap", "flags"}
+
+POST /api/pos/groups/status        a group's day before its payment is taken (src/services/pos_group_payments.py)
+    {"device_id", "device_secret", "barcode": "2001873757556", "group": "The Ark Educare Centre"}
+    -> {"barcode", "group_name", "visit_date", "heads_today", "heads_converted", "paid_today_cents", "payments": [...]}
+    The payment itself arrives as a "group_payment" audit event (stage "paid") and is mirrored into pos_group_payments.
+POST /api/pos/conversions/lookup   today's paid sales a group conversion may take (src/services/pos_conversions.py)
+    {"device_id", "device_secret", "plate": "CJ90587"}  or  {..., "open_sync_id": 1791889697637449}  (the slip QR)
+    -> {"receipts": [{"receipt_id", "printed_no", "plate", "closed_at", "heads", "amount", "payment_summary", ...}],
+        "others": [{"printed_no", "closed_at", "reason"}]}
+
+POST /api/pos/conversions/record   the conversion, recorded BEFORE the refund runs (it waives the refund window)
+    {"device_id", "device_secret", "conversion_id": "<uuid>", "receipt_id", "group": "Sunnyside Primary", "heads": 4,
+     "amount_cents", "person": {...}, "employee_id", "employee_name", "recorded_at": ms, ...}
+    -> {"status": "ok", "conversion_id", "stage"}   or 409 {"error": "<why, for the manager>"}
+    Later stages (refunded, admitted, refund_failed, cancelled) come in as "group_conversion" audit events.
+"""
+
+from flask import Blueprint, jsonify, request
+
+from src.services.pos_accounts import PosAccountService
+from src.services.pos_conversions import ConversionRefused, PosConversionService
+from src.services.pos_group_payments import PosGroupPaymentService
+from src.services.pos_reentry import ReentryService
+from src.services.pos_staff import DeviceAuthError, PosStaffService
+from web.routes.bridge_auth import require_bridge_token
+
+pos_staff_bp = Blueprint("pos_staff", __name__)
+
+
+def _device_or_403(service, payload):
+    try:
+        return service.authenticate_device(payload.get("device_id"), payload.get("device_secret")), None
+    except DeviceAuthError:
+        return None, (jsonify({"error": "device not authorised"}), 403)
+
+
+@pos_staff_bp.route("/pos/roster", methods=["POST"])
+@require_bridge_token
+def roster():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    PosAccountService.seen(payload.get("account"), device["device_id"])
+    body = service.roster_for_device(device)
+    known = payload.get("known_version")
+    if isinstance(known, str) and known == body["version"]:
+        return jsonify({"version": body["version"], "unchanged": True})
+    return jsonify(body)
+
+
+@pos_staff_bp.route("/pos/events", methods=["POST"])
+@require_bridge_token
+def events():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    accepted, rejected = service.record_events(device, payload.get("events"))
+    return jsonify({"status": "ok", "accepted": accepted, "rejected": rejected})
+
+
+@pos_staff_bp.route("/pos/receipts/cashiers", methods=["POST"])
+@require_bridge_token
+def receipt_cashiers():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        after = int(payload.get("after") or 0)
+    except (TypeError, ValueError):
+        after = 0
+    entries, cursor, more = PosStaffService.cashiers(after)
+    return jsonify({"status": "ok", "cashiers": entries, "cursor": cursor, "more": more})
+
+
+@pos_staff_bp.route("/pos/reentry/check", methods=["POST"])
+@require_bridge_token
+def reentry_check():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    verdict = ReentryService().check_issue(payload.get("plate"), bool(payload.get("typed")), payload.get("heads"))
+    return jsonify(verdict)
+
+
+@pos_staff_bp.route("/pos/reentry/status", methods=["POST"])
+@require_bridge_token
+def reentry_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    verdict = ReentryService().check_return(payload.get("plate"), payload.get("sync_id"))
+    return jsonify(verdict)
+
+
+@pos_staff_bp.route("/pos/plates/status", methods=["POST"])
+@require_bridge_token
+def plates_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    return jsonify({"status": "ok", **ReentryService().plate_status(payload.get("plate"))})
+
+
+@pos_staff_bp.route("/pos/devices/register", methods=["POST"])
+@require_bridge_token
+def register_device():
+    payload = request.get_json(force=True, silent=True) or {}
+    try:
+        device = PosStaffService.register_device(
+            payload.get("device_id"), payload.get("device_secret"), str(payload.get("model") or "")
+        )
+    except DeviceAuthError:
+        return jsonify({"error": "device not authorised"}), 403
+    PosAccountService.seen(payload.get("account"), device["device_id"])
+    return jsonify({"status": "ok", "device_id": device["device_id"]})
+
+
+@pos_staff_bp.route("/pos/groups/status", methods=["POST"])
+@require_bridge_token
+def groups_status():
+    payload = request.get_json(force=True, silent=True) or {}
+    device, error = _device_or_403(PosStaffService(), payload)
+    if error:
+        return error
+    barcode = str(payload.get("barcode") or "").strip()
+    if not barcode:
+        return jsonify({"error": "barcode required"}), 400
+    return jsonify({"status": "ok", **PosGroupPaymentService().status(barcode, payload.get("group"))})
+
+
+@pos_staff_bp.route("/pos/conversions/lookup", methods=["POST"])
+@require_bridge_token
+def conversions_lookup():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        result = PosConversionService().lookup(plate=payload.get("plate"), open_sync_id=payload.get("open_sync_id"))
+    except ConversionRefused as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"status": "ok", **result})
+
+
+@pos_staff_bp.route("/pos/conversions/record", methods=["POST"])
+@require_bridge_token
+def conversions_record():
+    payload = request.get_json(force=True, silent=True) or {}
+    service = PosStaffService()
+    device, error = _device_or_403(service, payload)
+    if error:
+        return error
+    try:
+        row = PosConversionService().record(device, payload)
+    except ConversionRefused as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"status": "ok", "conversion_id": row["conversion_id"], "stage": row["stage"]})

@@ -45,7 +45,7 @@ calendar and the day view (arrivals, gate payments) only.
   recipient to `DEV_MAIL_RECIPIENT` and prefixes the subject with
   `[DEV → original@address]`. Never bypass this.
 
-## 4. Data model (migration `migrations/007-booking-system.sql`, owned by lead)
+## 4. Data model (migration `migrations/015-booking-system.sql`; the booking migrations follow the bridge's 007–014 since the 30 Oct 2026 merge)
 
 All tables `utf8mb4_unicode_ci`, InnoDB, `created_at`/`updated_at` TIMESTAMPs.
 
@@ -118,7 +118,7 @@ proforma_sent_at, invoice_sent_at, final_invoice_sent_at, ticket_sent_at (WhatsA
 ticket_emailed_at, confirmed_at, completed_at, cancelled_at, lapsed_at  (DATETIME NULL)
 created_by INT NULL
 ```
-Migration 016 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
+Migration 024 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
 `arrived_at`, `price_overridden`, `price_override_reason` and
 `legacy_sheet_row`; gazebos return later as invoice line items.
 
@@ -202,7 +202,7 @@ enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorde
    ├──cancel──▶ cancelled        ├──hold expires──▶ lapsed (button, suggested by queue)  ├──visit day: arrivals recorded──▶ completed
    └──(any)                      └──cancel──▶ cancelled                                 └──no arrivals after date──▶ no_show
 ```
-- **Requests (migration 011, Oct 26):** the public form creates `requested`
+- **Requests (migration 019, Oct 26):** the public form creates `requested`
   (not on the calendar). `POST /bookings/:id/accept` applies edits, moves it to
   `enquiry` and sends the proforma in the same step; `POST …/decline` →
   `declined`. `requested → enquiry | proforma_sent | declined | cancelled`;
@@ -377,7 +377,7 @@ arrivals), `lapsing` (hold_expires_on ≤ today + 3, unpaid).
 
 ## 9. Seeds (migration)
 
-Price tiers 2026/27 since migration 016 (code, price): `children_weekday` 70,
+Price tiers 2026/27 since migration 024 (code, price): `children_weekday` 70,
 `group_weekday` 95, `group_weekend` 95, `public_weekend` 115, `peak` 130. The
 older tiers (school parents, adult small/large, pensioners, church, non-profit
 kids/adults) were mapped onto these and deleted; `scripts/reprice_bookings.py`
@@ -441,7 +441,7 @@ only **Tax invoice** (`INV1703`). A booking counts **visitors** only.
 
 ### Contacts: on the day (29 Oct 2026)
 
-`booking_contacts.on_site` (migration 012) marks the one contact who is on
+`booking_contacts.on_site` (migration 020) marks the one contact who is on
 site and in charge on the day. `PATCH /api/v1/bookings/:id/contacts/:cid`
 takes `{name?, mobile?, on_site?}`; setting `on_site: true` clears it on the
 booking's other contacts; returns `{items}`. `GET /api/v1/bookings/:id` now
@@ -458,6 +458,6 @@ on_site?}`; the mobile is normalised; editing the booking's own contact
 updates `contact_name`/`contact_email`/`contact_mobile`; a new mobile on a
 primary contact resends the ticket to it when `ticket_sent_at` is set, and
 the response carries that result as `whatsapp`. `payments.kind` gains
-`cash_deposit` (migration 014). `GET …/payment-search` returns only credits
+`cash_deposit` (migration 022). `GET …/payment-search` returns only credits
 not on any booking and no larger than the outstanding balance plus R 1 000.
 

@@ -155,3 +155,31 @@ BOOKING_FORM_HOST = os.getenv("BOOKING_FORM_HOST", "bookings.farmyardpark.co.za"
 # (the logo in the header, document links). No trailing slash.
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://admin.farmyardpark.co.za").rstrip("/")
 BOOKING_FORM_URL = os.getenv("BOOKING_FORM_URL", f"https://{BOOKING_FORM_HOST}/request")
+
+# POS staff alerts (src/services/pos_alerts.py): a saved ticket reduced by a role that can take
+# payments, and any cash sale that follows one. Comma-separated e-mail addresses, sent through
+# the SMTP settings above; unset = the inventory NOTIFICATION_RECIPIENTS (config/constants.py),
+# "-" = no e-mail. POS_ALERT_WHATSAPP (27821234567) sends the same text over WhatsApp as well,
+# which only reaches a number that has messaged the business in the last 24 hours (Meta's rule
+# for free-form text).
+# Staff audit alerts (reductions, voids) go ONLY to these addresses; unset or "-" = no e-mail.
+# Never route them to NOTIFICATION_RECIPIENTS: that list includes the managers the alerts concern.
+_pos_alert_emails = os.getenv("POS_ALERT_EMAILS")
+POS_ALERT_EMAILS = (
+    None if _pos_alert_emails is None
+    else [e.strip() for e in _pos_alert_emails.split(",") if e.strip() and e.strip() != "-"]
+)
+POS_ALERT_WHATSAPP = os.getenv("POS_ALERT_WHATSAPP", "").strip()
+# Time of day after which a re-entry pass is dead (HH:MM, local). 18:00 is the park's rule;
+# override only for a test, and put it back.
+POS_REENTRY_CUTOFF = os.getenv("POS_REENTRY_CUTOFF", "18:00").strip() or "18:00"
+# The cut-off a training terminal (not on the live account) works to; the default is no cut-off
+# to speak of, so training can happen after hours.
+POS_REENTRY_CUTOFF_TRAINING = os.getenv("POS_REENTRY_CUTOFF_TRAINING", "23:59").strip() or "23:59"
+# The shop till (Aronium) posts its sales with this token (X-Shop-Token); empty = feed refused.
+SHOP_FEED_TOKEN = os.getenv("SHOP_FEED_TOKEN", "").strip()
+# A re-entry pass cannot be admitted this soon after it was issued (a manager's PIN overrides at the terminal).
+try:
+    POS_REENTRY_COOLDOWN_MINUTES = max(0, int(os.getenv("POS_REENTRY_COOLDOWN_MINUTES", "5")))
+except ValueError:
+    POS_REENTRY_COOLDOWN_MINUTES = 5

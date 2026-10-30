@@ -1,0 +1,25 @@
+-- Migration: the shop till's sales, as the Aronium module sends them (one row per saved document)
+CREATE TABLE IF NOT EXISTS shop_sales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    till VARCHAR(64) NOT NULL DEFAULT '',
+    till_id VARCHAR(32) NOT NULL DEFAULT '',
+    document_uid VARCHAR(64) NOT NULL,
+    document_number VARCHAR(40) NOT NULL DEFAULT '',
+    type_code VARCHAR(16) NOT NULL DEFAULT '',
+    type_name VARCHAR(64) NOT NULL DEFAULT '',
+    created_at DATETIME NULL,
+    received_at DATETIME(3) NOT NULL,
+    total_cents INT NOT NULL DEFAULT 0,
+    user_name VARCHAR(100) NOT NULL DEFAULT '',
+    register_name VARCHAR(100) NOT NULL DEFAULT '',
+    customer_name VARCHAR(255) NOT NULL DEFAULT '',
+    payment_summary VARCHAR(160) NOT NULL DEFAULT '',
+    card_trans_no VARCHAR(64) NULL,
+    card_auth_no VARCHAR(32) NULL,
+    card_masked VARCHAR(32) NULL,
+    items_count INT NOT NULL DEFAULT 0,
+    document JSON NOT NULL,
+    UNIQUE KEY uq_shop_sales_document (till_id, document_uid),
+    KEY idx_shop_sales_created (created_at),
+    KEY idx_shop_sales_received (received_at)
+);

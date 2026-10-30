@@ -11,7 +11,8 @@ POST /api/stock/availability
 
 POST /api/stock/availability   (bulk: the bridge refreshes its cache in the background)
     {"products": [{"product_id": 123, "variant_id": null}, ...], "exclude_sync_id": 0}
-    -> {"results": [{"product_id": 123, "variant_id": null, "held_elsewhere": 5000}, ...]}
+    -> {"results": [{"product_id": 123, "variant_id": null, "held_elsewhere": 5000,
+                     "held_by": [{"name": "CJ90587", "sync_id": 1791889697637449, "quantity": 5000}]}, ...]}
 
 Quantities are Loyverse's integer thousandths (1 unit = 1000).
 """
@@ -58,11 +59,16 @@ def _bulk(payload):
             continue
         variant_id = p.get("variant_id")
         keys.append((product_id, int(variant_id) if variant_id not in (None, "") else None))
-    held = OpenTicket.held_quantities(keys, exclude_sync_id=exclude_sync_id)
+    held = OpenTicket.held_by(keys, exclude_sync_id=exclude_sync_id)
     return jsonify(
         {
             "results": [
-                {"product_id": pid, "variant_id": vid, "held_elsewhere": held.get((pid, vid), 0)}
+                {
+                    "product_id": pid,
+                    "variant_id": vid,
+                    "held_elsewhere": sum(h["quantity"] for h in held.get((pid, vid), [])),
+                    "held_by": [{"name": h["name"], "sync_id": h["sync_id"], "quantity": h["quantity"]} for h in held.get((pid, vid), [])],
+                }
                 for pid, vid in keys
             ]
         }

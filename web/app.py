@@ -4,7 +4,8 @@ The portal is a React single-page app (built into web/static/app) talking to
 the JSON API under /api/v1. Flask also keeps three legacy surfaces alive:
 
 - the WhatsApp ticket endpoints under /group-bookings (Meta fetches the image),
-- the Loyverse bridge webhooks (/open_tickets/*, /api/stock/*), token-protected,
+- the Loyverse bridge webhooks and terminal calls (/open_tickets/*, /api/stock/*,
+  /api/pos/*), token-protected, and the Aronium shop till feed (/api/shop/sales),
 - the legacy /api/groups receipts feed.
 
 Access control is deny-by-default and lives in ``_register_guard``:
@@ -28,6 +29,8 @@ from web.config import Config
 from web.routes.api import api_bp
 from web.routes.groups import groups_bp
 from web.routes.open_tickets import open_tickets_bp
+from web.routes.pos_staff import pos_staff_bp
+from web.routes.shop import shop_bp
 from web.routes.stock import stock_bp
 
 logger = setup_logger("web")
@@ -43,7 +46,7 @@ PUBLIC_ENDPOINTS = {
     "groups.get_ticket_image",
 }
 # Blueprints that authenticate themselves with the bridge token.
-BRIDGE_BLUEPRINTS = ("open_tickets.", "stock.")
+BRIDGE_BLUEPRINTS = ("open_tickets.", "stock.", "pos_staff.")
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -66,6 +69,8 @@ def create_app(config_class=Config):
     app.register_blueprint(groups_bp)
     app.register_blueprint(open_tickets_bp)
     app.register_blueprint(stock_bp, url_prefix="/api")
+    app.register_blueprint(pos_staff_bp, url_prefix="/api")
+    app.register_blueprint(shop_bp)
 
     _register_api(app)
     _register_guard(app)

@@ -188,6 +188,101 @@ held in other open tickets (`OpenTicket.held_quantity`, thousandths). All three 
 require `Authorization: Bearer $BRIDGE_TOKEN` when `BRIDGE_TOKEN` is set
 (`web/routes/bridge_auth.py`).
 
+### POS staff (self-managed employees for the Loyverse bridge)
+
+Migration 007 adds `pos_roles`, `pos_employees`, `pos_devices`, `pos_auth_params` and the
+append-only `pos_employee_events`. The terminals no longer trust Loyverse's employee list:
+`POST /api/pos/roster` hands each enrolled terminal the active employees with their role's
+permissions and a *per-device verifier* (HMAC-SHA256 of the stored PBKDF2 PIN hash under that
+device's secret), and `POST /api/pos/events` receives the terminal's audit trail (login,
+logout, login_failed, locked, approval, approval_failed, permission_denied, sale, refund,
+ticket_replaced, ticket_reduced, ticket_voided, ...; de-duplicated on the event's UUID). Both need the bridge token **and** the
+device's `device_id` + `device_secret` in the body (`PosStaffService.authenticate_device`,
+constant time; unknown, revoked or wrong = 403). PINs are never stored or sent: the service
+hashes them (`hash_pin`, site salt in `pos_auth_params`), the unique index on `pin_hash`
+makes shared PINs impossible, and `validate_pin` rejects runs and repeats. Permission names are
+Loyverse's `ACCESS_*` enum plus `bridge.*` (`PERMISSIONS`; `bridge.apps` shows the Apps drawer entry,
+`bridge.manual_plate` / `bridge.replace_ticket_items` gate bridge features). Reductions of saved
+tickets are flagged, not blocked: Loyverse's own `ACCESS_DELETE_OPEN_RECEIPT` ("Void saved items in
+open tickets") decides who may remove a saved line, and `src/services/pos_alerts.py` (hooked into
+`record_events`) e-mails `POS_ALERT_EMAILS` only (never `NOTIFICATION_RECIPIENTS`, which includes the managers; unset = no e-mail; optionally WhatsApps `POS_ALERT_WHATSAPP`) when a role
+that can take payments reduces a ticket, when a cash sale follows any reduction within ten minutes,
+and on every `ticket_voided`; `PosStaffService.reductions_report` / `pos-staff reductions` lists
+reductions. Deleting a whole ticket is blocked for everyone but a Manager: Loyverse checks the same
+permission for it, so the terminal additionally requires `bridge.void_ticket` (Manager only) on
+that check and on the manager PIN that follows a refusal.
+
+**Re-entry passes** (`src/services/pos_reentry.py`, agreed 2026-10-13): a re-entry is any ticket
+carrying the Re-Entry line (SKU 10001, R0). The terminal asks `POST /api/pos/reentry/check` before
+saving one (plate, typed?, heads) and `POST /api/pos/reentry/status` before admitting one. Rules:
+an anchor is required (a closed, unrefunded sale today for the plate with heads > 0); scan-or-stricter
+(a scanned anchor refuses a typed re-entry); one open pass per plate; heads up to the anchor's paid
+heads, more needs the Manager PIN on the terminal (`bridge.approve_reentry`) and is flagged; bearer,
+single use, dead at the cut-off (18:00). A refund of the anchor voids open passes (full) or lowers the
+cap (partial). Heads = Visitor (SKU 10000) quantity + any line in the Online Tickets / Groups
+categories; `src/services/pos_items.py` (`ItemKinds`) is the one mapping of SKUs and category ids to
+meanings, served to terminals in the roster `policy.items` block (category *names* resolved from the
+live account, refreshed every 15 min) and checked against the account by `pos-staff items`.
+Anchors come from `open_tickets_history` closed rows (lines carry `sku` + `category` from bridge
+build 32 on), refunds from `refund` audit events. Events `reentry_issued` / `reentry_admitted` /
+`reentry_refused`; flagged issues alert (owner only); `pos-staff reentries` is the report.
+**Who sold what** (agreed 2026-10-15): Loyverse only knows its own employees, so every receipt it
+stores and syncs carries the account owner ("Owner"); the real cashier is the bridge's. Sale and
+refund receipts report `receipt_no` ("#1-0020") in the `sale` / `refund_receipt` events, and
+`POST /api/pos/receipts/cashiers` (`PosStaffService.cashiers`, cursor on `received_at`) hands every
+terminal the receipt -> cashier list so the receipt screen, list and reprints show the cashier who
+closed the sale on any terminal. The portal's sales pages must take the cashier from these events,
+never from Loyverse's receipt employee field or API.
+
+**Group entries** (agreed 2026-10-15): a group ticket reaches a terminal's ticket only by scanning
+the group's barcode (the Groups category is hidden from the sales list, search and dropdown; a tap
+is refused and logged as `permission_denied`), and before such a ticket is saved or printed the
+terminal captures the person entering: a driving licence card (PDF417, decoded on the terminal
+with the published keys), a smart ID card (plain-text PDF417) or a green ID book (the number
+only), or the driver's name typed and flagged manual (nothing else is typed). The name line
+("TJ NKOSI" from a licence, "THANDI JANE NKOSI" from a smart ID, "ID 8001015009087" from an ID
+book) goes onto the ticket comment and the slip; the `group_entry` event carries group, plate,
+heads, `person` (the name line), surname, names, ID number, source and the manual flag. `pos-staff groups` lists them; the portal's group page
+should show them. ID numbers live only in the audit (owner/manager access), never on slips.
+
+**Group conversions** (`src/services/pos_conversions.py`, migration 009, agreed 2026-10-15): a car
+that belongs to a group but arrived without the group ticket pays public price; later the same day a
+manager converts it on the terminal (drawer entry "Convert to group", permission
+`bridge.convert_group`): group ticket scanned, receipt named by slip QR or licence disc, the person
+entering captured as at the entrance, then Loyverse's own refund screen where the Visitor quantity
+chosen is the heads. The terminal calls `POST /api/pos/conversions/record` BEFORE the refund runs
+(the row is what waives the refund window), refunds, then closes a group ticket for the heads.
+`POST /api/pos/conversions/lookup` finds today's paid sales by plate or slip sync id. Later stages
+(`refunded`, `admitted`, `refund_failed`, `cancelled`) arrive as `group_conversion` audit events and
+are mirrored by `record_events`. `PosConversionService.heads_for_group(name, day)` is what a group
+invoice adds at the group rate. A conversion's refund does not void re-entry passes
+(`pos_reentry._refunds_from_audit` skips `detail.conversion`). CLI: `pos-staff conversions`,
+`pos-staff roles grant Manager bridge.convert_group` for roles created before this.
+
+**Refund disputes** (`src/services/pos_disputes.py`, migration 008, agreed 2026-10-15): when a
+terminal cannot refund a sale (the refund window has closed, or a card refund failed inside it) it
+offers "Log a refund dispute" instead of a dead end: the customer's name, e-mail, mobile and their
+own words, with the sale attached (receipt, plate, time, register, cashier, amount, card, AddPay
+code), and prints the receipt again with a dispute block and a number (`RD-XXXXXX`, made on the
+terminal) for the customer to keep. It arrives as the `refund_disputed` audit event and is mirrored
+into `pos_refund_disputes` by `record_events`; `PosDisputeService` lists, shows (with every terminal
+event for that plate that day: reductions, voids, re-entries), resolves (open / investigating /
+approved / declined / refunded) and replies (e-mail when an address was given). A dispute never
+moves money. Owner-only, like the audit: the history it carries must not reach managers. Alert to
+`POS_ALERT_EMAILS` on each new dispute. `pos-staff disputes` is the CLI. A card payment can only be
+refunded on the terminal that took it; the terminal says which one, that is a prompt, not a dispute.
+`bridge.admit_reentry` (Ticket Marshal) lets a role without Accept payments close a pass and
+nothing else: the terminal hands Loyverse a copy of the role with Accept payments so its payment
+screen opens, but answers the permission itself only while the current ticket is a live pure pass,
+and offers only the Re-Entry payment type (payment types Online / Group / Re-Entry, kind "Other",
+must exist in the Loyverse account; the API cannot create them). `DEFAULT_ROLES` (Manager,
+Payment Marshal, Ticket Marshal) are created on the first roster. Manage everything with `pos-staff` (`scripts/pos_staff.py`: roles, employees,
+PINs, device enrolment, events) until the portal pages exist; UI work goes through
+`PosStaffService`, never straight to the tables. Terminals enrol themselves: on first use
+the bridge makes its own secret and `POST /api/pos/devices/register` records it under the device's
+name (a revoked device stays revoked); `pos-staff devices enrol` remains for a fixed secret placed in
+`staff.deviceSecret`.
+
 ## Commands
 
 Normal operation is through Docker — see `DEPLOYMENT.md` for the full story.
@@ -282,3 +377,57 @@ Pre-existing; don't "fix" them as a side effect of unrelated work, but be aware:
   not when a query string is appended (`inventory?variant_ids=…`).
 - Class name `NoticifationService` and the README filename `REAMDE.md` are both
   misspelled; renaming either is a deliberate change, not a drive-by.
+
+**Which Loyverse account a row came from** (`src/models/pos_accounts.py`, `src/services/pos_accounts.py`,
+migration 010, built 2026-10-16): every terminal request carries `X-Loyverse-Account: <owner id>`
+(the Loyverse account the terminal is signed into); the bridge auth binds it to the request and
+the models stamp it on every row they write (`account_value()`) and filter every read by it
+(`account_clause()`), so a training terminal on the throwaway account only ever sees and touches
+its own rows. Outside a terminal request the scope is the *live* account: the one in
+`pos_accounts` whose e-mail matches the merchant behind `LOYVERSE_API_KEY` (`GET /merchant`,
+cached ten minutes, re-checked at every registration/roster call; `POS_LIVE_ACCOUNT` pins it).
+Alerts fire only for the live account. `pos-staff accounts` lists accounts with row counts and
+terminals; `accounts purge <id> --yes` deletes one account's rows; `accounts adopt <id>` tags
+rows written before the tag existed; `--account <id>|all` before any listing changes its scope.
+
+**Live vs training staff** (migration 011, 2026-10-16): `pos_employees.scope` is `live` or
+`training`; a roster request from a terminal on the live account gets the live employees, any
+other terminal the training ones (`roster_for_device`). Everyone from before the migration is
+training; `pos-staff employees add` makes live logins unless `--training`; `--random-pin` prints a
+policy-passing PIN once (run it with stdout to a private file when the PIN must not be seen).
+The re-entry cut-off (`POS_REENTRY_CUTOFF`, 18:00 on prod) applies to the live account only;
+training terminals get `POS_REENTRY_CUTOFF_TRAINING` (default 23:59) in their roster policy and
+in the server-side checks (`ItemKinds.for_request()` / `scoped(live)`), so training can run after hours.
+**Sales-screen categories per role** (migration 012, 2026-10-16): `pos_roles.sales_categories` (JSON
+list of names, NULL = all) travels to the terminals as each employee's `categories` in the roster;
+the bridge trims the category dropdown to it (Public always offered, Groups scan-only, and the
+All items / Favourites / Discounts entries dropped for everyone). Prod: Manager and Owner all,
+Payment Marshal = Public, Online Tickets, Gazeebos; Ticket Marshal = Public, Online Tickets.
+`pos-staff roles set-categories <role> --category ... | --all-categories`.
+
+**Group payments** (`src/services/pos_group_payments.py`, migration 013, 2026-10-16): a terminal takes
+a group's payment only after scanning the group's ticket (Ray: no manual choice anywhere group-related,
+"not even me as the owner can add a count or payment to a group without scanning a ticket"). Before
+charging it asks `POST /api/pos/groups/status` (heads admitted under the ticket today from the closed
+R0 group sales, heads converted, what was paid already); the closed receipt comes in as a
+`group_payment` audit event whose `paid` stage is mirrored into `pos_group_payments`, keyed by the
+barcode. Permission `bridge.group_payment` (Manager default; granted to Manager and Owner on prod).
+`pos-staff group-payments [--days 7]`. The policy block now carries `group_payment_sku` (10037).
+
+**One paid entry per car per day + re-entry cool-down** (2026-10-16 evening, Ray): `POST /api/pos/plates/status`
+(`ReentryService.plate_status`) answers whether a plate already has a live paid entry today (the
+re-entry anchors); the terminals refuse a second non-re-entry sale for the plate and point at
+re-entry (lines added to a returning re-entry stay allowed). `check_return` refuses a pass admitted
+within `POS_REENTRY_COOLDOWN_MINUTES` (default 5) of being issued (`"cooldown": true`; a manager's
+PIN overrides at the terminal); the roster policy carries `reentry_cooldown_minutes`.
+
+**Held stock counts a Loyverse ticket once** (2026-10-16 late): a ticket synced to two terminals is
+fed by both, each under its own `ticket_id` (unique key), with the same `sync_id`; `OpenTicket.held_by`
+/ `held_quantity` now count one hold per `sync_id` (newest row wins). Before this the pay point saw
+"4 held in other open tickets" for a ticket's own seats and the stock guard refused Admit and Save.
+
+**Shop till feed** (2026-10-19): the Aronium module on the office laptop posts every saved document to
+`POST /api/shop/sales` with header `X-Shop-Token` = `SHOP_FEED_TOKEN` (.env on prod; the token is in
+`/home/ray/private/shop-feed-token-20261019.txt` on Ray's PC). Rows land in `shop_sales` (migration 014,
+`src/models/shop_sales.py`, upsert on till_id + document uid); `/shop/till` shows the day live (10 s poll,
+`/shop/till/data`). A body with `"probe": true` only checks the token (the module's "Test back office").

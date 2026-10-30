@@ -1,0 +1,667 @@
+"""Self-managed POS staff: roles, employees, PINs, enrolled terminals and the audit trail.
+
+The patched Loyverse terminals (the "bridge") no longer trust Loyverse's employee list.
+Each terminal downloads a roster from here, verifies PINs against it on the device (so the
+gate keeps working offline), enforces the role's permissions, and reports every login,
+failed PIN, lockout, approval, denied action, sale, refund and ticket rewrite back.
+
+How a PIN is protected
+    pin_hash     = PBKDF2-HMAC-SHA256(pin, site salt, ITERATIONS)       stored here, never sent
+    verifier(d)  = HMAC-SHA256(secret of device d, pin_hash)             sent only to device d
+    A terminal computes the same two steps from the digits typed and compares in constant
+    time. A roster stolen from one terminal is useless anywhere else, a leaked bridge token
+    alone yields nothing, and revoking a device (``PosDevice.set_active``) ends its access.
+    Four-digit PINs cannot survive an offline brute force whatever the hash, so the terminal
+    keeps its roster encrypted under its hardware keystore and locks the PIN pad after
+    repeated failures; the server records every failure for review.
+
+PIN policy
+    Digits only, PIN_MIN_LENGTH..PIN_MAX_LENGTH long, no single repeated digit and no straight
+    run (1234, 4321). Two employees can never share a PIN: the unique index on pin_hash
+    rejects the second one, and ``PinInUseError`` says so without saying whose it is.
+"""
+
+import hashlib
+import hmac
+import json
+import secrets
+import uuid
+from datetime import datetime, timedelta
+
+import pymysql
+
+from src.models.pos_staff import (
+    UNSET,
+    PosAuthParams,
+    PosDevice,
+    PosEmployee,
+    PosEmployeeEvent,
+    PosReductionReport,
+    PosRole,
+)
+from src.services.pos_alerts import ReductionAlerts
+from src.services.pos_items import ItemKinds
+from src.utils.logging import setup_logger
+
+logger = setup_logger("pos_staff")
+
+ALGORITHM = "pbkdf2-sha256"
+ITERATIONS = 50_000
+KEY_LENGTH = 32
+SALT_BYTES = 16
+DEVICE_SECRET_BYTES = 32
+
+PIN_MIN_LENGTH = 4
+PIN_MAX_LENGTH = 6
+
+# What a terminal does after wrong PINs: lock the pad for LOCKOUT_SECONDS, doubling each
+# further round of MAX_ATTEMPTS failures.
+MAX_ATTEMPTS = 5
+LOCKOUT_SECONDS = 30
+
+# Loyverse's own employee permissions: the names of the k9.d0$a enum in POS 2.63, which is
+# what the app asks for before a restricted action. The terminal answers those checks from
+# the employee's role here instead of from Loyverse's employee list. The POS-side ones are:
+#   ACCESS_LPOS                          may log in to the POS at all (every role needs it)
+#   ACCESS_ACCEPT_PAYMENTS               take payments
+#   ACCESS_REFUND                        refund a receipt
+#   ACCESS_DISCOUNT                      apply discounts
+#   ACCESS_LPOS_CHANGE_TAXES_DURING_SALE change taxes on a sale
+#   ACCESS_VIEW_RECEIPTS                 open the receipts list
+#   ACCESS_REPRINT_RECEIPTS              reprint receipts
+#   ACCESS_NOT_MY_OPENED_RECEIPTS        open tickets saved by other employees
+#   ACCESS_DELETE_OPEN_RECEIPT           "Void saved items in open tickets" (also deletes a ticket)
+#   ACCESS_VIEW_CURRENT_SHIFT            see the shift report
+#   ACCESS_OPEN_CASH_DRAWER              open the drawer without a sale
+#   ACCESS_VIEW_COST_POS                 see item costs
+#   ACCESS_LPOS_CLIENT_RECALL            look up customers
+#   ACCESS_CONNECT_PRINTERS              "Change settings" (the Settings screen)
+#   ACCESS_LPOS_SUPPORT                  support menu
+# The rest are back-office rights Loyverse never checks on the terminal.
+LOYVERSE_PERMISSIONS = [
+    "ACCESS_ACCEPT_PAYMENTS",
+    "ACCESS_BACK_CLIENT_RECALLS",
+    "ACCESS_BACK_OFFICE",
+    "ACCESS_BACK_OFFICE_SUPPORT",
+    "ACCESS_CLIENTS",
+    "ACCESS_CONNECT_PRINTERS",
+    "ACCESS_DELETE_OPEN_RECEIPT",
+    "ACCESS_DISCOUNT",
+    "ACCESS_EDIT_LOYALTY",
+    "ACCESS_EDIT_PROFILE",
+    "ACCESS_EDIT_WARE",
+    "ACCESS_FOR_ALL_MERCHANTS",
+    "ACCESS_LPOS",
+    "ACCESS_LPOS_CHANGE_TAXES_DURING_SALE",
+    "ACCESS_LPOS_CLIENT_RECALL",
+    "ACCESS_LPOS_SUPPORT",
+    "ACCESS_MERCHANTS",
+    "ACCESS_NOT_MY_OPENED_RECEIPTS",
+    "ACCESS_OPEN_CASH_DRAWER",
+    "ACCESS_OUTLETS",
+    "ACCESS_REFUND",
+    "ACCESS_REPORTS",
+    "ACCESS_REPRINT_RECEIPTS",
+    "ACCESS_TAXES",
+    "ACCESS_VIEW_COST_POS",
+    "ACCESS_VIEW_CURRENT_SHIFT",
+    "ACCESS_VIEW_RECEIPTS",
+    "ACCESS_WARES",
+]
+
+# Permissions for the bridge's own features. Reductions of saved tickets are not gated by the
+# bridge: Loyverse's own ACCESS_DELETE_OPEN_RECEIPT decides who may remove a saved line, and
+# the back office alerts on them (src/services/pos_alerts.py). Deleting a whole ticket is the
+# exception: Loyverse checks the same permission for it, so the terminal additionally requires
+# bridge.void_ticket there (and on the manager PIN that follows a refusal).
+BRIDGE_PERMISSIONS = [
+    # REPLACE ITEMS on the "ticket already open" screen (rewrites a saved ticket's lines)
+    "bridge.replace_ticket_items",
+    # type a registration instead of scanning the licence disc
+    "bridge.manual_plate",
+    # the Apps entry in the terminal's drawer (Loyverse has no permission for it)
+    "bridge.apps",
+    # delete a whole open ticket (a ticket, once created, must end in a sale or a manager's void)
+    "bridge.void_ticket",
+    # issue a re-entry pass at the exit (anchored to a paid admission; src/services/pos_reentry.py)
+    "bridge.issue_reentry",
+    # approve a re-entry for more heads than the admission paid for (the manager PIN on the terminal)
+    "bridge.approve_reentry",
+    # admit a re-entry pass without Accept payments: the only ticket such a role may ever close
+    "bridge.admit_reentry",
+    # Convert to group in the terminal's drawer: move a public sale onto a group ticket, refund
+    # outside the window on the strength of the record (src/services/pos_conversions.py)
+    "bridge.convert_group",
+    # take a group's payment: only after scanning the group's ticket (never a pick from a list)
+    "bridge.group_payment",
+]
+
+PERMISSIONS = LOYVERSE_PERMISSIONS + BRIDGE_PERMISSIONS
+
+# Starter roles, created the first time the roster is built on an empty pos_roles table.
+# The permission names are Loyverse's; the back office UI shows them under Loyverse's labels.
+GATE_BRIDGE_PERMISSIONS = ["bridge.manual_plate", "bridge.replace_ticket_items", "bridge.issue_reentry"]
+PAYMENT_MARSHAL_PERMISSIONS = [
+    "ACCESS_LPOS",
+    "ACCESS_ACCEPT_PAYMENTS",  # Accept payments
+    "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
+    *GATE_BRIDGE_PERMISSIONS,
+]
+# Which sales-screen categories each default role may pick from (None / absent = all of them;
+# Public is always offered; Groups is scan-only for everyone). Ray, 2026-10-16.
+DEFAULT_SALES_CATEGORIES = {
+    "Payment Marshal": ["Public", "Online Tickets", "Gazeebos"],
+    "Ticket Marshal": ["Public", "Online Tickets"],
+}
+
+DEFAULT_ROLES = [
+    (
+        "Manager",
+        "Takes payments and runs the gate: receipts, refunds, items, settings, shift report",
+        [
+            *PAYMENT_MARSHAL_PERMISSIONS,
+            "ACCESS_VIEW_RECEIPTS",  # View all receipts
+            "ACCESS_REPRINT_RECEIPTS",  # Reprint and resend receipts
+            "ACCESS_REFUND",  # Perform refunds
+            "ACCESS_EDIT_WARE",  # Manage items
+            "ACCESS_VIEW_COST_POS",  # View cost of items
+            "ACCESS_CONNECT_PRINTERS",  # Change settings
+            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets
+            "ACCESS_VIEW_CURRENT_SHIFT",  # View shift report
+            "bridge.void_ticket",  # delete a whole open ticket
+            "bridge.approve_reentry",  # re-entry for more heads than were paid for
+            "bridge.convert_group",  # move a public sale onto a group ticket later in the day
+            "bridge.group_payment",  # take a group's payment against its scanned ticket
+        ],
+    ),
+    (
+        "Payment Marshal",
+        "Takes payments on open tickets; cannot void saved items without a manager's PIN",
+        PAYMENT_MARSHAL_PERMISSIONS,
+    ),
+    (
+        "Ticket Marshal",
+        "Opens and corrects tickets at the gate on a phone; no payments, cannot delete a ticket",
+        [
+            "ACCESS_LPOS",
+            "ACCESS_NOT_MY_OPENED_RECEIPTS",  # Manage all open tickets
+            "ACCESS_DELETE_OPEN_RECEIPT",  # Void saved items in open tickets (lines, not whole tickets)
+            *GATE_BRIDGE_PERMISSIONS,
+            "bridge.admit_reentry",  # close a re-entry pass (and nothing else) at the gate
+        ],
+    ),
+]
+
+EVENT_NAMES = {
+    "login",
+    "logout",
+    "login_failed",
+    "locked",
+    "approval",
+    "approval_failed",
+    "permission_denied",
+    "sale",
+    "refund",
+    "ticket_saved",
+    "ticket_replaced",
+    "ticket_printed",
+    "ticket_reduced",
+    "ticket_voided",
+    "reentry_issued",
+    "reentry_admitted",
+    "reentry_refused",
+    # a refund the terminal could not do, logged with the customer's details for the owner
+    "refund_disputed",
+    # a refund receipt was written (its receipt_no and the refunding employee)
+    "refund_receipt",
+    # a person entered under a group ticket: who (licence / smart ID / ID book / typed), which group, which plate
+    "group_entry",
+    "group_payment",
+    "group_conversion",
+    "ticket_opened",
+    "roster_refreshed",
+}
+
+
+class PinPolicyError(ValueError):
+    """The PIN does not meet the policy; the message is safe to show."""
+
+
+class PinInUseError(ValueError):
+    """Another employee already has this PIN."""
+
+
+# Who a terminal may log in: the live account's terminals get the live staff, every other
+# terminal (the throwaway training account) the training staff.
+SCOPES = ("live", "training")
+
+
+class DeviceAuthError(Exception):
+    """The terminal is unknown, revoked, or presented the wrong secret."""
+
+
+class PosStaffService:
+    def __init__(self, auth_params=None):
+        self._params = auth_params
+
+    # ---- PIN hashing ----------------------------------------------------------------------
+
+    def auth_params(self):
+        if self._params is None:
+            params = PosAuthParams.get()
+            if params is None:
+                params = PosAuthParams.create(
+                    ALGORITHM, secrets.token_bytes(SALT_BYTES).hex(), ITERATIONS, KEY_LENGTH
+                )
+            self._params = params
+        return self._params
+
+    @staticmethod
+    def validate_pin(pin):
+        if not isinstance(pin, str) or not pin.isdigit() or not pin.isascii():
+            raise PinPolicyError("The PIN must be digits only")
+        if not PIN_MIN_LENGTH <= len(pin) <= PIN_MAX_LENGTH:
+            raise PinPolicyError(f"The PIN must be {PIN_MIN_LENGTH} to {PIN_MAX_LENGTH} digits")
+        if len(set(pin)) == 1:
+            raise PinPolicyError("The PIN cannot be one repeated digit")
+        steps = {int(b) - int(a) for a, b in zip(pin, pin[1:])}
+        if steps in ({1}, {-1}):
+            raise PinPolicyError("The PIN cannot be a straight run of digits")
+
+    def hash_pin(self, pin):
+        """Hex PBKDF2 of a PIN that already passed ``validate_pin``."""
+        params = self.auth_params()
+        if params["algorithm"] != ALGORITHM:
+            raise RuntimeError(f"unsupported PIN hash algorithm {params['algorithm']}")
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            pin.encode("ascii"),
+            bytes.fromhex(params["salt_hex"]),
+            int(params["iterations"]),
+            dklen=int(params["key_length"]),
+        )
+        return digest.hex()
+
+    @staticmethod
+    def verifier(device_secret_hex, pin_hash_hex):
+        """What a terminal compares against: HMAC of the stored hash under the device secret."""
+        return hmac.new(
+            bytes.fromhex(device_secret_hex), bytes.fromhex(pin_hash_hex), hashlib.sha256
+        ).hexdigest()
+
+    def check_pin(self, pin):
+        """Server-side verification (for the back office's own use); the active employee or None."""
+        try:
+            self.validate_pin(pin)
+        except PinPolicyError:
+            return None
+        employee = PosEmployee.get_by_pin_hash(self.hash_pin(pin))
+        return employee if employee and employee["active"] else None
+
+    # ---- roles and employees --------------------------------------------------------------
+
+    @staticmethod
+    def validate_permissions(permissions):
+        unknown = sorted(set(permissions) - set(PERMISSIONS))
+        if unknown:
+            raise ValueError(f"unknown permissions: {', '.join(unknown)}")
+        return sorted(set(permissions))
+
+    def create_role(self, name, description, permissions):
+        return PosRole.create(name.strip(), description.strip(), self.validate_permissions(permissions))
+
+    def update_role(self, role_id, name=None, description=None, permissions=None, sales_categories=UNSET):
+        if permissions is not None:
+            permissions = self.validate_permissions(permissions)
+        if sales_categories is not UNSET and sales_categories is not None:
+            sales_categories = [str(c).strip() for c in sales_categories if str(c).strip()]
+        return PosRole.update(role_id, name=name, description=description, permissions=permissions,
+                              sales_categories=sales_categories)
+
+    def ensure_default_roles(self):
+        if PosRole.all():
+            return
+        for name, description, permissions in DEFAULT_ROLES:
+            PosRole.create(name, description, permissions, sales_categories=DEFAULT_SALES_CATEGORIES.get(name))
+
+    def create_employee(self, name, role_id, pin=None, loyverse_merchant_id=None, scope="live"):
+        name = name.strip()
+        if not name:
+            raise ValueError("name required")
+        if PosRole.get(role_id) is None:
+            raise ValueError("unknown role")
+        if scope not in SCOPES:
+            raise ValueError(f"scope must be one of {', '.join(SCOPES)}")
+        pin_hash = None
+        if pin is not None:
+            self.validate_pin(pin)
+            pin_hash = self.hash_pin(pin)
+        try:
+            return PosEmployee.create(name, role_id, pin_hash=pin_hash, loyverse_merchant_id=loyverse_merchant_id, scope=scope)
+        except pymysql.err.IntegrityError as e:
+            raise PinInUseError("That PIN is already in use") from e
+
+    @staticmethod
+    def set_scope(employee_id, scope):
+        if scope not in SCOPES:
+            raise ValueError(f"scope must be one of {', '.join(SCOPES)}")
+        if PosEmployee.get(employee_id) is None:
+            raise ValueError("unknown employee")
+        return PosEmployee.update(employee_id, scope=scope)
+
+    @classmethod
+    def random_pin(cls):
+        """A PIN that passes the policy, for a login whose PIN must not pass through anyone's hands."""
+        while True:
+            pin = "".join(secrets.choice("0123456789") for _ in range(PIN_MIN_LENGTH))
+            try:
+                cls.validate_pin(pin)
+                return pin
+            except PinPolicyError:
+                continue
+
+    def set_pin(self, employee_id, pin):
+        self.validate_pin(pin)
+        try:
+            return PosEmployee.set_pin_hash(employee_id, self.hash_pin(pin))
+        except pymysql.err.IntegrityError as e:
+            raise PinInUseError("That PIN is already in use") from e
+
+    @staticmethod
+    def clear_pin(employee_id):
+        return PosEmployee.set_pin_hash(employee_id, None)
+
+    @staticmethod
+    def set_active(employee_id, active):
+        return PosEmployee.update(employee_id, active=active)
+
+    # ---- terminals -------------------------------------------------------------------------
+
+    @staticmethod
+    def enrol_device(device_id, note=""):
+        """Returns (device row, secret hex). The secret is shown once; it is also the only copy
+        a terminal gets, so re-enrolling replaces it."""
+        device_id = device_id.strip()
+        if not device_id or len(device_id) > 64:
+            raise ValueError("device_id must be 1-64 characters")
+        secret_hex = secrets.token_bytes(DEVICE_SECRET_BYTES).hex()
+        return PosDevice.enrol(device_id, secret_hex, note.strip()), secret_hex
+
+    @staticmethod
+    def register_device(device_id, secret_hex, model=""):
+        """Self-enrolment: a terminal presents the secret it made for itself. A new device is
+        recorded active; a known active device may re-key (its storage was reset); a revoked
+        device stays revoked. Returns the device row or raises DeviceAuthError."""
+        if not isinstance(device_id, str) or not isinstance(secret_hex, str):
+            raise DeviceAuthError("device not authorised")
+        device_id = device_id.strip()
+        secret_hex = secret_hex.strip().lower()
+        if not device_id or len(device_id) > 64 or len(secret_hex) != DEVICE_SECRET_BYTES * 2:
+            raise DeviceAuthError("device not authorised")
+        try:
+            bytes.fromhex(secret_hex)
+        except ValueError as e:
+            raise DeviceAuthError("device not authorised") from e
+        existing = PosDevice.get_by_device_id(device_id)
+        if existing is not None and not existing["active"]:
+            raise DeviceAuthError("device not authorised")
+        note = (existing or {}).get("note") or ""
+        if model and model not in note:
+            note = (note + " " if note else "") + f"self-enrolled ({str(model)[:40]})"
+        return PosDevice.enrol(device_id, secret_hex, note[:255])
+
+    @staticmethod
+    def authenticate_device(device_id, secret_hex):
+        """The device row, or DeviceAuthError. Same cost and message whatever went wrong."""
+        if not isinstance(device_id, str) or not isinstance(secret_hex, str):
+            raise DeviceAuthError("device not authorised")
+        device = PosDevice.get_by_device_id(device_id[:64])
+        stored = device["secret_hex"] if device else "0" * (DEVICE_SECRET_BYTES * 2)
+        matches = hmac.compare_digest(stored.encode("ascii"), secret_hex.strip().lower().encode("ascii"))
+        if device is None or not device["active"] or not matches:
+            raise DeviceAuthError("device not authorised")
+        return device
+
+    # ---- roster ----------------------------------------------------------------------------
+
+    def roster_for_device(self, device):
+        """The payload a terminal caches: employees with per-device verifiers, the hash
+        parameters and the lockout policy. ``version`` changes whenever anything in it does."""
+        self.ensure_default_roles()
+        params = self.auth_params()
+        # The live account's terminals log in the live staff; any other terminal the training staff.
+        from src.models.pos_accounts import current_account
+        from src.services.pos_accounts import PosAccountService
+
+        scope = "live" if PosAccountService.is_live_account(current_account()) else "training"
+        employees = []
+        for e in PosEmployee.roster(scope):
+            employees.append(
+                {
+                    "id": e["id"],
+                    "name": e["name"],
+                    "role": e["role_name"],
+                    "permissions": e["permissions"],
+                    "categories": e["categories"],
+                    "verifier": self.verifier(device["secret_hex"], e["pin_hash"]),
+                }
+            )
+        body = {
+            "auth": {
+                "algorithm": params["algorithm"],
+                "salt": params["salt_hex"],
+                "iterations": int(params["iterations"]),
+                "length": int(params["key_length"]),
+            },
+            "policy": {
+                "max_attempts": MAX_ATTEMPTS,
+                "lockout_seconds": LOCKOUT_SECONDS,
+                # What the Loyverse items mean, so every terminal and this back office agree
+                # (re-entry line, which lines count as heads, the re-entry cut-off time).
+                "items": ItemKinds.current().scoped(scope == "live").policy(),
+            },
+            "employees": employees,
+            "scope": scope,
+        }
+        canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        body["version"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        body["generated_at"] = datetime.now().isoformat(timespec="seconds")
+        PosDevice.touch(device["device_id"], roster_version=body["version"])
+        return body
+
+    # ---- audit trail -------------------------------------------------------------------------
+
+    @staticmethod
+    def record_events(device, events):
+        """Store the terminal's events; returns (accepted, rejected). Malformed entries are
+        rejected individually so one bad event never blocks the batch."""
+        accepted = rejected = 0
+        received_at = datetime.now()
+        # A training terminal's events are stored like any other but never alert the owner.
+        from src.services.pos_accounts import PosAccountService
+
+        alerts_wanted = PosAccountService.owner_facing()
+        for evt in events if isinstance(events, list) else []:
+            try:
+                event_uuid = str(uuid.UUID(str(evt["uuid"])))
+                event = str(evt["event"])
+                if event not in EVENT_NAMES:
+                    raise ValueError(event)
+                occurred_at = datetime.fromtimestamp(int(evt["occurred_at"]) / 1000)
+                employee_id = evt.get("employee_id")
+                employee_id = int(employee_id) if employee_id not in (None, "") else None
+                employee_name = evt.get("employee_name")
+                employee_name = str(employee_name)[:100] if employee_name else None
+                detail = evt.get("detail")
+                if detail is not None and not isinstance(detail, dict):
+                    raise ValueError("detail")
+            except (KeyError, TypeError, ValueError, OverflowError):
+                rejected += 1
+                continue
+            inserted = PosEmployeeEvent.record(
+                event_uuid, device["device_id"], employee_id, employee_name, event, detail, occurred_at, received_at
+            )
+            accepted += 1
+            if inserted and event == "refund_disputed":
+                try:
+                    from src.services.pos_disputes import PosDisputeService
+
+                    PosDisputeService.record(
+                        device["device_id"], employee_id, employee_name, event_uuid, detail or {}, occurred_at
+                    )
+                except Exception as e:  # the audit row is kept; the mirror can be rebuilt from it
+                    logger.error(f"mirroring dispute {event_uuid} failed: {e}")
+            if inserted and event == "group_payment":
+                try:
+                    from src.services.pos_group_payments import PosGroupPaymentService
+
+                    PosGroupPaymentService.on_event(device["device_id"], employee_id, employee_name, event_uuid, detail or {}, occurred_at)
+                except Exception as e:  # the audit row is kept; the payment can be replayed from it
+                    logger.error(f"mirroring group payment {event_uuid} failed: {e}")
+            if inserted and event == "group_conversion":
+                try:
+                    from src.services.pos_conversions import PosConversionService
+
+                    PosConversionService().on_event(device["device_id"], employee_id, employee_name, detail or {}, occurred_at)
+                except Exception as e:  # the audit row is kept; the stage can be replayed from it
+                    logger.error(f"mirroring conversion event {event_uuid} failed: {e}")
+            if inserted and alerts_wanted:
+                try:
+                    ReductionAlerts.default().consider(
+                        device["device_id"], employee_id, employee_name, event, detail or {}, occurred_at
+                    )
+                except Exception as e:  # an alert must never cost the terminal its upload
+                    logger.error(f"pos alert failed for {event} {event_uuid}: {e}")
+        PosDevice.touch(device["device_id"])
+        return accepted, rejected
+
+    # ---- who sold what: receipt -> cashier for the terminals -------------------------------------
+
+    CASHIER_EVENTS = ("sale", "refund_receipt")
+
+    @classmethod
+    def cashiers(cls, received_after_ms, limit=2000):
+        """Receipt number -> cashier, from every terminal's sale and refund_receipt events received
+        after the cursor (epoch ms). The terminals pull this every roster period so a receipt closed
+        on one terminal shows its real cashier on the others (Loyverse's own copy says the owner).
+        Returns (entries, cursor_ms, more)."""
+        cursor = datetime.fromtimestamp(max(0, int(received_after_ms or 0)) / 1000)
+        rows = PosEmployeeEvent.received_after(cursor, cls.CASHIER_EVENTS, limit)
+        entries = []
+        last = None
+        for row in rows:
+            detail = row["detail"] or {}
+            number = detail.get("receipt_no")
+            if number:
+                entries.append({
+                    "receipt_no": str(number),
+                    "employee_id": row["employee_id"],
+                    "name": row["employee_name"] or "",
+                    "at": int(row["occurred_at"].timestamp() * 1000),
+                })
+            last = row["received_at"]
+        cursor_ms = int(last.timestamp() * 1000) if last else int(received_after_ms or 0)
+        return entries, cursor_ms, len(rows) >= limit
+
+    # ---- reductions report -------------------------------------------------------------------
+
+    @staticmethod
+    def _ticket_value(receipt_json):
+        """(units, value) of a ticket version: units = summed quantities (thousandths), value = sum of
+        quantity x price in Loyverse's raw units; voided lines are skipped. Only comparability
+        between versions of the same ticket matters here."""
+        units = value = 0
+        for line in (receipt_json or {}).get("items") or []:
+            if line.get("voided"):
+                continue
+            qty = int(line.get("quantity") or 0)
+            units += qty
+            value += qty * int(line.get("price") or 0)
+        return units, value
+
+    @staticmethod
+    def _lines_by_id(receipt_json):
+        return {
+            str(line.get("item_id")): line
+            for line in (receipt_json or {}).get("items") or []
+            if not line.get("voided")
+        }
+
+    def reductions_report(self, since, until=None, follow_minutes=10):
+        """Every time a saved ticket's value went down, who did it, and whether a sale on that
+        ticket followed within ``follow_minutes`` (a cash one is the pattern to look at).
+
+        Reads the back office's own ticket history (every version the terminals reported, each
+        carrying ``_bridge.staff``) and the staff audit trail, so this covers managers and
+        approved reductions too, not just refused ones.
+        """
+        until = until or datetime.now()
+        versions = PosReductionReport.ticket_versions(since - timedelta(hours=12), until)
+        events = PosReductionReport.staff_events(since, until + timedelta(minutes=follow_minutes))
+        sales_by_sync = {}
+        marks_by_sync = {}
+        for evt in events:
+            detail = evt.get("detail") or {}
+            sync_id = detail.get("open_sync_id") if evt["event"] == "sale" else detail.get("sync_id")
+            if sync_id in (None, ""):
+                continue
+            bucket = sales_by_sync if evt["event"] == "sale" else marks_by_sync
+            bucket.setdefault(int(sync_id), []).append(evt)
+
+        rows = []
+        previous = {}
+        for v in versions:
+            receipt = v["receipt_json"] or {}
+            ticket_id = v["ticket_id"]
+            units, value = self._ticket_value(receipt)
+            prev = previous.get(ticket_id)
+            previous[ticket_id] = (units, value, receipt)
+            if prev is None or v["observed_at"] < since:
+                continue
+            prev_units, prev_value, prev_receipt = prev
+            if value >= prev_value and units >= prev_units:
+                continue
+            before, after = self._lines_by_id(prev_receipt), self._lines_by_id(receipt)
+            removed = [
+                {"name": l.get("name"), "quantity": int(l.get("quantity") or 0) - int(after.get(k, {}).get("quantity") or 0)}
+                for k, l in before.items()
+                if int(l.get("quantity") or 0) > int(after.get(k, {}).get("quantity") or 0)
+            ]
+            bridge = receipt.get("_bridge") or {}
+            sync_id = receipt.get("sync_id")
+            window_end = v["observed_at"] + timedelta(minutes=follow_minutes)
+            sales = [
+                {
+                    "at": s["occurred_at"],
+                    "employee_id": s["employee_id"],
+                    "employee_name": s["employee_name"],
+                    "payments": [p.get("name") for p in (s.get("detail") or {}).get("payments") or []],
+                    "amount_paid": sum(int(p.get("amount_paid") or 0) for p in (s.get("detail") or {}).get("payments") or []),
+                }
+                for s in sales_by_sync.get(int(sync_id), []) if sync_id not in (None, "")
+                if v["observed_at"] <= s["occurred_at"] <= window_end
+            ]
+            approvals = [
+                {"event": m["event"], "at": m["occurred_at"], "approved_by": (m.get("detail") or {}).get("approved_by_name")}
+                for m in marks_by_sync.get(int(sync_id), []) if sync_id not in (None, "")
+                if abs((m["occurred_at"] - v["observed_at"]).total_seconds()) <= 120
+            ]
+            rows.append(
+                {
+                    "at": v["observed_at"],
+                    "ticket_id": ticket_id,
+                    "sync_id": sync_id,
+                    "ticket": receipt.get("name"),
+                    "device": bridge.get("device"),
+                    "staff": bridge.get("staff"),
+                    "units_before": prev_units,
+                    "units_after": units,
+                    "value_before": prev_value,
+                    "value_after": value,
+                    "removed": removed,
+                    "approvals": approvals,
+                    "sales_after": sales,
+                    "cash_sale_after": any("cash" in (p or "").lower() for s in sales for p in s["payments"]),
+                }
+            )
+        return rows

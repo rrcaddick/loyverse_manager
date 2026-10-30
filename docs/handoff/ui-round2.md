@@ -65,10 +65,10 @@ it lands.
     name, email and mobile and removes a contact; a new number on a primary
     contact gets the ticket again at once when one has gone out. Edits to
     the booking's own contact keep the booking's fields in step.
-- **Backend**: `booking_contacts.on_site` (migration 012) with
+- **Backend**: `booking_contacts.on_site` (migration 020) with
   `PATCH /bookings/:id/contacts/:cid {name?, mobile?, on_site?}`; the
   primary contact is mirrored into booking_contacts on create and update
-  (migration 013 backfilled; upsert promotes the role); `GET /bookings/:id`
+  (migration 021 backfilled; upsert promotes the role); `GET /bookings/:id`
   carries `contacts` and `pops`. See `docs/booking-system.md`.
 
 Not done here, for the next screens: the old `rail.tsx` and `money-card.tsx`
@@ -98,7 +98,7 @@ Contacts have their heading above the table, full width. The note box says
 only "Add a note…". The header's ⋯ menu holds only the status changes nothing
 else offers (lapsed, no-show, reopen) and is absent when there are none;
 "mark proforma sent" and "mark completed" are gone. A booking contact with
-no email now exists as a contacts row too (migration 015: email optional),
+no email now exists as a contacts row too (migration 023: email optional),
 so On site can be ticked on any booking.
 
 Fourth pass (29 Oct, late): the Bookings list's bucket badges count bookings
@@ -138,7 +138,7 @@ ever showed; covered by `tests/payments/test_payment_search.py`.
 
 ## Schema pass (30 Oct 2026)
 
-Agreed with the owner and done in one pass (migration 016, `scripts/reprice_bookings.py`):
+Agreed with the owner and done in one pass (migration 024, `scripts/reprice_bookings.py`):
 
 - **Dropped** arrival time, vehicles, gazebos (back later as invoice line
   items), arrived-at and the manual arrivals source; the sheet row moved to
@@ -163,4 +163,14 @@ Agreed with the owner and done in one pass (migration 016, `scripts/reprice_book
   the R95 group rate) sits on the public rate less R15 for review.
 - To confirm: the default school-holiday ranges (10 Dec 2026 to 12 Jan 2027,
   25 Mar to 5 Apr 2027) against the Western Cape calendar.
+
+Merged `main` (the Loyverse bridge line, 5249f24) into `feat/booking` on 30 Oct
+2026: the POS tables (`pos_*`, `open_tickets_*` with closed receipts,
+`shop_sales` for the Aronium till) and their terminal routes (`/api/pos/*`,
+`/api/shop/sales`) are now on this branch. The booking migrations were
+renumbered 015–024 to follow the bridge's 007–014; the old single-account
+login and the AdminLTE layout went (the Shop till page's data endpoint stays
+for a React page later). Local databases that had the booking migrations under
+their old names need their `schema_migrations` rows renamed; production never
+ran them.
 
