@@ -666,6 +666,11 @@ def apply_plan(plan: BookingPlan, *, today: date | None = None) -> dict:
     for address in sorted(plan.learned_emails):
         if booking_contact.upsert(int(bid), address, role="learned", source="migration"):
             stats["contacts"] += 1
+    # The sheet has no email column: the booking's own address is the person who
+    # wrote to us most on its conversations. Without it nothing can be sent.
+    learned_primary = primary_email_for(plan)
+    if learned_primary:
+        stats["primary_email"] = set_primary_email(int(bid), learned_primary)
     if plan.chosen:
         em.insert_booking_event(
             int(bid), "updated",
@@ -673,3 +678,74 @@ def apply_plan(plan: BookingPlan, *, today: date | None = None) -> dict:
             {"threads": [str(t) for t in plan.chosen], "learned": sorted(plan.learned_emails)}, None,
         )
     return stats
+
+
+def primary_email_for(plan: BookingPlan) -> str | None:
+    """The most frequent outside sender on the chosen conversations (the
+    customer, not us, not a robot); the reference-matched conversations count
+    double, since the proforma thread is the one the customer answers from."""
+    from collections import Counter
+
+    own = own_addresses()
+    tally: Counter = Counter()
+    for thrid in plan.chosen:
+        tp = plan.threads[thrid]
+        weight = 2 if "reference" in tp.why else 1
+        for fm in tp.messages:
+            if fm.direction != "inbound":
+                continue
+            address = (fm.parsed.from_email or "").lower().strip()
+            if not address or is_own(address, own) or mt.is_noreply(address):
+                continue
+            tally[address] += weight
+    return tally.most_common(1)[0][0] if tally else None
+
+
+def set_primary_email(booking_id: int, address: str) -> bool:
+    """Give the booking its email address when it has none (mirrors the primary
+    contact and records the change). False when it already had one."""
+    from src.models import booking as booking_model
+    from src.services import booking as booking_service
+
+    row = booking_model.get(booking_id)
+    if row is None or row.get("contact_email"):
+        return False
+    try:
+        booking_service.update_booking(booking_id, {"contact_email": address}, None)
+    except booking_service.BookingError as exc:
+        logger.warning(f"Learned address rejected for {row.get('reference')}: {exc}")
+        return False
+    return True
+
+
+def learn_primary_emails() -> dict:
+    """Backfill for bookings stored without an address: the most frequent
+    inbound sender across the conversations linked to each."""
+    from collections import Counter
+
+    from src.models.base import query
+
+    own = own_addresses()
+    out = {"bookings": 0, "learned": 0, "still_without": []}
+    for b in query("SELECT id, reference FROM bookings WHERE contact_email IS NULL ORDER BY visit_date, id"):
+        out["bookings"] += 1
+        rows = query(
+            """
+            SELECT m.from_email, m.match_method
+            FROM email_messages m JOIN email_threads t ON t.gmail_thrid = m.gmail_thrid
+            WHERE t.booking_id = %s AND m.direction = 'inbound'
+            """,
+            (int(b["id"]),),
+        )
+        tally: Counter = Counter()
+        for r in rows:
+            address = (r.get("from_email") or "").lower().strip()
+            if not address or is_own(address, own) or mt.is_noreply(address):
+                continue
+            tally[address] += 2 if "reference" in str(r.get("match_method") or "") else 1
+        if tally and set_primary_email(int(b["id"]), tally.most_common(1)[0][0]):
+            out["learned"] += 1
+        else:
+            out["still_without"].append(b["reference"])
+    return out
+

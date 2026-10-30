@@ -85,8 +85,9 @@ def _contains_phrase(haystack_norm: str, phrase_norm: str) -> bool:
 def wipe_workspace() -> dict:
     """Local reset: everything derived from the previous import goes."""
     counts = {}
-    for table in ("email_thread_notes", "email_threads", "email_attachments", "email_messages",
-                  "mail_sync_state", "bounce_backs", "booking_reminders", "form_submissions"):
+    for table in ("enquiries", "pop_candidates", "mail_skipped", "email_thread_notes", "email_threads",
+                  "email_attachments", "email_messages", "mail_sync_state", "bounce_backs",
+                  "booking_reminders", "form_submissions"):
         counts[table] = execute(f"DELETE FROM {table}")
     counts["bank_matches_reset"] = execute(
         """
