@@ -261,9 +261,9 @@ function ContactLine({ contact }: { contact: BookingContact }) {
       </span>
       <span className="flex min-w-0 flex-wrap gap-x-3 text-sm text-muted-foreground">
         {contact.email ? (
-          <a href={`mailto:${contact.email}`} className="truncate underline-offset-3 hover:underline">
+          <Link to="?tab=conversation" className="truncate underline-offset-3 hover:underline" title="Open the conversation">
             {contact.email}
-          </a>
+          </Link>
         ) : null}
         {contact.mobile ? (
           <a href={`tel:+${contact.mobile}`} className="tabular underline-offset-3 hover:underline">

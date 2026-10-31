@@ -663,8 +663,9 @@ def apply_plan(plan: BookingPlan, *, today: date | None = None) -> dict:
         em.link_thread(int(thrid), int(bid), "migration:" + "+".join(tp.why)[:19])
         em.set_booking_thread_if_null(int(bid), int(thrid))
         conversations.refresh_thread(int(thrid))
+    names = names_on_plan(plan)
     for address in sorted(plan.learned_emails):
-        if booking_contact.upsert(int(bid), address, role="learned", source="migration"):
+        if booking_contact.upsert(int(bid), address, name=names.get(address), role="learned", source="migration"):
             stats["contacts"] += 1
     # The sheet has no email column: the booking's own address is the person who
     # wrote to us most on its conversations. Without it nothing can be sent.
@@ -678,6 +679,56 @@ def apply_plan(plan: BookingPlan, *, today: date | None = None) -> dict:
             {"threads": [str(t) for t in plan.chosen], "learned": sorted(plan.learned_emails)}, None,
         )
     return stats
+
+
+def names_on_plan(plan: BookingPlan) -> dict[str, str]:
+    """address -> display name, from the From, To and Cc headers of the chosen
+    conversations; a name the person wrote themselves (as sender) wins."""
+    names: dict[str, str] = {}
+    as_sender: set[str] = set()
+    for thrid in plan.chosen:
+        for fm in plan.threads[thrid].messages:
+            sender = (fm.parsed.from_email or "").lower()
+            if sender and fm.parsed.from_name and sender not in as_sender:
+                names[sender] = fm.parsed.from_name
+                as_sender.add(sender)
+            for address, name in (fm.parsed.names or {}).items():
+                if address not in names:
+                    names[address] = name
+    return names
+
+
+def learn_contact_names() -> dict:
+    """Backfill: every learned contact without a name takes the name a stored
+    message gives for that address (as sender first, then from To or Cc)."""
+    from src.models import booking_contact
+    from src.models.base import execute, query
+
+    out = {"nameless": 0, "named": 0}
+    for c in query("SELECT id, email FROM booking_contacts WHERE role = 'learned' AND (name IS NULL OR name = '')"):
+        out["nameless"] += 1
+        row = query(
+            "SELECT from_name FROM email_messages WHERE from_email = %s AND from_name IS NOT NULL AND from_name <> '' ORDER BY sent_at DESC LIMIT 1",
+            (c["email"],),
+        )
+        name = row[0]["from_name"] if row else None
+        if not name:
+            for m in query(
+                "SELECT participant_names FROM email_messages WHERE participant_names IS NOT NULL AND JSON_CONTAINS_PATH(participant_names, 'one', %s) LIMIT 1",
+                ('$."' + c["email"].replace('"', "") + '"',),
+            ):
+                pn = m["participant_names"]
+                if isinstance(pn, str):
+                    import json
+
+                    pn = json.loads(pn)
+                name = (pn or {}).get(c["email"])
+                break
+        if name:
+            execute("UPDATE booking_contacts SET name = %s WHERE id = %s", (name[:255], c["id"]))
+            out["named"] += 1
+    del booking_contact
+    return out
 
 
 def primary_email_for(plan: BookingPlan) -> str | None:

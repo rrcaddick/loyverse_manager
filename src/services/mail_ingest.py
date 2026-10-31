@@ -110,6 +110,8 @@ class ParsedMessage:
     attachments: list[ParsedAttachment] = field(default_factory=list)
     skipped_attachments: list[dict] = field(default_factory=list)
     headers: dict[str, str] = field(default_factory=dict)
+    # address (lower case) -> display name as written in From, To or Cc
+    names: dict[str, str] = field(default_factory=dict)
 
     @property
     def participant_emails(self) -> set[str]:
@@ -134,6 +136,18 @@ def _header(msg: EmailMessage, name: str) -> str | None:
         return None
     text = re.sub(r"\s+", " ", text).strip()
     return text or None
+
+
+def _display_name(realname: str | None, addr: str) -> str | None:
+    """A header's display name worth keeping: not the address itself or its
+    local part, not a bare quoted address, trimmed to the column."""
+    text = re.sub(r"\s+", " ", (realname or "").strip().strip('"').strip("'")).strip()
+    if not text or "@" in text:
+        return None
+    local = addr.split("@", 1)[0].lower()
+    if text.lower() in (local, local.replace(".", " "), local.replace("_", " ")):
+        return None
+    return text[:255]
 
 
 def _addresses(msg: EmailMessage, name: str) -> list[tuple[str, str]]:
@@ -300,8 +314,15 @@ def parse_message(raw: bytes, internaldate: datetime | None = None) -> ParsedMes
 
     from_pairs = _addresses(msg, "From")
     from_name, from_email = (from_pairs[0] if from_pairs else (None, None))
-    to = [a for _n, a in _addresses(msg, "To")]
-    cc = [a for _n, a in _addresses(msg, "Cc")]
+    to_pairs = _addresses(msg, "To")
+    cc_pairs = _addresses(msg, "Cc")
+    to = [a for _n, a in to_pairs]
+    cc = [a for _n, a in cc_pairs]
+    names: dict[str, str] = {}
+    for realname, addr in [*from_pairs, *to_pairs, *cc_pairs]:
+        clean = _display_name(realname, addr)
+        if clean and addr not in names:
+            names[addr] = clean
     subject = (_header(msg, "Subject") or "")[:SUBJECT_MAX]
 
     body_plain = body_html = None
@@ -385,6 +406,7 @@ def parse_message(raw: bytes, internaldate: datetime | None = None) -> ParsedMes
         from_email=from_email,
         to=to,
         cc=cc,
+        names=names,
         subject=subject,
         date=_parse_date(msg, internaldate),
         text=text,
@@ -895,6 +917,7 @@ def build_row(item: dict, parsed: ParsedMessage, folder: str) -> dict:
         "from_email": parsed.from_email,
         "to_emails": parsed.to,
         "cc_emails": parsed.cc,
+        "participant_names": parsed.names or None,
         "subject": parsed.subject or None,
         "sent_at": parsed.date or to_sast_naive(item.get("internaldate")),
         "snippet": make_snippet(split["new_text"]) or parsed.snippet or None,

@@ -132,9 +132,9 @@ function ContactCard({ booking }: { booking: BookingDetail }) {
         <div className="flex items-center gap-2">
           <Mail aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           {booking.contact_email ? (
-            <a href={`mailto:${booking.contact_email}`} className="truncate text-foreground underline-offset-3 hover:underline">
+            <Link to="?tab=conversation" className="truncate text-foreground underline-offset-3 hover:underline" title="Open the conversation">
               {booking.contact_email}
-            </a>
+            </Link>
           ) : (
             <button type="button" onClick={() => actions.openEdit("contact")} className="text-amber-text underline-offset-3 hover:underline">
               No email — add one

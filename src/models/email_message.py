@@ -33,7 +33,7 @@ INACTIVE_BOOKING_STATUSES = ("cancelled", "lapsed")
 VIEWS = ("review", "all", "unmatched", "booking")
 REVIEW_STATUSES = ("none", "pending", "resolved", "not_booking")
 
-JSON_COLUMNS = ("to_emails", "cc_emails", "attachments_meta")
+JSON_COLUMNS = ("to_emails", "cc_emails", "participant_names", "attachments_meta")
 
 INSERT_COLUMNS = (
     "gmail_msgid",
@@ -49,6 +49,7 @@ INSERT_COLUMNS = (
     "from_email",
     "to_emails",
     "cc_emails",
+    "participant_names",
     "subject",
     "sent_at",
     "snippet",

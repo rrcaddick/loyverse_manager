@@ -98,6 +98,14 @@ def _learn_contacts(booking_id: int, row: dict) -> None:
     line (the office is often copied in, and so are colleagues). Learned
     contacts are for the record; only a primary receives correspondence."""
     sender = (row.get("from_email") or "").lower()
+    names = row.get("participant_names") or {}
+    if isinstance(names, str):
+        try:
+            import json
+
+            names = json.loads(names) or {}
+        except ValueError:
+            names = {}
     seen: set[str] = set()
     for address, name in [(sender, row.get("from_name"))] + [
         (str(a).lower(), None) for a in list(row.get("to_emails") or []) + list(row.get("cc_emails") or [])
@@ -105,7 +113,7 @@ def _learn_contacts(booking_id: int, row: dict) -> None:
         if not address or address in seen or _is_own(address) or mt.is_noreply(address):
             continue
         seen.add(address)
-        booking_contact.upsert(booking_id, address, name=name, role="learned", source="inbound")
+        booking_contact.upsert(booking_id, address, name=name or names.get(address), role="learned", source="inbound")
 
 
 def _now() -> datetime:

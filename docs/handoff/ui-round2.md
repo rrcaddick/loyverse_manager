@@ -176,3 +176,13 @@ for a React page later). Local databases that had the booking migrations under
 their old names need their `schema_migrations` rows renamed; production never
 ran them.
 
+Migration run of 30 Oct (local): 69 bookings, 66 with their mail, 45
+enquiries, 27 deposits matched. Fixed on the back of it: the booking's own
+email is learned from its conversations (`migration.primary_email_for`,
+backfill `learn_primary_emails`); a booking that gains its email keeps one
+primary contact row (`booking_contact.adopt_email_on_primary`, duplicates
+folded); display names from From, To and Cc are kept on the message
+(migration 025) and given to learned contacts; the email on a contact opens
+the Conversation tab, not a mail client. The sheet is read live from Google
+Drive (the "FY Bookings" sheet, first tab) rather than a downloaded copy.
+

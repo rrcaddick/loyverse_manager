@@ -135,3 +135,23 @@ def test_safe_filename():
     assert mi.safe_filename("C:\\Users\\me\\Quote (final).pdf") == "Quote (final).pdf"
     long = mi.safe_filename("a" * 200 + ".pdf")
     assert long.endswith(".pdf") and len(long) <= 120
+
+
+def test_display_names_are_kept_by_address():
+    raw = (
+        b"From: \"Sashley Bartley\" <sashleym4@gmail.com>\r\n"
+        b"To: Farmyard Park <thefarmyardpark@gmail.com>\r\n"
+        b"Cc: Natasha Landers <natashalanders4@gmail.com>, bob@example.com, \"bob@example.com\" <bob@example.com>, "
+        b"=?utf-8?q?Ren=C3=A9e_du_Toit?= <renee@example.com>\r\n"
+        b"Subject: Test\r\nMessage-ID: <names-1@example.com>\r\nContent-Type: text/plain\r\n\r\nhi\r\n"
+    )
+    parsed = mi.parse_message(raw)
+    assert parsed.names == {
+        "sashleym4@gmail.com": "Sashley Bartley",
+        "thefarmyardpark@gmail.com": "Farmyard Park",
+        "natashalanders4@gmail.com": "Natasha Landers",
+        "renee@example.com": "Renée du Toit",
+    }
+    # a bare address or the address repeated as its "name" is no name at all
+    assert "bob@example.com" not in parsed.names
+

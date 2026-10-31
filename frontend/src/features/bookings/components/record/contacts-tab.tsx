@@ -6,6 +6,7 @@
  * number when one has gone out already.
  */
 
+import { Link } from "react-router";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Plus, Users } from "lucide-react";
 import { useState } from "react";
@@ -55,9 +56,9 @@ export function ContactsTab({ booking }: { booking: BookingDetail }) {
       header: "Email",
       cell: ({ row }) =>
         row.original.email ? (
-          <a href={`mailto:${row.original.email}`} className="text-body text-foreground underline-offset-3 hover:underline">
+          <Link to="?tab=conversation" className="text-body text-foreground underline-offset-3 hover:underline" title="Open the conversation">
             {row.original.email}
-          </a>
+          </Link>
         ) : (
           <span className="text-muted-foreground">No email</span>
         ),

@@ -122,6 +122,12 @@ Migration 024 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
 `arrived_at`, `price_overridden`, `price_override_reason` and
 `legacy_sheet_row`; gazebos return later as invoice line items.
 
+### email_messages.participant_names (migration 025)
+JSON, address → display name as written in the From, To and Cc headers, so a
+contact learned from a copied address gets a name (`mail_ingest.parse_message`
+keeps them; the migration and the live pipeline pass them to
+`booking_contact.upsert`; `migration.learn_contact_names()` backfills).
+
 ### booking_legacy_rows
 `booking_id` (PK, FK), `sheet_row JSON`, `imported_at`. The original sheet row
 behind an imported booking, kept whole and never read by the app.
