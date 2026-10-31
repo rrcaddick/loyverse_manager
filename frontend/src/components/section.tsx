@@ -35,7 +35,7 @@ export function Section({ title, description, actions, flush, footer, layout, cl
   if (resolved === "split") {
     return (
       <section className={cn("grid gap-4 lg:grid-cols-[minmax(0,17rem)_1fr] lg:gap-8", className)} {...props}>
-        <div className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+        <div className="min-w-0 lg:self-start">
           {title ? <h2 className="text-section text-foreground">{title}</h2> : null}
           {description ? <p className="mt-1 max-w-[40ch] text-body text-muted-foreground">{description}</p> : null}
           {actions ? <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div> : null}
