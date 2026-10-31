@@ -178,7 +178,7 @@ function KindRow({ control, index, code, count, onMove, onRemove }: { control: C
   const colour = useWatch({ control, name: `kinds.${index}.colour` });
   const on = useWatch({ control, name: `kinds.${index}.on` });
   return (
-    <li className={cn("grid gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] sm:items-center", !on && "opacity-60")}>
+    <li className={cn("grid gap-x-3 gap-y-2 px-5 py-3 xl:grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] xl:items-center", !on && "opacity-60")}>
       <div className="flex items-center">
         <Button type="button" variant="ghost" size="icon-sm" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
           <ArrowUp />

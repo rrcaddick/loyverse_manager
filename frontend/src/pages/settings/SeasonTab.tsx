@@ -125,7 +125,7 @@ export default function SeasonTab({ data }: SettingsTabProps) {
         ) : (
           <ul className="divide-y divide-border">
             {holidays.fields.map((field, index) => (
-              <li key={field.id} className="grid grid-cols-1 gap-3 px-5 py-3 sm:grid-cols-[11rem_11rem_minmax(0,1fr)_auto] sm:items-start">
+              <li key={field.id} className="grid grid-cols-1 gap-3 px-5 py-3 sm:grid-cols-[11rem_11rem_minmax(0,1fr)_auto] xl:items-start">
                 <DateField control={form.control} name={`season.school_holidays.${index}.from`} label="From" />
                 <DateField control={form.control} name={`season.school_holidays.${index}.to`} label="To (inclusive)" />
                 <TextField control={form.control} name={`season.school_holidays.${index}.label`} label="Label" placeholder="Summer holidays" />
@@ -156,7 +156,7 @@ export default function SeasonTab({ data }: SettingsTabProps) {
             {days.fields.map((field, index) => {
               const day = form.watch(`season_days.${index}.day`);
               return (
-                <li key={field.id} className="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,11rem)_1fr_auto] sm:items-start">
+                <li key={field.id} className="grid gap-3 px-5 py-3 xl:grid-cols-[minmax(0,11rem)_1fr_auto] xl:items-start">
                   <div className="space-y-1">
                     <DateField control={form.control} name={`season_days.${index}.day`} label={`Date for row ${index + 1}`} hideLabel />
                     <p className="text-xs text-muted-foreground tabular">{day ? formatWeekday(day) : " "}</p>

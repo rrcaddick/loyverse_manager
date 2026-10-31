@@ -6,7 +6,8 @@
  * done. `?view=` and `?page=` live in the URL; with no view the first one in
  * pipeline order that has something in it opens. Keys: J/K move, Enter opens
  * the row, 1 fires its verb. Reminders older than 30 days are Stale, with
- * Dismiss all.
+ * Dismiss all. The page is pinned to the viewport; the list scrolls inside
+ * its card.
  */
 
 import { AlertCircle, Archive, Bell, Hourglass, Inbox, Mail, MessageSquareText, Receipt, RefreshCw, Split, Ticket, type LucideIcon } from "lucide-react";
@@ -213,7 +214,8 @@ export default function WorkPage() {
         }
       />
 
-      <div className="flex min-w-0 flex-col gap-3">
+      {/* The page is pinned to the viewport; the list scrolls inside its card. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         {list.isError ? (
           <Alert variant="destructive">
             <AlertCircle />
@@ -228,8 +230,8 @@ export default function WorkPage() {
           </Alert>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-border">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
             <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             <h2 className="text-section">{meta.what}</h2>
             {c ? <CountBadge count={c[view] ?? 0} /> : null}
@@ -239,7 +241,7 @@ export default function WorkPage() {
               </span>
             ) : null}
           </div>
-          {rowsOut}
+          <div className="relative min-h-0 overflow-y-auto scrollbar-thin">{rowsOut}</div>
         </div>
 
         {total > WORK_PAGE_SIZE ? (

@@ -286,3 +286,19 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
 - **Settings**: the page is pinned to the viewport (route layout "fill");
   the sections list and the settings scroll independently.
 - Shortcut `g e` opens Enquiries (`g m` went with Mail).
+
+## No page scrolling (31 Oct 2026, late)
+
+- Today, Work and Settings are pinned to the viewport (route `layout: "fill"`)
+  like the calendar, the booking record and the lists: the day's table and
+  Today's right column, the Work list and the two Settings columns scroll on
+  their own. The shell's main container is `overflow-x-hidden` and
+  `relative`, and so are the scrolling columns: screen-reader-only labels and
+  the hidden native selects behind the dropdowns are positioned absolutely,
+  and without a positioned ancestor they escaped the scrolling containers and
+  stretched the document (the mystery page scroll on laptop screens).
+- The save bar has no negative margins (they overflowed the column sideways)
+  and takes no room while hidden, so a page that fits never scrolls for an
+  empty bar. Settings rows that need width (closed days, day kinds) stack
+  below `xl`. The Work accordion's rows are shorter and the main nav rows a
+  step shorter under 900 px, so the sidebar fits a laptop screen.

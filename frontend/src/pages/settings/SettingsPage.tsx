@@ -111,8 +111,8 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       {/* The page pins to the viewport (route layout "fill"): the sections list and the settings scroll on their own. */}
-      <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <nav aria-label="Settings sections" className="flex flex-col gap-5 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:scrollbar-thin">
+      <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <nav aria-label="Settings sections" className="relative flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:scrollbar-thin">
           {groups.map((group) => (
             <div key={group.title} className="flex flex-col gap-1">
               <div className="text-label px-3 text-muted-foreground uppercase">{group.title}</div>
@@ -137,7 +137,7 @@ export default function SettingsPage() {
           ))}
         </nav>
 
-        <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-6 lg:scrollbar-thin">
+        <div className="relative min-w-0 overflow-x-hidden lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-6 lg:scrollbar-thin">
           {needsSettings && settings.isPending ? (
             <PageSkeleton />
           ) : needsSettings && settings.isError ? (
@@ -149,7 +149,7 @@ export default function SettingsPage() {
           ) : Component ? (
             <SectionLayoutContext.Provider value="split">
               <Suspense fallback={<PageSkeleton />}>
-                <div className="flex flex-col gap-10">
+                <div className="flex flex-col gap-8">
                   <Component key={current.value} data={settings.data} />
                 </div>
               </Suspense>

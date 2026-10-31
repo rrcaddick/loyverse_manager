@@ -7,7 +7,8 @@
  *   the day's groups with live arrivals (two thirds)  |  Needs attention · The season · Next visit days (admin)
  *
  * A closed or empty day shows the next visit day and a seven-day strip
- * instead of the table. Keys: T today, ← → previous / next day.
+ * instead of the table. The page is pinned to the viewport; the table and the
+ * right column scroll on their own. Keys: T today, ← → previous / next day.
  */
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -91,7 +92,7 @@ function TodayView({ date }: { date: string }) {
 
   return (
     <>
-      <header className="flex flex-col gap-2">
+      <header className="flex shrink-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon-sm" aria-label="Previous day" onClick={() => navigate(`/today/${shiftDay(date, -1)}`)}>
@@ -141,7 +142,7 @@ function TodayView({ date }: { date: string }) {
         </Alert>
       ) : null}
 
-      <BigNumberRow columns={isAdmin ? 4 : 3} className={cn("transition-opacity", stale && "opacity-70")}>
+      <BigNumberRow columns={isAdmin ? 4 : 3} className={cn("shrink-0 transition-opacity", stale && "opacity-70")}>
         {isAdmin ? (
           <>
             <BigNumber label={isToday ? "Groups today" : "Groups"} value={tiles ? formatNumber(tiles.groups.total) : ""} detail={tiles ? `${formatNumber(tiles.groups.arrived)} arrived` : undefined} loading={!tiles} />
@@ -181,8 +182,9 @@ function TodayView({ date }: { date: string }) {
         )}
       </BigNumberRow>
 
-      <div className={cn("grid items-start gap-card-gap transition-opacity", isAdmin && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]", stale && "opacity-70")}>
-        <div className="min-w-0">
+      {/* The page is pinned to the viewport: the day's table and the right column scroll on their own. */}
+      <div className={cn("grid min-h-0 flex-1 items-start gap-card-gap transition-opacity lg:grid-rows-[minmax(0,1fr)] lg:items-stretch", isAdmin && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]", stale && "opacity-70")}>
+        <div className="relative min-w-0 lg:min-h-0 lg:overflow-y-auto lg:scrollbar-thin">
           {!data ? (
             <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border">
               <DayTable rows={[]} loading showMoney={isAdmin} canOpenBooking={isAdmin} />
@@ -197,7 +199,7 @@ function TodayView({ date }: { date: string }) {
         </div>
 
         {isAdmin ? (
-          <div className="flex min-w-0 flex-col gap-card-gap">
+          <div className="relative flex min-w-0 flex-col gap-card-gap lg:min-h-0 lg:overflow-y-auto lg:pb-1 lg:scrollbar-thin">
             <AttentionCard counts={data?.work_counts} skipped={data?.tiles.skipped_mail} loading={!data} />
             <SeasonCard season={data?.season} money={data?.money} loading={!data} />
             <NextDaysCard days={data?.next_visit_days} loading={!data} />
@@ -258,7 +260,7 @@ function AttentionCard({ counts, skipped, loading }: { counts: WorkCounts | unde
             const n = (counts as unknown as Record<string, number>)[item.view] ?? 0;
             return (
               <li key={item.view}>
-                <Link to={`/work?view=${item.view}`} className="flex h-11 items-center gap-3 px-card text-body outline-none hover:bg-nested focus-visible:bg-nested">
+                <Link to={`/work?view=${item.view}`} className="flex h-9 items-center gap-3 px-card text-body outline-none hover:bg-nested focus-visible:bg-nested">
                   <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">{item.title}</span>
                   <CountBadge count={n} />
@@ -269,7 +271,7 @@ function AttentionCard({ counts, skipped, loading }: { counts: WorkCounts | unde
         </ul>
       )}
       {skipped && skipped.count > 0 ? (
-        <Link to="/settings/system" className="flex h-10 items-center gap-2 border-t border-border px-card text-sm text-muted-foreground outline-none hover:bg-nested focus-visible:bg-nested">
+        <Link to="/settings/system" className="flex h-9 items-center gap-2 border-t border-border px-card text-sm text-muted-foreground outline-none hover:bg-nested focus-visible:bg-nested">
           <Inbox aria-hidden="true" className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">
             {pluralise(skipped.count, "automated mail")} set aside in the last {pluralise(skipped.days, "day")}
@@ -350,7 +352,7 @@ function NextDaysCard({ days, loading }: { days: NextVisitDay[] | undefined; loa
         <ul className="divide-y divide-border">
           {days.map((d) => (
             <li key={d.date}>
-              <Link to={`/today/${d.date}`} className="flex h-12 items-center gap-3 px-card outline-none hover:bg-nested focus-visible:bg-nested">
+              <Link to={`/today/${d.date}`} className="flex h-10 items-center gap-3 px-card outline-none hover:bg-nested focus-visible:bg-nested">
                 <div className="w-24 shrink-0">
                   <div className="text-body leading-5 font-medium text-foreground">{formatDate(d.date)}</div>
                   <div className="text-xs leading-4 text-muted-foreground">{relativeDayLabel(d.date) ?? ""}</div>

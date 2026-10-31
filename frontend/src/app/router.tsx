@@ -112,8 +112,8 @@ export const router = createBrowserRouter([
             path: "today",
             handle: { crumb: "Today", crumbTo: "/today" },
             children: [
-              { index: true, lazy: page(() => import("@/pages/today/TodayPage")) },
-              { path: ":date", lazy: page(() => import("@/pages/today/TodayPage")), handle: { crumb: dateCrumb } },
+              { index: true, lazy: page(() => import("@/pages/today/TodayPage")), handle: { layout: "fill" } },
+              { path: ":date", lazy: page(() => import("@/pages/today/TodayPage")), handle: { crumb: dateCrumb, layout: "fill" } },
             ],
           },
           { path: "day/:date", element: <RedirectTo to={(p) => `/today/${p.date ?? ""}`} /> },
@@ -132,7 +132,7 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole roles={["admin"]} />,
         children: [
-          { path: "work", lazy: page(() => import("@/pages/work/WorkPage")), handle: { crumb: "Work" } },
+          { path: "work", lazy: page(() => import("@/pages/work/WorkPage")), handle: { crumb: "Work", layout: "fill" } },
           {
             path: "enquiries",
             handle: { crumb: "Enquiries", crumbTo: "/enquiries" },

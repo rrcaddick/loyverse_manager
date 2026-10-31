@@ -145,7 +145,10 @@ export function AppLayout() {
             <div
               id="main-content"
               className={cn(
-                "flex min-w-0 flex-1 flex-col",
+                // `relative`: screen-reader-only labels and hidden native selects are
+                // positioned absolutely; without a positioned ancestor they escape the
+                // scrolling containers and stretch the document.
+                "relative flex min-w-0 flex-1 flex-col overflow-x-hidden",
                 full ? "h-dvh min-h-0 overflow-hidden" : "mx-auto w-full max-w-page gap-card-gap px-4 py-5 max-md:pt-14 sm:px-6 lg:px-gutter",
                 fill && "h-dvh flex-none min-h-0 overflow-hidden",
               )}

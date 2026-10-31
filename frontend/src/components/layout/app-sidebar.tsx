@@ -75,7 +75,7 @@ export function AppSidebar() {
         isActive={active}
         tooltip={tooltip}
         className={cn(
-          "relative h-10 gap-3 px-3 text-body [&_svg]:size-5",
+          "relative h-10 gap-3 px-3 text-body [&_svg]:size-5 [@media(max-height:900px)]:h-9",
           "data-active:before:absolute data-active:before:top-2 data-active:before:bottom-2 data-active:before:left-0 data-active:before:w-[3px] data-active:before:rounded-r-full data-active:before:bg-primary",
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0",
         )}
@@ -119,7 +119,7 @@ export function AppSidebar() {
               tooltip={item.title}
               aria-expanded={workOpen}
               className={cn(
-                "relative h-10 gap-3 px-3 text-body [&_svg]:size-5",
+                "relative h-10 gap-3 px-3 text-body [&_svg]:size-5 [@media(max-height:900px)]:h-9",
                 "data-active:before:absolute data-active:before:top-2 data-active:before:bottom-2 data-active:before:left-0 data-active:before:w-[3px] data-active:before:rounded-r-full data-active:before:bg-primary",
               )}
             >
@@ -129,14 +129,14 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <SidebarMenuSub className="mr-1 ml-4 gap-0.5 py-1 pr-0">
+            <SidebarMenuSub className="mr-1 ml-4 gap-0 py-0.5 pr-0">
               {item.children.map((child) => {
                 const n = counts.workViews[child.view] ?? 0;
                 if (child.muted && n === 0) return null;
                 const childActive = currentView === child.view;
                 return (
                   <SidebarMenuSubItem key={child.view}>
-                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-8 pr-1 text-sm", child.muted && "text-muted-foreground")}>
+                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-7 pr-1 text-sm", child.muted && "text-muted-foreground")}>
                       <NavLink to={`/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
                         <child.icon aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate">{child.title}</span>

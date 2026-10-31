@@ -41,8 +41,9 @@ export function SaveBar({
       aria-label="Unsaved changes"
       aria-hidden={!dirty}
       className={cn(
-        "sticky inset-x-0 bottom-0 z-20 mt-6 -mx-4 px-4 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] transition-all duration-200 motion-reduce:transition-none sm:-mx-6 sm:px-6",
-        dirty ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0",
+        "sticky inset-x-0 bottom-0 z-20 transition-opacity duration-200 motion-reduce:transition-none",
+        // Hidden, it takes no room, so a page that fits never scrolls for an empty bar.
+        dirty ? "mt-6 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] opacity-100" : "pointer-events-none mt-0 h-0 overflow-hidden pb-0 opacity-0",
         className,
       )}
     >
