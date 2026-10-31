@@ -157,9 +157,9 @@ export function ExtendHoldPopover({ open, onOpenChange, reference, currentHold, 
       {anchorOnly ? <PopoverAnchor asChild>{children}</PopoverAnchor> : <PopoverTrigger asChild>{children}</PopoverTrigger>}
       <PopoverContent align="end" className="w-auto p-0" onClick={(event) => event.stopPropagation()}>
         <div className="border-b border-border px-3 py-2 text-sm">
-          <div className="font-medium">New hold expiry · {reference}</div>
+          <div className="font-medium">New expiry date · {reference}</div>
           <div className="text-xs text-muted-foreground tabular">
-            {currentHold ? `Currently ${formatDate(currentHold)}` : "No hold date set"}
+            {currentHold ? `Currently ${formatDate(currentHold)}` : "No expiry set"}
             {visitDate ? ` · visit ${formatDate(visitDate)}` : ""}
           </div>
         </div>
@@ -227,7 +227,7 @@ interface SetStatusDialogProps {
 const STATUS_COPY: Partial<Record<SetStatusAction["status"], { title: string; description: string; destructive: boolean }>> = {
   no_show: { title: "Mark as no show?", description: "Confirmed but nobody arrived on the day. The booking closes and leaves the arrivals list. Nothing is emailed.", destructive: true },
   cancelled: { title: "Cancel this booking?", description: "The customer is not coming. Nothing is emailed; the day frees up on the calendar.", destructive: true },
-  lapsed: { title: "Mark as lapsed?", description: "The hold expired without a deposit. Nothing is emailed.", destructive: true },
+  lapsed: { title: "Mark as expired?", description: "The booking expired without a deposit. Nothing is emailed.", destructive: true },
   completed: { title: "Mark as completed?", description: "Closes the booking as visited.", destructive: false },
 };
 

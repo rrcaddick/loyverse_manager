@@ -61,7 +61,7 @@ export const BOOKING_STATUS_META: Record<BookingStatus, StatusMeta> = {
   confirmed: { label: "Confirmed", tone: "green" },
   completed: { label: "Completed", tone: "green-muted", icon: Check },
   cancelled: { label: "Cancelled", tone: "red" },
-  lapsed: { label: "Lapsed", tone: "red-muted" },
+  lapsed: { label: "Expired", tone: "red-muted" },
   no_show: { label: "No show", tone: "red-muted" },
   declined: { label: "Declined", tone: "red-muted" },
 };

@@ -98,11 +98,11 @@ export function AttentionTab({
       key: "lapse",
       urgency: "red",
       icon: Bell,
-      title: "Hold expired",
-      detail: "The deposit did not arrive in time. Send the lapse notice; it marks the booking lapsed.",
+      title: "Booking expired",
+      detail: "The deposit did not arrive in time. Send the expiry notice; it marks the booking expired.",
       action: (
         <Button size="sm" className="min-w-32" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send("send-expiry")}>
-          Send lapse notice
+          Send expiry notice
         </Button>
       ),
     });

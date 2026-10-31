@@ -682,9 +682,9 @@ def _hold_rows(today: date, lapse_days_before: int) -> list[dict]:
         past = (today - hold_on).days
         deposit = Decimal(str(r["deposit_due"] or 0))
         if past > 0:
-            bits = [f"Hold expired {_rel(past)}"]
+            bits = [f"Booking expired {_rel(past)}"]
         else:
-            bits = [f"Hold expires {_rel(past)}"]
+            bits = [f"Booking expires {_rel(past)}"]
         if deposit > 0 and not r.get("deposit_waived"):
             bits.append(f"deposit {_rands(deposit)} outstanding")
         bits.append(f"visit {_day(r['visit_date'])}")

@@ -143,7 +143,7 @@ export interface WorkRow {
   context: string;
   amount: number | null;
   age_days: number;
-  /** Reminder rows: "Deposit reminder" | "Still interested?" | "Final details" | "Hold expiring". */
+  /** Reminder rows: "Deposit reminder" | "Still interested?" | "Final details" | "Expiry". */
   group: string | null;
   primary: WorkAction;
   secondary: WorkAction[];

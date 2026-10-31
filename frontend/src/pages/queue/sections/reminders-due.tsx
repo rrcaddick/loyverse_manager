@@ -46,8 +46,8 @@ function describeSend(item: ReminderItem): SendCopy {
       };
     case "lapse":
       return {
-        title: `Let the hold on ${item.booking.reference} lapse?`,
-        description: `Emails ${to} that the hold on ${ref} has expired and marks the booking lapsed, releasing ${formatDate(item.booking.visit_date)}. This can be reopened later from the booking.`,
+        title: `Let ${item.booking.reference} expire?`,
+        description: `Emails ${to} that ${ref} has expired and marks the booking expired, releasing ${formatDate(item.booking.visit_date)}. This can be reopened later from the booking.`,
         confirmLabel: "Send and lapse",
         destructive: true,
       };
@@ -116,7 +116,7 @@ function ReminderGroupBlock({
           const facts: Fact[] = [
             { label: "Due", value: `${formatDate(item.due_on)} · ${overdueLabel(item.days_overdue)}`, tone: item.days_overdue > 7 ? "danger" : item.days_overdue > 0 ? "warning" : "default" },
             { label: "Deposit", value: item.deposit_due !== null ? formatMoney(item.deposit_due) : null },
-            { label: "Hold expires", value: item.hold_expires_on ? formatDate(item.hold_expires_on) : null },
+            { label: "Expires", value: item.hold_expires_on ? formatDate(item.hold_expires_on) : null },
             { label: "Email", value: item.contact_email ?? "none on the booking", tone: noEmail ? "danger" : "default" },
           ];
           const busy = dismissingId === item.reminder_id;

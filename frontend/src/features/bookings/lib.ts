@@ -51,7 +51,7 @@ export function sourceLabel(source: BookingSource): string {
 }
 
 export interface HoldState {
-  /** Days until the hold lapses; negative when already past. */
+  /** Days until the booking expires (the deposit deadline); negative when already past. */
   daysLeft: number;
   tone: "neutral" | "amber" | "red";
   text: string;
@@ -65,10 +65,10 @@ export function holdState(booking: Pick<BookingRow, "status" | "hold_expires_on"
   const daysLeft = daysBetween(todayIso(), booking.hold_expires_on);
   const date = formatDate(booking.hold_expires_on);
   const relative = relativeDays(daysLeft);
-  if (daysLeft < 0) return { daysLeft, tone: "red", text: `Hold expired ${relative} (${date})`, relative };
-  if (daysLeft === 0) return { daysLeft, tone: "red", text: `Hold expires today (${date})`, relative };
-  if (daysLeft <= 3) return { daysLeft, tone: "amber", text: `Hold expires ${relative} (${date})`, relative };
-  return { daysLeft, tone: "neutral", text: `Hold until ${date}`, relative };
+  if (daysLeft < 0) return { daysLeft, tone: "red", text: `Expired ${relative} (${date})`, relative };
+  if (daysLeft === 0) return { daysLeft, tone: "red", text: `Expires today (${date})`, relative };
+  if (daysLeft <= 3) return { daysLeft, tone: "amber", text: `Expires ${relative} (${date})`, relative };
+  return { daysLeft, tone: "neutral", text: `Expires ${date}`, relative };
 }
 
 export function isTentative(status: BookingStatus): boolean {

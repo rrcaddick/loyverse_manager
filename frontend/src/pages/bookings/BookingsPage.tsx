@@ -33,13 +33,13 @@ import { useAppearance } from "@/lib/appearance";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const TAB_LABELS: Record<BookingBucket, string> = { requests: "Requests", pending: "Pending", confirmed: "Confirmed", lapsed: "Lapsed", past: "Past", all: "All" };
+const TAB_LABELS: Record<BookingBucket, string> = { requests: "Requests", pending: "Pending", confirmed: "Confirmed", lapsed: "Expired", past: "Past", all: "All" };
 
 const EMPTY_COPY: Record<BookingBucket, { title: string; hint: string }> = {
   requests: { title: "No requests to review", hint: "Requests from the public form wait here until they are accepted or declined." },
   pending: { title: "Nothing pending", hint: "Accepted requests and enquiries stay here until the deposit arrives." },
   confirmed: { title: "No confirmed visits", hint: "A booking moves here when its deposit is recorded or matched from the bank." },
-  lapsed: { title: "Nothing lapsed, cancelled or declined", hint: "Holds that expire without a deposit, cancellations and declined requests are kept here." },
+  lapsed: { title: "Nothing expired, cancelled or declined", hint: "Bookings that expire without a deposit, cancellations and declined requests are kept here." },
   past: { title: "No past visits yet", hint: "Completed visits and no-shows are kept here." },
   all: { title: "No bookings yet", hint: "Requests from the form, the inbox or the phone will show up here." },
 };

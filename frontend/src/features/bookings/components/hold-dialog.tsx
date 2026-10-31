@@ -30,8 +30,8 @@ export function HoldDialog({ booking, open, onOpenChange }: HoldDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Hold expiry</DialogTitle>
-          <DialogDescription>The day the provisional hold lapses if no deposit arrives. It moves with the visit date unless set here by hand.</DialogDescription>
+          <DialogTitle>Expiry</DialogTitle>
+          <DialogDescription>The day the booking expires if no deposit has arrived. It moves with the visit date unless set here by hand.</DialogDescription>
         </DialogHeader>
         {open ? <HoldForm key={booking.updated_at} booking={booking} onClose={() => onOpenChange(false)} /> : null}
       </DialogContent>

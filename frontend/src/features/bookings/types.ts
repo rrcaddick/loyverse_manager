@@ -534,7 +534,7 @@ export const REMINDER_KIND_LABELS: Record<ReminderKind, string> = {
   still_interested: "Still interested?",
   deposit_reminder: "Deposit reminder",
   final_details: "Final details",
-  lapse: "Hold expiry",
+  lapse: "Expiry",
 };
 
 /** GET /bookings/quote: the rate a booking would get (src/services/pricing.py). */

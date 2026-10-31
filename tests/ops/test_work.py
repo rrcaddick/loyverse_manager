@@ -230,14 +230,14 @@ def test_holds_view(rows):
     past = by_id(holds, f"hold:{rows['hold_past']['id']}")
     soon = by_id(holds, f"hold:{rows['hold_soon']['id']}")
     assert holds.index(past) < holds.index(soon)
-    assert past["context"].startswith("Hold expired 2 d ago · deposit R")
+    assert past["context"].startswith("Booking expired 2 d ago · deposit R")
     assert past["age_days"] == 2 and past["amount"] == float(rows["hold_past"]["deposit_due"])
     assert past["primary"] == {
         "verb": "Extend", "action": "extend_hold", "booking_id": rows["hold_past"]["id"],
         "hold_expires_on": (rows["today"] - timedelta(days=2)).isoformat(),
     }
     assert verbs(past) == ["Send expiry", "Open", "Dismiss"]
-    assert soon["context"].startswith("Hold expires in 2 d") and soon["age_days"] == 0
+    assert soon["context"].startswith("Booking expires in 2 d") and soon["age_days"] == 0
     assert past["sort_key"] < soon["sort_key"]
     # the booking whose lapse reminder is stale/dismissed leaves the view
     execute(
@@ -282,7 +282,7 @@ def test_new_requests_tickets_and_reminders(rows):
     assert live["primary"]["action"] == "booking_action" and live["primary"]["kind"] == "still_interested"
     assert live["context"].startswith("Due 3 d ago · visit ")
     assert verbs(live) == ["Open", "Dismiss"]
-    assert all(r["group"] != "Hold expiring" for r in views["reminders"])  # holds have their own view
+    assert all(r["group"] != "Expiry" for r in views["reminders"])  # holds have their own view
     stale_id = reminder_rows(rows["stale_old"]["id"])["still_interested"]["id"]
     assert f"reminder:{stale_id}" not in ids(views["reminders"])
     # reminders view is contiguous by kind

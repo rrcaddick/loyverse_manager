@@ -47,7 +47,7 @@ KIND_TITLES = {
     "still_interested": "Still interested?",
     "deposit_reminder": "Deposit reminder",
     "final_details": "Final details",
-    "lapse": "Hold expiring",
+    "lapse": "Expiry",
 }
 
 SECTION_TITLES = {

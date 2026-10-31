@@ -35,7 +35,7 @@ export const SECTION_META: Record<QueueSectionKey, { description: string; empty:
   tickets_to_send: { description: "Confirmed groups that have not received their vehicle ticket.", empty: "every confirmed group has its ticket", icon: Ticket },
   visits_this_week: { description: "Groups arriving in the next seven days.", empty: "no groups this week", icon: CalendarDays },
   arrivals_to_record: { description: "Past visits with no arrival count yet.", empty: "all arrivals recorded", icon: ClipboardCheck },
-  lapsing: { description: "Unpaid holds expiring within three days.", empty: "no holds about to lapse", icon: Hourglass },
+  lapsing: { description: "Unpaid bookings expiring within three days.", empty: "nothing about to expire", icon: Hourglass },
 };
 
 export function CountBadge({ count, className }: { count: number; className?: string }) {

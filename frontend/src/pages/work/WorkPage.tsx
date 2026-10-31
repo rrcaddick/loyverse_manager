@@ -86,10 +86,10 @@ const VIEWS: Record<WorkView, ViewMeta> = {
     empty: { title: "No reminders due.", hint: "Reminders are recalculated every morning from the booking dates.", link: { to: "/settings/reminders", label: "Reminder settings" } },
   },
   holds: {
-    label: "Holds lapsing",
+    label: "Expiring",
     icon: Hourglass,
     tone: "amber",
-    empty: { title: "No holds lapsing.", hint: "Tentative bookings whose hold ends within three days appear here.", link: { to: "/bookings?bucket=pending", label: "Pending bookings" } },
+    empty: { title: "Nothing expiring.", hint: "Unpaid bookings that expire within three days appear here.", link: { to: "/bookings?bucket=pending", label: "Pending bookings" } },
   },
   arrivals: {
     label: "Record arrivals",

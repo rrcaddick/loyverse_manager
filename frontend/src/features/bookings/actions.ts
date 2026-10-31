@@ -137,7 +137,7 @@ export function proformaIsStale(b: BookingDetail): boolean {
 
 export const REMINDER_COPY: Record<EmailReminderKind, { label: string; description: string }> = {
   still_interested: { label: "Still interested?", description: "A friendly nudge a week after the proforma, with the proforma attached again." },
-  deposit_reminder: { label: "Deposit reminder", description: "Reminds them the deposit is due before the hold lapses; attaches the proforma." },
+  deposit_reminder: { label: "Deposit reminder", description: "Reminds them the deposit is due before the booking expires; attaches the proforma." },
   final_details: { label: "Final details", description: "Arrival instructions a few days before the visit. Attaches the vehicle ticket if it has not been emailed yet." },
 };
 
@@ -151,7 +151,7 @@ export const STATUS_CHANGE_COPY: Partial<Record<BookingStatus, { label: string; 
   confirmed: { label: "Confirm booking", description: "Confirms without a recorded deposit. Give the reason." },
   completed: { label: "Mark completed", description: "Closes the booking as visited. Normally this happens when arrivals are recorded." },
   cancelled: { label: "Cancel booking", description: "The customer is not coming. Nothing is emailed; the day frees up on the calendar.", destructive: true },
-  lapsed: { label: "Mark lapsed", description: "The hold expired without a deposit. To email the customer as well, use “Send expiry notice”.", destructive: true },
+  lapsed: { label: "Mark expired", description: "The booking expired without a deposit. To email the customer as well, use “Send expiry notice”.", destructive: true },
   no_show: { label: "Mark no-show", description: "Confirmed but nobody arrived on the day.", destructive: true },
-  enquiry: { label: "Reopen as enquiry", description: "Brings a cancelled or lapsed booking back as a live enquiry." },
+  enquiry: { label: "Reopen as enquiry", description: "Brings a cancelled or expired booking back as a live enquiry." },
 };

@@ -28,7 +28,7 @@ export function LapsingSection({ section }: { section: Section }) {
           const expired = item.days_left < 0;
           const facts: Fact[] = [
             {
-              label: "Hold",
+              label: "Expires",
               value: item.hold_expires_on
                 ? `${expired ? "expired" : "expires"} ${relativeDays(item.days_left)} · ${formatDate(item.hold_expires_on)}`
                 : `${expired ? "expired" : "expires"} ${relativeDays(item.days_left)}`,
@@ -59,19 +59,19 @@ export function LapsingSection({ section }: { section: Section }) {
       <ConfirmDialog
         open={expiring.open}
         onOpenChange={expiring.onOpenChange}
-        title={`Let the hold on ${expiring.subject?.booking.reference ?? ""} lapse?`}
+        title={`Let ${expiring.subject?.booking.reference ?? "this booking"} expire?`}
         description={
           expiring.subject
-            ? `Emails ${expiring.subject.contact_email} that the hold has expired and marks ${expiring.subject.booking.reference} ${expiring.subject.booking.group_name} lapsed, releasing ${formatDate(expiring.subject.booking.visit_date)}. It can be reopened from the booking.`
+            ? `Emails ${expiring.subject.contact_email} that the booking has expired and marks ${expiring.subject.booking.reference} ${expiring.subject.booking.group_name} lapsed, releasing ${formatDate(expiring.subject.booking.visit_date)}. It can be reopened from the booking.`
             : undefined
         }
-        confirmLabel="Send and lapse"
+        confirmLabel="Send and expire"
         destructive
         onConfirm={async () => {
           const item = expiring.subject;
           if (!item) return;
           await action.mutateAsync({ id: item.booking.id, action: "send-expiry" });
-          toast.success(`${item.booking.reference} marked lapsed and the customer emailed`);
+          toast.success(`${item.booking.reference} marked expired and the customer emailed`);
         }}
       />
     </QueueSectionCard>

@@ -288,17 +288,17 @@ export function HoldCard({ booking }: { booking: BookingDetail }) {
   const hold = holdState(booking);
   return (
     <RailCard
-      title="Hold & reminders"
+      title="Expiry & reminders"
       icon={CalendarClock}
       actions={
-        <Button variant="ghost" size="icon-sm" aria-label="Change the hold expiry" onClick={actions.openHold}>
+        <Button variant="ghost" size="icon-sm" aria-label="Change the expiry" onClick={actions.openHold}>
           <Pencil />
         </Button>
       }
     >
       <div className="flex flex-col gap-3 text-body">
         <div>
-          <div className="text-foreground">{booking.hold_expires_on ? `Hold until ${formatDateLong(booking.hold_expires_on)}` : "No hold expiry set"}</div>
+          <div className="text-foreground">{booking.hold_expires_on ? `Expires ${formatDateLong(booking.hold_expires_on)}` : "No hold expiry set"}</div>
           {hold && hold.tone !== "neutral" ? <div className={cn("text-sm font-medium", hold.tone === "red" ? "text-red-text" : "text-amber-text")}>{hold.text}</div> : null}
         </div>
         <ReminderList booking={booking} />

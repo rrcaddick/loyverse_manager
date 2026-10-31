@@ -46,7 +46,7 @@ const send = (action: ActionId, label = ACTION_LABELS[action]): StepVerb => ({ k
 const recordPayment: StepVerb = { kind: "record-payment", label: ACTION_LABELS["record-payment"] };
 const addEmail: StepVerb = { kind: "edit", focus: "contact", label: "Add email address" };
 const addContact: StepVerb = { kind: "edit", focus: "contact", label: "Add contact details" };
-const extendHold: StepVerb = { kind: "extend-hold", label: "Extend hold" };
+const extendHold: StepVerb = { kind: "extend-hold", label: "Extend expiry" };
 
 /** A send verb, or "Add email address" when the booking cannot receive it. */
 function sendOr(b: BookingDetail, action: ActionId): StepVerb {
@@ -174,7 +174,7 @@ export function nextStep(b: BookingDetail): NextStep {
 
   // ---- tentative (enquiry, proforma_sent)
   const hold = holdState(b);
-  const holdLine = b.hold_expires_on ? `hold until ${formatDateShort(b.hold_expires_on)}` : null;
+  const holdLine = b.hold_expires_on ? `expires ${formatDateShort(b.hold_expires_on)}` : null;
   const depositLine = f.deposit_waived ? "deposit waived" : `deposit ${money(f.deposit_due)}`;
   const totalLine = `${money(f.total_amount)} (${formatNumber(b.people_booked)} × ${money(f.price_per_person)})`;
 
@@ -214,7 +214,7 @@ export function nextStep(b: BookingDetail): NextStep {
     return {
       urgency: "red",
       icon: AlertTriangle,
-      title: `Hold expired ${hold.relative} — ${money(outstanding)} deposit not received`,
+      title: `Booking expired ${hold.relative} — ${money(outstanding)} deposit not received`,
       detail: join(sentAgo, visit, questions),
       primary: b.contact_email ? send("send-expiry") : statusVerb(b, "lapsed"),
       secondary: [extendHold, recordPayment],
@@ -224,7 +224,7 @@ export function nextStep(b: BookingDetail): NextStep {
     return {
       urgency: hold.daysLeft === 0 ? "red" : "amber",
       icon: Clock,
-      title: `Hold expires ${hold.relative} — ${money(outstanding)} deposit not received`,
+      title: `Booking expires ${hold.relative} — ${money(outstanding)} deposit not received`,
       detail: join(sentAgo, visit, questions),
       primary: recordPayment,
       secondary: [send("reminder:deposit_reminder"), extendHold],

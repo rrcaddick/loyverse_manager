@@ -65,9 +65,9 @@ export default function RemindersTab({ data }: SettingsTabProps) {
             <ReminderField
               control={form}
               name="reminders.lapse_days_before"
-              label="Hold lapses"
+              label="Booking expires"
               unit="days before the visit"
-              help="An unpaid booking's hold expires here. The queue suggests marking it lapsed so the date can be offered to another group. Also sets the default hold date on new bookings."
+              help="An unpaid booking expires this many days before the visit. Work then offers the expiry notice, which marks it expired so the date can be offered again."
             />
             <ReminderField
               control={form}
@@ -103,7 +103,7 @@ function Timeline({ values }: { values: FormValues["reminders"] }) {
     { label: "Proforma sent", date: proforma, muted: true },
     { label: "Still interested?", date: addDays(proforma, Number(values.still_interested_days) || 0) },
     { label: "Deposit reminder", date: subDays(visit, Number(values.deposit_reminder_days_before) || 0) },
-    { label: "Hold lapses", date: subDays(visit, Number(values.lapse_days_before) || 0) },
+    { label: "Booking expires", date: subDays(visit, Number(values.lapse_days_before) || 0) },
     { label: "Final details", date: subDays(visit, Number(values.final_details_days_before) || 0) },
     { label: "Visit day", date: visit, muted: true },
   ].sort((a, b) => a.date.getTime() - b.date.getTime());

@@ -139,7 +139,7 @@ export function useWorkActions(): WorkActions {
         const date = input?.date;
         if (!date) return;
         void guarded(row, () => extend.mutateAsync({ booking_id: action.booking_id, hold_expires_on: date })).then(() =>
-          done(row, `Hold on ${row.booking?.reference ?? "the booking"} extended to ${formatDate(date)}`, row.booking?.group_name),
+          done(row, `${row.booking?.reference ?? "The booking"} now expires on ${formatDate(date)}`, row.booking?.group_name),
         );
         return;
       }

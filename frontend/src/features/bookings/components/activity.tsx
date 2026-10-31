@@ -87,7 +87,7 @@ const FIELD_LABELS: Record<string, string> = {
   group_type: "Kind of group",
   contact_mobile: "Mobile",
   contact_email: "Email",
-  hold_expires_on: "Hold expires",
+  hold_expires_on: "Expiry",
   price_per_person: "Price per visitor",
   deposit_due: "Deposit",
   internal_notes: "Internal note",

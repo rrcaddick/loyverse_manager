@@ -83,7 +83,7 @@ export function WorkDetailPanel({ row, onClose, onAction, className }: WorkDetai
                 {b.contact_mobile ? ` · ${formatPhone(b.contact_mobile)}` : ""}
                 {b.contact_email ? ` · ${b.contact_email}` : ""}
               </div>
-              {b.hold_expires_on && (b.status === "enquiry" || b.status === "proforma_sent") ? <div className="tabular">Hold until {formatDate(b.hold_expires_on)}</div> : null}
+              {b.hold_expires_on && (b.status === "enquiry" || b.status === "proforma_sent") ? <div className="tabular">Expires {formatDate(b.hold_expires_on)}</div> : null}
             </div>
           ) : detail.isError ? (
             <p className="text-sm text-red-text">Could not load the booking.</p>

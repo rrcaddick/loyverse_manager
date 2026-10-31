@@ -141,7 +141,7 @@ function spec(booking: BookingDetail, action: ActionId): SendSpec {
         confirmLabel: "Send and mark lapsed",
         to: email,
         attachment: "None",
-        effect: "Status becomes Lapsed. The day frees up on the calendar; the booking can be reopened later.",
+        effect: "Status becomes Expired. The day frees up on the calendar; the booking can be reopened later.",
         destructive: true,
         reason: "optional",
         successVerb: "Expiry notice sent",

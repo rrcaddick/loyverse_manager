@@ -97,7 +97,7 @@ def extend_hold(booking_id: int):
     today = get_today()
     if new_hold < today:
         raise ApiError(
-            "validation_error", "The hold cannot expire in the past", 422,
+            "validation_error", "The expiry cannot be in the past", 422,
             {"hold_expires_on": "Choose today or later"},
         )
     booking = booking_model.get(booking_id)
@@ -106,12 +106,12 @@ def extend_hold(booking_id: int):
     if booking["status"] not in ("enquiry", "proforma_sent"):
         raise ApiError(
             "invalid_state",
-            f"Only a tentative booking has a hold (this one is {booking['status']})",
+            f"Only an unpaid booking has an expiry (this one is {booking['status']})",
             409,
         )
     if new_hold > booking["visit_date"]:
         raise ApiError(
-            "validation_error", "The hold cannot outlive the visit", 422,
+            "validation_error", "The expiry cannot be after the visit", 422,
             {"hold_expires_on": f"On or before {booking['visit_date'].isoformat()}"},
         )
     booking_service.update_booking(booking_id, {"hold_expires_on": new_hold.isoformat()}, current_user_id())

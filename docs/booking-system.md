@@ -222,7 +222,11 @@ enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorde
 - `confirm` happens when `paid_total ≥ deposit_due`, or deposit waived + admin
   clicks Confirm. Admin can also Confirm manually with a reason.
 - Reopen: cancelled/lapsed → enquiry (admin).
-- `hold_expires_on = visit_date − reminders.lapse_days_before`, editable.
+- `hold_expires_on = visit_date − reminders.lapse_days_before`, editable. In the
+  UI this is the booking's **expiry** (31 Oct 2026): "Expires Thu 4 Mar", "Booking
+  expires today", "Extend expiry", and the status `lapsed` reads **Expired**; the
+  `expiry` email is the expiry notice. The word is never used for the visit date
+  passing. Column and status codes are unchanged.
 - **Rates (30 Oct 2026, `pricing.decide_tier`):** three group rates plus the
   public and peak prices, all in `price_tiers`. Children's groups (a `children`
   flag on the group type: school, crèche, aftercare, youth club) pay
