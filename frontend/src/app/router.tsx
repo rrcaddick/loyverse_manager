@@ -151,7 +151,8 @@ export const router = createBrowserRouter([
               {
                 path: ":id",
                 lazy: page(() => import("@/pages/bookings/BookingDetailPage")),
-                handle: { crumb: (_: unknown, params: Params) => `Booking ${params.id ?? ""}`.trim() },
+                // Pinned to the viewport: the header and tabs stay, the tab's content scrolls.
+                handle: { crumb: (_: unknown, params: Params) => `Booking ${params.id ?? ""}`.trim(), layout: "fill" },
               },
             ],
           },

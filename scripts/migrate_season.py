@@ -9,6 +9,10 @@ nothing. ``--apply`` stores the chosen conversations and links them.
     python -m scripts.migrate_season --booking FY1719                # one booking
     python -m scripts.migrate_season --apply --with-enquiries        # the real run
 
+The sheet is the live "FY Bookings" Google Sheet (first tab, exported as CSV
+through the Drive connector into data/import/fy-bookings-2026-27.csv just
+before a run); it was never a hand-kept download.
+
 Options: --sheet PATH (default data/import/fy-bookings-2026-27.csv),
 --from-visit YYYY-MM-DD (default 2026-09-01), --enquiries-from YYYY-MM-DD
 (default 2026-06-01), --limit N, --upcoming (visit on/after today), --booking
@@ -117,11 +121,15 @@ def main(argv: list[str] | None = None) -> int:
                         enquiry_service.create_from_message(em.get(newest_id))
 
     if args.apply:
+        # Names for learned contacts can come from mail outside their own booking's
+        # conversations (the person wrote to us about something else): one pass
+        # over everything stored, once every booking is in.
+        print("Contact names:", migration.learn_contact_names())
         try:
             from src.services import bank, reminders
 
             print("Bank:", {k: v for k, v in bank.match_new().items()})
-            print("Reminders:", reminders.recompute_all() if hasattr(reminders, "recompute_all") else "skipped")
+            print("Reminders:", reminders.recompute_reminders())
         except Exception as exc:  # noqa: BLE001
             print("Bank/reminders step failed:", exc)
 
