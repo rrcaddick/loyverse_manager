@@ -624,9 +624,14 @@ def _mirror_primary_contact(booking_id: int) -> None:
     email = booking.get("contact_email")
     try:
         if email and "@" in email:
-            booking_contact.upsert(
-                booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"), role="primary", source="booking"
-            )
+            # A booking that started without an address keeps one primary row:
+            # the address lands on it rather than beside it.
+            if not booking_contact.adopt_email_on_primary(
+                booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile")
+            ):
+                booking_contact.upsert(
+                    booking_id, email, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"), role="primary", source="booking"
+                )
         else:
             booking_contact.upsert_primary_without_email(booking_id, name=booking.get("contact_name"), mobile=booking.get("contact_mobile"))
     except Exception:  # noqa: BLE001 - never let the mirror break a save

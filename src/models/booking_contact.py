@@ -56,6 +56,55 @@ def upsert_primary_without_email(booking_id: int, *, name: str | None, mobile: s
     return True
 
 
+def adopt_email_on_primary(booking_id: int, email: str, *, name: str | None, mobile: str | None) -> bool:
+    """The booking's own contact gained an email address. Put it on the primary
+    row that had none, or, when a row with that address already exists (a
+    learned contact), promote that row and fold the address-less one into it,
+    keeping "on site". True when a row was merged or adopted."""
+    address = (email or "").strip().lower()
+    if not address:
+        return False
+    blank = query_one(
+        "SELECT id, on_site FROM booking_contacts WHERE booking_id = %s AND role = 'primary' AND email IS NULL",
+        (int(booking_id),),
+    )
+    if not blank:
+        return False
+    same = query_one("SELECT id FROM booking_contacts WHERE booking_id = %s AND email = %s", (int(booking_id), address))
+    if same:
+        execute(
+            "UPDATE booking_contacts SET role = 'primary', source = 'booking', name = COALESCE(%s, name), "
+            "mobile = COALESCE(%s, mobile), on_site = GREATEST(on_site, %s) WHERE id = %s",
+            (name, mobile, int(blank["on_site"] or 0), same["id"]),
+        )
+        execute("DELETE FROM booking_contacts WHERE id = %s", (blank["id"],))
+    else:
+        execute(
+            "UPDATE booking_contacts SET email = %s, name = COALESCE(%s, name), mobile = COALESCE(%s, mobile) WHERE id = %s",
+            (address, name, mobile, blank["id"]),
+        )
+    return True
+
+
+def dedupe_primary_rows() -> int:
+    """Every booking with both an address-less primary row and a row for its
+    own address: fold them together (the state the migration of 30 Oct 2026
+    left behind). Returns the number of bookings touched."""
+    rows = query(
+        """
+        SELECT b.id, b.contact_email, b.contact_name, b.contact_mobile
+        FROM bookings b
+        WHERE b.contact_email IS NOT NULL
+          AND EXISTS (SELECT 1 FROM booking_contacts c WHERE c.booking_id = b.id AND c.role = 'primary' AND c.email IS NULL)
+        """
+    )
+    touched = 0
+    for r in rows:
+        if adopt_email_on_primary(int(r["id"]), r["contact_email"], name=r.get("contact_name"), mobile=r.get("contact_mobile")):
+            touched += 1
+    return touched
+
+
 def update(booking_id: int, contact_id: int, *, name: str | None = None, mobile: str | None = None,
            on_site: bool | None = None, role: str | None = None, email: str | None = None) -> int:
     """Edit a contact's name, mobile, email or role, or mark it as the one on

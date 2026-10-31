@@ -140,3 +140,22 @@ def test_list_filters(created):
     assert total == 1 and rows[0]["id"] == b["id"]
     rows, total = bm.list_bookings(statuses=["cancelled"], q=b["reference"])
     assert total == 0
+
+
+def test_own_contact_stays_one_row_when_the_email_arrives_later(created):
+    from src.models import booking_contact
+
+    b = make(created, contact_email=None)
+    rows = booking_contact.list_for_booking(b["id"])
+    assert [(r["role"], r["email"]) for r in rows] == [("primary", None)]
+    booking_contact.update(b["id"], rows[0]["id"], on_site=True)
+    bs.update_booking(b["id"], {"contact_email": "Jane.Test@Example.com"}, actor=None)
+    rows = booking_contact.list_for_booking(b["id"])
+    assert [(r["role"], r["email"], bool(r["on_site"])) for r in rows] == [("primary", "jane.test@example.com", True)]
+    # the address already known as a learned contact: that row is promoted, the blank one goes
+    b2 = make(created, contact_email=None, group_name="TEST pytest school 2")
+    booking_contact.upsert(b2["id"], "learned@example.com", role="learned", source="inbound")
+    bs.update_booking(b2["id"], {"contact_email": "learned@example.com"}, actor=None)
+    rows = booking_contact.list_for_booking(b2["id"])
+    assert [(r["role"], r["email"], r["name"]) for r in rows] == [("primary", "learned@example.com", "Jane Test")]
+
