@@ -840,6 +840,15 @@ def reply(
     )
     _link_documents(link_ids, sent.get("id"))
     refresh_thread(thrid)
+    # An open enquiry on this conversation is now answered, whichever reader sent the reply.
+    try:
+        from src.models import enquiry as enquiry_model
+
+        enquiry = enquiry_model.get_by_thread(thrid)
+        if enquiry and enquiry.get("status") in enquiry_model.OPEN_STATUSES and sent.get("send_status") != "failed":
+            enquiry_model.touch_outbound(int(enquiry["id"]), datetime.now().replace(microsecond=0))
+    except Exception as exc:  # noqa: BLE001 - the reply went; the enquiry mark is a nicety
+        logger.warning(f"Could not mark the enquiry on thread {thrid} as replied: {exc}")
     if mark_done_after and sent.get("send_status") == "sent":
         mark_done(thrid, actor)
     full = em.get(int(sent["id"])) if sent.get("id") else None

@@ -7,6 +7,7 @@
  *   /work                     Work queue
  *   /calendar                 Season calendar (sidebar auto-collapses)
  *   /bookings, /bookings/:id  Bookings list and record
+ *   /enquiries[/:id]          Enquiries: the list and the reading pane
  *   /mail, /mail/:thrid       Mail queues and conversation
  *   /bank                     Bank feed
  *   /gate                     Gate: arrivals, open tickets, morning sync
@@ -133,6 +134,14 @@ export const router = createBrowserRouter([
         element: <RequireRole roles={["admin"]} />,
         children: [
           { path: "work", lazy: page(() => import("@/pages/work/WorkPage")), handle: { crumb: "Work" } },
+          {
+            path: "enquiries",
+            handle: { crumb: "Enquiries", crumbTo: "/enquiries" },
+            children: [
+              { index: true, lazy: page(() => import("@/pages/enquiries/EnquiriesPage")), handle: { collapseSidebarBelow: 1600, layout: "fill" } },
+              { path: ":id", lazy: page(() => import("@/pages/enquiries/EnquiriesPage")), handle: { collapseSidebarBelow: 1600, layout: "fill" } },
+            ],
+          },
           { path: "queue", element: <RedirectTo to="/work" /> },
           {
             path: "bookings",

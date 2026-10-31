@@ -80,6 +80,11 @@ type FormValues = z.input<typeof schema>;
 type ParsedValues = z.output<typeof schema>;
 
 const nullable = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
+
+function stripUndefined<T extends object>(values: T | undefined): Partial<T> {
+  if (!values) return {};
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined && v !== null)) as Partial<T>;
+}
 const isNumber = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v);
 
 function toInput(values: ParsedValues, booking: BookingDetail | null): BookingInput {
@@ -146,6 +151,9 @@ function defaultsFor(booking: BookingDetail | null, defaultDate?: string): FormV
 
 // ------------------------------------------------------------------ dialog
 
+/** Create mode: values to start the form with (an enquiry's extraction, a calendar day). */
+export type BookingFormPrefill = Partial<Pick<FormValues, "group_name" | "group_type" | "area" | "contact_name" | "contact_email" | "contact_mobile" | "visit_date" | "alternative_date" | "visitors" | "customer_notes" | "internal_notes">>;
+
 export interface BookingFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -153,27 +161,46 @@ export interface BookingFormDialogProps {
   booking?: BookingDetail | null;
   /** Create mode: prefill the visit date (from the calendar). */
   defaultDate?: string;
+  /** Create mode: more starting values (an enquiry's details). */
+  prefill?: BookingFormPrefill;
+  /** Create mode: fields sent with the form's own (questions from an enquiry). */
+  extraInput?: Partial<BookingInput>;
+  /** Create mode: create through another endpoint (an enquiry's Create request). */
+  onCreate?: (input: BookingInput) => Promise<BookingDetail>;
   /** Create mode: called with the new booking; defaults to navigating to it. */
   onCreated?: (booking: BookingDetail) => void;
   /** Edit mode: open on the contact fields or with Pricing expanded. */
   focus?: EditFocus;
+  /** Title, description and submit label when the dialog is not plainly "New booking". */
+  copy?: { title: string; description: string; submit: string };
 }
 
-export function BookingFormDialog({ open, onOpenChange, booking = null, defaultDate, onCreated, focus = null }: BookingFormDialogProps) {
+export function BookingFormDialog({ open, onOpenChange, booking = null, defaultDate, prefill, extraInput, onCreate, onCreated, focus = null, copy }: BookingFormDialogProps) {
   const editing = !!booking;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-section">{editing ? `Edit ${booking.reference}` : "New booking"}</DialogTitle>
+          <DialogTitle className="text-section">{editing ? `Edit ${booking.reference}` : (copy?.title ?? "New booking")}</DialogTitle>
           <DialogDescription>
             {editing
               ? "Changing the date, kind of group or visitors recalculates the rate and deposit. An agreed price below the rate stays as a discount."
-              : "A group that booked by phone or in person. The rate follows the date, kind of group and visitors; the reference is assigned on save."}
+              : (copy?.description ?? "A group that booked by phone or in person. The rate follows the date, kind of group and visitors; the reference is assigned on save.")}
           </DialogDescription>
         </DialogHeader>
         {open ? (
-          <BookingForm key={booking?.id ?? `new-${defaultDate ?? ""}`} booking={booking} defaultDate={defaultDate} focus={focus} onClose={() => onOpenChange(false)} onCreated={onCreated} />
+          <BookingForm
+            key={booking?.id ?? `new-${defaultDate ?? ""}`}
+            booking={booking}
+            defaultDate={defaultDate}
+            prefill={prefill}
+            extraInput={extraInput}
+            onCreate={onCreate}
+            submitLabel={copy?.submit}
+            focus={focus}
+            onClose={() => onOpenChange(false)}
+            onCreated={onCreated}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -188,13 +215,33 @@ const RATE_DAY_LABEL: Record<RateQuote["rate_day"], string> = {
   weekday: "term-time weekday",
 };
 
-function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { booking: BookingDetail | null; defaultDate?: string; focus: EditFocus; onClose: () => void; onCreated?: (booking: BookingDetail) => void }) {
+function BookingForm({
+  booking,
+  defaultDate,
+  prefill,
+  extraInput,
+  onCreate,
+  submitLabel,
+  focus,
+  onClose,
+  onCreated,
+}: {
+  booking: BookingDetail | null;
+  defaultDate?: string;
+  prefill?: BookingFormPrefill;
+  extraInput?: Partial<BookingInput>;
+  onCreate?: (input: BookingInput) => Promise<BookingDetail>;
+  submitLabel?: string;
+  focus: EditFocus;
+  onClose: () => void;
+  onCreated?: (booking: BookingDetail) => void;
+}) {
   const navigate = useNavigate();
   const settings = useSettings();
   const create = useCreateBooking();
   const update = useUpdateBooking(booking?.id ?? 0);
   const [error, setError] = useState<string | null>(null);
-  const form = useZodForm({ schema, defaultValues: defaultsFor(booking, defaultDate) });
+  const form = useZodForm({ schema, defaultValues: { ...defaultsFor(booking, defaultDate), ...(booking ? {} : stripUndefined(prefill)) } });
   const [invoiceOpen, setInvoiceOpen] = useState(!!(booking?.billing_address || booking?.customer_vat_number));
   const [pricingOpen, setPricingOpen] = useState(focus === "pricing" || !!booking && (booking.discount_per_person > 0 || booking.deposit_overridden || booking.deposit_waived));
 
@@ -273,8 +320,9 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
         toast.success("Booking updated");
         onClose();
       } else {
-        const created = await create.mutateAsync(input);
-        toast.success(`${created.reference} created for ${created.group_name}`);
+        const payload = { ...input, ...stripUndefined(extraInput) } as BookingInput;
+        const created = onCreate ? await onCreate(payload) : await create.mutateAsync(payload);
+        if (!onCreate) toast.success(`${created.reference} created for ${created.group_name}`);
         onClose();
         if (onCreated) onCreated(created);
         else navigate(`/bookings/${created.id}`);
@@ -391,7 +439,7 @@ function BookingForm({ booking, defaultDate, focus, onClose, onCreated }: { book
           </Button>
           <Button type="submit" disabled={busy || (!!booking && !form.formState.isDirty)}>
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            {booking ? "Save changes" : "Create booking"}
+            {booking ? "Save changes" : (submitLabel ?? "Create booking")}
           </Button>
         </DialogFooter>
       </form>
