@@ -24,7 +24,7 @@ import { BookingFormDialog } from "@/features/bookings/components/booking-form-d
 import { BookingPicker } from "@/features/bookings/components/booking-picker";
 import type { BookingInput } from "@/features/bookings/types";
 import { errorMessage } from "@/lib/api";
-import { formatDateTime, pluralise } from "@/lib/format";
+import { formatDate, formatDateTime, pluralise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { useAttachEnquiry, useCreateRequest, useEnquiryAction, useEnquiryBooking, useEnquiryPrefill } from "../api";
@@ -88,7 +88,7 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
               {enquiry.sender_email}
             </span>
             <span>{pluralise(enquiry.message_count, "message")}</span>
-            <span>{open ? `Waiting since ${waitingLabel(enquiry).toLowerCase()}` : enquiry.resolved_at ? `Closed ${formatDateTime(enquiry.resolved_at)}` : waitingLabel(enquiry)}</span>
+            <span>{open ? `Waiting since ${formatDate(enquiry.last_inbound_at ?? enquiry.first_message_at ?? enquiry.created_at)}` : enquiry.resolved_at ? `Closed ${formatDateTime(enquiry.resolved_at)}` : `Last message ${waitingLabel(enquiry).toLowerCase()}`}</span>
             {enquiry.convert_sent_at ? <span>Form sent {formatDateTime(enquiry.convert_sent_at)}</span> : null}
           </p>
         </div>
@@ -96,7 +96,7 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
       <div className="flex flex-wrap items-center gap-2">
         {open ? (
           <>
-            <Button size="sm" className="border-transparent bg-amber-solid text-[#1f1a0a] hover:bg-amber-solid/90" disabled={busy} onClick={() => setConfirm("convert")}>
+            <Button size="sm" className="border-transparent bg-[#f59e0b] text-[#1f1a0a] hover:bg-[#d97706]" disabled={busy} onClick={() => setConfirm("convert")}>
               <Send data-icon="inline-start" />
               {enquiry.convert_sent_at ? "Send the form again" : "Send the form"}
             </Button>
