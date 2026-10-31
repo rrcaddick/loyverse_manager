@@ -40,7 +40,7 @@ export function VerbButton({ verb, primary = false, size, className }: { verb: S
   return (
     <Button
       size={size}
-      variant={primary ? "default" : destructive ? "destructive" : "ghost"}
+      variant={primary ? "default" : destructive ? "destructive" : "outline-primary"}
       className={className}
       onClick={() => actions.run(verb)}
     >

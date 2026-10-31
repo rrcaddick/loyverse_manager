@@ -100,16 +100,16 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
               <Send data-icon="inline-start" />
               {enquiry.convert_sent_at ? "Send the form again" : "Send the form"}
             </Button>
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => setRequestOpen(true)}>
+            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setRequestOpen(true)}>
               <FileInput data-icon="inline-start" />
               Create request
             </Button>
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => setAttachOpen(true)}>
+            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setAttachOpen(true)}>
               <Link2 data-icon="inline-start" />
               Attach to booking
             </Button>
             <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => void run("resolve", "Enquiry resolved")}>
+            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => void run("resolve", "Enquiry resolved")}>
               <Check data-icon="inline-start" />
               Resolve
             </Button>
@@ -126,7 +126,7 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
             </Link>
           </Button>
         ) : (
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => void run("reopen", "Enquiry reopened")}>
+          <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => void run("reopen", "Enquiry reopened")}>
             <RotateCcw data-icon="inline-start" />
             Reopen
           </Button>

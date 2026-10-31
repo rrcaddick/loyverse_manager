@@ -60,7 +60,7 @@ export function AttentionTab({
       secondary: (
         <Button
           size="sm"
-          variant="outline"
+          variant="outline-primary"
           className="min-w-32"
           disabled={partyDone.isPending}
           onClick={async () => {
