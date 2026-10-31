@@ -4,8 +4,8 @@
  *   row 1   day number (today: filled disc) · OVER top right when the day has
  *           passed Settings › Capacity › OVER threshold (the only tag)
  *   middle  the people booked, centred and large; the group count under it
- *   bottom  the split: confirmed (green) against pending (amber), a ratio of
- *           the two, with the two numbers under it, confirmed left, pending right
+ *   bottom  the two numbers, confirmed left and pending right, over the split
+ *           bar: confirmed (green) against pending (amber), a ratio of the two
  *
  * Fill = heat band of the people booked against capacity, five shades of one
  * blue, ink text on all. The day kind (Settings › Day kinds) is the cell's
@@ -101,7 +101,7 @@ export function DayCell({ ref, date, day, isToday, capacity, isFocused, isSelect
       </div>
 
       {hasNumbers ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden text-center leading-none whitespace-nowrap">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden pb-1.5 text-center leading-none whitespace-nowrap">
           <span className="text-(length:--fy-interest) leading-[0.95] font-bold tracking-tight tabular">{formatNumber(total)}</span>
           <span className={cn("mt-0.5 text-[0.8125rem] leading-4 font-medium", level === 0 && "text-muted-foreground")}>
             {groups} {groups === 1 ? "group" : "groups"}

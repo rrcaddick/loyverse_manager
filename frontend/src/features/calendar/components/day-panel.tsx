@@ -90,11 +90,11 @@ export function DayPanel({ date, day, today, onClose, onAddBooking }: DayPanelPr
           </div>
           {total > 0 ? (
             <div className="mt-2 flex flex-col gap-1">
-              <SplitBar confirmed={day.confirmed_people} pending={day.tentative_people} height={8} />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>confirmed</span>
                 <span>pending</span>
               </div>
+              <SplitBar confirmed={day.confirmed_people} pending={day.tentative_people} height={8} />
             </div>
           ) : null}
         </div>

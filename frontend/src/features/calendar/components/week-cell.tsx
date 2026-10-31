@@ -42,7 +42,7 @@ export function WeekCell({ week, days, isLoading }: WeekCellProps) {
       ) : (
         <>
           <div className="h-5 shrink-0" />
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden text-center leading-none whitespace-nowrap">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden pb-1.5 text-center leading-none whitespace-nowrap">
             <span className={cn("text-(length:--fy-week-interest) leading-[0.95] font-bold tracking-tight", total === 0 && "text-muted-foreground")}>{formatNumber(total)}</span>
             <span className={cn("mt-0.5 text-[0.8125rem] leading-4 font-medium", total === 0 && "text-muted-foreground")}>
               {groups} {groups === 1 ? "group" : "groups"}
