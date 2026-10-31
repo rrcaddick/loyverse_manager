@@ -22,7 +22,7 @@
  *   selected, active  secondary-container / on-secondary-container
  *   hover, focus      state layers: on-surface at 8 % / 12 %
  *   semantic hues     fixed tonal palettes (green 145, amber 75, red 25, blue 250, grey = neutral-variant)
- *   heat ramp         amber palette tones 95…60 (light) / 25…45 (dark), ink text
+ *   heat ramp         blue palette tones 95…60 (light) / 20…40 (dark), ink text
  *
  * The theme blocks are emitted per [data-theme] and [data-theme].dark with
  * literal values so an element carrying data-theme renders the whole set
@@ -70,7 +70,7 @@ const SEMANTIC = {
   red: TonalPalette.fromHueAndChroma(25, 84),
   blue: TonalPalette.fromHueAndChroma(250, 48),
 };
-const HEAT = TonalPalette.fromHueAndChroma(72, 56);
+const HEAT = TonalPalette.fromHueAndChroma(264, 48); // the calendar's blue ramp (29 Oct 2026)
 
 function roles(theme, isDark) {
   const scheme = new theme.scheme(Hct.fromInt(argbFromHex(theme.seed)), isDark, theme.contrast);
@@ -224,7 +224,7 @@ function tokens(theme, isDark) {
     "status-blue-bg": hc ? "transparent" : sem["blue-soft"],
     "status-blue-fg": sem["blue-text"],
 
-    // heat ramp (calendar): one warm ramp in every theme, ink text on all
+    // heat ramp (calendar): one blue ramp in every theme, ink text on all
     "heat-0": "transparent",
     "heat-1": tone(HEAT, L ? 95 : 20),
     "heat-2": tone(HEAT, L ? 90 : 25),

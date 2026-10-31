@@ -4,7 +4,7 @@
  * Money is a 2dp float; dates are "YYYY-MM-DD"; datetimes are naive SAST ISO.
  */
 
-import type { BookingStatus } from "@/types/api";
+import type { BookingStatus, DayKind } from "@/types/api";
 
 export type BookingSource = "form" | "email" | "import" | "manual";
 export type PaymentKind = "eft" | "cash" | "card" | "cash_deposit" | "other";
@@ -354,10 +354,16 @@ export interface CalendarDay {
   is_peak: boolean;
   is_school_holiday: boolean;
   label: string | null;
+  /** The day's primary kind (Settings › Day kinds), highest priority that matches. */
+  kind: DayKind | null;
+  /** Every kind the day matches, highest priority first. */
+  kinds: string[];
   total_people: number;
   confirmed_people: number;
   tentative_people: number;
   booking_count: number;
+  /** People booked at or past Settings › Capacity › OVER threshold. */
+  over: boolean;
   capacity_warning: boolean;
   bookings: CalendarDayBooking[];
 }
@@ -366,6 +372,10 @@ export interface CalendarResponse {
   from: string;
   to: string;
   days: CalendarDay[];
+  /** What the cells are drawn with (managers cannot read GET /settings). */
+  capacity: number;
+  over_threshold: number;
+  day_kinds: DayKind[];
 }
 
 /** GET /days/:date items: the row plus finance and payments (no list-item roll-ups). */

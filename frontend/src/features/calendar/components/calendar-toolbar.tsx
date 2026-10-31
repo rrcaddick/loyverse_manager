@@ -86,7 +86,7 @@ function MonthPicker({ month, title, onPick }: { month: string; title: string; o
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" className="h-9 px-2" aria-label={`Choose a month, showing ${title}`}>
-          <h1 className="text-section leading-none">{title}</h1>
+          <h1 className="text-title leading-none">{title}</h1>
           <ChevronDown className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>

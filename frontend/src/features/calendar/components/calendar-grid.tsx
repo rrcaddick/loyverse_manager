@@ -158,13 +158,13 @@ export function CalendarGrid({
 
   return (
     <div role="grid" aria-label={`Bookings calendar, ${windowTitle(view)}`} aria-busy={isLoading || undefined} className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
-      <div role="row" className="grid h-6 shrink-0 items-center gap-x-1.5 px-3" style={{ gridTemplateColumns: COLUMNS }}>
+      <div role="row" className="grid h-7 shrink-0 items-center gap-x-1.5 px-3" style={{ gridTemplateColumns: COLUMNS }}>
         {WEEKDAY_HEADERS.map((label) => (
-          <div key={label} role="columnheader" className="text-label px-2 text-muted-foreground uppercase">
+          <div key={label} role="columnheader" className="px-2 text-sm font-semibold tracking-[0.04em] text-muted-foreground uppercase">
             {label}
           </div>
         ))}
-        <div role="columnheader" className="text-label px-2.5 text-right text-muted-foreground uppercase">
+        <div role="columnheader" className="px-2.5 text-right text-sm font-semibold tracking-[0.04em] text-muted-foreground uppercase">
           Week
         </div>
       </div>

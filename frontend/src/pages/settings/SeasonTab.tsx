@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useFieldArray } from "react-hook-form";
 import { z } from "zod";
 
-import { DateField, FieldRow, NumberField, SelectField, TextField, WeekdayToggleField, useZodForm } from "@/components/form";
+import { DateField, FieldRow, SelectField, TextField, WeekdayToggleField, useZodForm } from "@/components/form";
 import { EmptyState } from "@/components/empty-state";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { WEEKDAYS, formatDate, formatWeekday, todayIso } from "@/lib/format";
 import type { SeasonDay } from "@/types/api";
 
 import type { SettingsTabProps } from "./SettingsPage";
-import { SettingsForm, count, dirtyKeys, isoDate, pick, runSave } from "./shared";
+import { SettingsForm, dirtyKeys, isoDate, pick, runSave } from "./shared";
 
 const KIND_OPTIONS = [
   { value: "closed", label: "Closed", description: "No bookings on this day" },
@@ -34,9 +34,6 @@ const schema = z
           label: z.string().trim().max(80, "Keep labels short"),
         }),
       ),
-    }),
-    capacity: z.object({
-      daily_warning_people: count("Enter the number of people"),
     }),
     season_days: z.array(
       z.object({
@@ -76,7 +73,6 @@ type FormValues = z.input<typeof schema>;
 
 export default function SeasonTab({ data }: SettingsTabProps) {
   const saveSeason = useUpdateSection("season");
-  const saveCapacity = useUpdateSection("capacity");
   const saveDays = useReplaceSeasonDays();
   const [error, setError] = useState<string | null>(null);
 
@@ -87,7 +83,6 @@ export default function SeasonTab({ data }: SettingsTabProps) {
         ...data.settings.season,
         school_holidays: (data.settings.season.school_holidays ?? []).map((r) => ({ from: r.from, to: r.to, label: r.label ?? "" })),
       },
-      capacity: data.settings.capacity,
       season_days: data.season_days.map((d) => ({ day: d.day, kind: d.kind, label: d.label ?? "" })),
     },
   });
@@ -107,8 +102,6 @@ export default function SeasonTab({ data }: SettingsTabProps) {
           }
           await saveSeason.mutateAsync(payload);
         }
-        const capacityKeys = dirtyKeys(values.capacity, dirty.capacity);
-        if (capacityKeys.length) await saveCapacity.mutateAsync(pick(values.capacity, capacityKeys));
         if (dirty.season_days) {
           const items: SeasonDay[] = [...values.season_days]
             .sort((a, b) => a.day.localeCompare(b.day))
@@ -121,7 +114,7 @@ export default function SeasonTab({ data }: SettingsTabProps) {
     );
   }
 
-  const saving = saveSeason.isPending || saveCapacity.isPending || saveDays.isPending;
+  const saving = saveSeason.isPending || saveDays.isPending;
 
   return (
     <SettingsForm form={form} onSubmit={onSubmit} saving={saving} error={error}>
@@ -213,9 +206,6 @@ export default function SeasonTab({ data }: SettingsTabProps) {
         )}
       </Section>
 
-      <Section title="Capacity" description="The calendar warns when the people booked for one day pass this number.">
-        <NumberField control={form.control} name="capacity.daily_warning_people" label="Daily warning" suffix="people" integer min={0} className="sm:max-w-xs" />
-      </Section>
     </SettingsForm>
   );
 }

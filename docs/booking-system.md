@@ -493,3 +493,20 @@ the response carries that result as `whatsapp`. `payments.kind` gains
 `cash_deposit` (migration 022). `GET …/payment-search` returns only credits
 not on any booking and no larger than the outstanding balance plus R 1 000.
 
+
+
+### Day kinds and capacity (31 Oct 2026)
+
+`settings.day_kinds = {kinds: [{code, label, colour, on, dates?}], peak_days:
+["MM-DD"], ramadan: {start, end}}` (highest priority first; built-in codes
+`peak`, `public_holiday`, `ramadan_eve`, `eid`, `weekend`, `school_holiday`,
+`closed`; `src/services/day_kinds.py`: `kinds_for`, `primary_kind`, `legend`,
+`ramadan_windows`, tabular Islamic calendar `hijri_to_date`).
+`settings.capacity = {capacity: 1500, over_threshold: 1200}` (`booking.capacity_of`,
+`booking.over_threshold`; the old `daily_warning_people` is read as the
+threshold when present). `GET /calendar` → `{from, to, days, capacity,
+over_threshold, day_kinds}`; each day carries `kind` (`{code, label, colour}`
+or null), `kinds` (codes) and `over`; `GET /days/:date` and `GET /today`
+carry `kind` and `kinds`. `GET /today` (admin) also carries `season`,
+`month`, `money`, `next_visit_days`; `up_next`, `needs_you` and `system` are
+gone. `pricing.is_peak` counts `peak_days` as well as `season_days` rows.

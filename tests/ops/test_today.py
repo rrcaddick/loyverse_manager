@@ -110,7 +110,10 @@ def test_today_tiles_maths(visit_day):
     assert page["tiles"]["people"] == {"total": 150, "confirmed": 100}
     # owed = (100 × 95 − 2000) + 50 × 95 ; paid = 2000
     assert page["tiles"]["owed_at_gate"] == {"total": 12250.0, "paid": 2000.0}
-    assert set(page["tiles"]["needs_you"]) == {"count", "oldest_days"}
+    assert set(page["season"]) == {"from", "to", "bookings", "confirmed_people", "pending_people", "completed", "visit_days_ahead"}
+    assert set(page["month"]) == {"label", "from", "to", "groups", "confirmed_people", "pending_people"}
+    assert set(page["money"]) == {"deposits", "deposits_count", "balances", "balances_count"}
+    assert isinstance(page["next_visit_days"], list) and page["kind"] is not None and "weekend" in page["kinds"]
     assert [g["reference"] for g in page["groups"]] == [
         visit_day["confirmed"]["reference"], visit_day["tentative"]["reference"]
     ]
@@ -125,7 +128,7 @@ def test_today_tiles_maths(visit_day):
     assert len(strip) == 7 and strip[0] == {
         "date": d.isoformat(), "groups": 2, "people": 150, "confirmed_people": 100, "is_closed": False
     }
-    assert len(page["up_next"]) <= 5 and set(page["system"]) == {"mail", "bank", "loyverse_sync"}
+    assert "up_next" not in page and "system" not in page
     assert "work_counts" in page
 
     # arrivals recorded on the confirmed group: balance is now against the final amount
@@ -136,7 +139,7 @@ def test_today_tiles_maths(visit_day):
 
     stripped = today_service.today(d, for_manager=True)
     assert set(stripped["tiles"]) == {"groups", "people"}
-    assert "up_next" not in stripped and "work_counts" not in stripped
+    assert "up_next" not in stripped and "work_counts" not in stripped and "season" not in stripped and "money" not in stripped
     assert stripped["groups"][0]["balance_due"] == 5600.0  # the gate still sees per-group money
 
 

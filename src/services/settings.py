@@ -73,7 +73,28 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "lapse_days_before": 7,
     },
     "capacity": {
-        "daily_warning_people": 1000,
+        # The bar in a calendar cell is drawn against ``capacity``; OVER shows
+        # from ``over_threshold`` (29 Oct 2026).
+        "capacity": 1500,
+        "over_threshold": 1200,
+    },
+    "day_kinds": {
+        # Highest priority first; the first kind a day matches colours its cell.
+        # Built-in codes carry a rule (src/services/day_kinds.py); a kind added
+        # here matches the dates listed on it: {"code", "label", "colour", "on", "dates"}.
+        "kinds": [
+            {"code": "peak", "label": "Peak day", "colour": "#E53935", "on": True},
+            {"code": "public_holiday", "label": "Public holiday", "colour": "#8E24AA", "on": True},
+            {"code": "ramadan_eve", "label": "Day before Ramadan", "colour": "#3949AB", "on": True},
+            {"code": "eid", "label": "Day after Ramadan", "colour": "#5E35B1", "on": True},
+            {"code": "weekend", "label": "Weekend", "colour": "#FB8C00", "on": True},
+            {"code": "school_holiday", "label": "School holiday", "colour": "#FFB300", "on": True},
+            {"code": "closed", "label": "Closed to the public", "colour": "#9E9E9E", "on": True},
+        ],
+        # Peak days every year, as MM-DD (explicit season_days rows of kind peak count too).
+        "peak_days": ["12-26", "01-01", "01-02"],
+        # The moon sighting decides Ramadan: the first and last day, when known.
+        "ramadan": {"start": None, "end": None},
     },
     "email": {
         "sender_name": "The Farmyard Park",

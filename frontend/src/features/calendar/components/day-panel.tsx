@@ -9,7 +9,7 @@
  * the admin-only balance in red when due (GET /days/:date); a footer with
  * Open day view and Add booking (admin).
  *
- * `DayFlags` is also used by the day view (pages/calendar/DayPage.tsx).
+ * `DayFlags` is also used by the Today page.
  */
 
 import { ArrowRight, CalendarPlus, ChevronRight, Plus, X } from "lucide-react";
@@ -29,19 +29,19 @@ import { cn } from "@/lib/utils";
 
 import { useDay } from "../api";
 import { relativeDayLabel } from "../month";
+import { KindPill } from "./kind-pill";
 import { SplitCaption } from "./split-caption";
 
-type DayFlagsInput = Pick<CalendarDay, "day_type" | "is_closed" | "is_avoid" | "is_peak" | "is_school_holiday" | "label" | "capacity_warning">;
+type DayFlagsInput = Pick<CalendarDay, "kind" | "label" | "over">;
 
+/** The day's kind, a holiday or special-day name when it adds something, and OVER. */
 export function DayFlags({ day, className }: { day: DayFlagsInput; className?: string }) {
+  const named = day.label && (!day.kind || day.label !== day.kind.label) ? day.label : null;
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      <StatusPill tone="neutral" dot={false} label={day.day_type === "weekend" ? "Weekend rate" : "Weekday rate"} />
-      {day.is_closed ? <StatusPill tone="neutral" label={day.label ? `Closed · ${day.label}` : "Closed"} /> : day.label ? <StatusPill tone="blue" label={day.label} /> : null}
-      {day.is_peak ? <StatusPill tone="amber" label="Peak day" /> : null}
-      {day.is_avoid ? <StatusPill tone="neutral" label="Avoid" /> : null}
-      {day.is_school_holiday && !day.is_peak ? <StatusPill tone="amber" label="School holidays" /> : null}
-      {day.capacity_warning ? <StatusPill tone="red" label="Over capacity" /> : null}
+      {day.kind ? <KindPill kind={day.kind} /> : null}
+      {named ? <StatusPill tone="neutral" dot={false} label={named} /> : null}
+      {day.over ? <StatusPill tone="red" label="Over the limit" /> : null}
     </div>
   );
 }

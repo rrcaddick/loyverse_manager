@@ -10,8 +10,8 @@
  * row 2) and ?day=YYYY-MM-DD (the open panel).
  *
  * Data: GET /calendar?from&to for the visible window (adjacent windows are
- * prefetched), GET /settings for the capacity setting (admin; managers fall
- * back to DEFAULT_CAPACITY), GET /days/:date inside the panel for balances.
+ * prefetched) which also carries the capacity, the OVER threshold and the day
+ * kinds, GET /days/:date inside the panel for balances.
  */
 
 import { AlertCircle, RefreshCw } from "lucide-react";
@@ -43,7 +43,6 @@ import {
   windowWithInRowTwo,
 } from "@/features/calendar/month";
 import { useViewportRows } from "@/features/calendar/use-viewport-rows";
-import { useSettings } from "@/features/settings/api";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useShortcut } from "@/hooks/use-keyboard";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
@@ -69,8 +68,9 @@ export default function CalendarPage() {
 
   const calendar = useCalendar(view.from, view.to);
   const prefetch = usePrefetchCalendar();
-  const settings = useSettings({ enabled: isAdmin });
-  const capacity = settings.data?.settings.capacity.daily_warning_people ?? DEFAULT_CAPACITY;
+  const capacity = calendar.data?.capacity ?? DEFAULT_CAPACITY;
+  const overThreshold = calendar.data?.over_threshold ?? capacity;
+  const dayKinds = calendar.data?.day_kinds ?? [];
 
   useEffect(() => {
     const neighbours = new Set([shiftDay(view.from, -7), shiftDay(view.from, 7), shiftWindowMonth(view.from, -1), shiftWindowMonth(view.from, 1)]);
@@ -217,7 +217,7 @@ export default function CalendarPage() {
           onWheelWeeks={stepWeeks}
         />
 
-        <CalendarLegend capacity={capacity} />
+        <CalendarLegend capacity={capacity} overThreshold={overThreshold} kinds={dayKinds} />
       </div>
 
       {selectedDate ? (

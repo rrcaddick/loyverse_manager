@@ -1,19 +1,19 @@
 /**
  * GET /today?date= (docs/handoff/work-today.md). Manager calls lose the
- * money tile, Needs you, Up next and the work counts, so those are optional.
+ * money tile and the dashboard blocks, so those are optional.
  */
 
 import type { ArrivalSource } from "@/features/bookings/types";
-import type { WorkCounts, WorkRow } from "@/features/work/types";
-import type { BookingStatus } from "@/types/api";
+import type { WorkCounts } from "@/features/work/types";
+import type { BookingStatus, DayKind } from "@/types/api";
 
 export interface TodayTiles {
   groups: { total: number; arrived: number };
   people: { total: number; confirmed: number };
   /** Admin only. */
   owed_at_gate?: { total: number; paid: number };
-  /** Admin only: the Work total and the oldest row's age. */
-  needs_you?: { count: number; oldest_days: number | null };
+  /** Admin only: automated mail set aside in the last `days` days. */
+  skipped_mail?: { count: number; days: number };
 }
 
 export interface TodayGroup {
@@ -42,18 +42,37 @@ export interface NextVisitDay {
   date: string;
   groups: number;
   people: number;
+  confirmed_people?: number;
+  pending_people?: number;
+  kind?: DayKind | null;
 }
 
-export type SyncOutcome = "success" | "no_event" | "failed" | "running";
+/** Admin only: the season's numbers. */
+export interface SeasonBlock {
+  from: string;
+  to: string;
+  bookings: number;
+  confirmed_people: number;
+  pending_people: number;
+  completed: number;
+  visit_days_ahead: number;
+}
 
-export interface SystemStatus {
-  mail: { last_synced_at: string | null; ok: boolean };
-  bank: { last_poll_at: string | null; ok: boolean };
-  loyverse_sync: {
-    scheduled: boolean;
-    last_run: { at: string; outcome: SyncOutcome; message: string | null } | null;
-    status: "off" | "unknown" | "ok" | "failed" | "running";
-  };
+export interface MonthBlock {
+  label: string;
+  from: string;
+  to: string;
+  groups: number;
+  confirmed_people: number;
+  pending_people: number;
+}
+
+/** Admin only: money still to come in on the visits ahead. */
+export interface MoneyBlock {
+  deposits: number;
+  deposits_count: number;
+  balances: number;
+  balances_count: number;
 }
 
 export interface TodayResponse {
@@ -67,16 +86,20 @@ export interface TodayResponse {
   is_peak: boolean;
   /** Season-day label or the public holiday name. */
   day_label: string | null;
+  /** The day's kind (Settings › Day kinds) and every kind it matches. */
+  kind: DayKind | null;
+  kinds: string[];
   tiles: TodayTiles;
   groups: TodayGroup[];
   /** Only when the day is closed or has no groups. */
   next_visit_day: NextVisitDay | null;
   seven_day_strip: StripDay[];
-  /** Admin only: the first five of Work's up_next. */
-  up_next?: WorkRow[];
   /** Admin only. */
+  season?: SeasonBlock;
+  month?: MonthBlock;
+  money?: MoneyBlock;
+  next_visit_days?: NextVisitDay[];
   work_counts?: WorkCounts;
-  system: SystemStatus;
 }
 
 /**

@@ -241,9 +241,157 @@ def seven_day_strip(start: date) -> list[dict]:
     ]
 
 
+def _as_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _people_by_status(from_d: date, to_d: date) -> dict[str, dict]:
+    rows = query(
+        """
+        SELECT status, COUNT(*) AS n, COALESCE(SUM(people_booked), 0) AS people
+        FROM bookings WHERE visit_date BETWEEN %s AND %s GROUP BY status
+        """,
+        (from_d, to_d),
+    )
+    return {r["status"]: r for r in rows}
+
+
+def season_block(today: date) -> dict:
+    """The season's numbers: bookings, people confirmed and pending, visit days ahead."""
+    from src.services.settings import get_settings
+
+    s = get_settings()
+    start = _as_date(s.season.get("start")) or today
+    end = _as_date(s.season.get("end")) or today
+    by = _people_by_status(start, end)
+
+    def people(statuses) -> int:
+        return int(sum(int(by[st]["people"]) for st in statuses if st in by))
+
+    def count(statuses) -> int:
+        return int(sum(int(by[st]["n"]) for st in statuses if st in by))
+
+    ahead = query_one(
+        "SELECT COUNT(DISTINCT visit_date) AS n FROM bookings WHERE visit_date BETWEEN %s AND %s AND status IN %s",
+        (today, end, tuple(ACTIVE_STATUSES)),
+    )
+    return {
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "bookings": count(ACTIVE_STATUSES),
+        "confirmed_people": people(FIRM_STATUSES),
+        "pending_people": people(booking_service.TENTATIVE_STATUSES),
+        "completed": count(("completed",)),
+        "visit_days_ahead": int((ahead or {}).get("n") or 0),
+    }
+
+
+def month_block(d: date) -> dict:
+    """This month's confirmed and pending people and groups."""
+    first = d.replace(day=1)
+    last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    by = _people_by_status(first, last)
+
+    def people(statuses) -> int:
+        return int(sum(int(by[st]["people"]) for st in statuses if st in by))
+
+    return {
+        "label": first.strftime("%B"),
+        "from": first.isoformat(),
+        "to": last.isoformat(),
+        "groups": int(sum(int(by[st]["n"]) for st in ACTIVE_STATUSES if st in by)),
+        "confirmed_people": people(FIRM_STATUSES),
+        "pending_people": people(booking_service.TENTATIVE_STATUSES),
+    }
+
+
+def money_block(today: date) -> dict:
+    """Money outstanding on the visits ahead: deposits not yet paid on bookings
+    awaiting them, and balances still owed on confirmed visits."""
+    from src.models import booking as booking_model
+    from src.services.settings import get_settings
+
+    s = get_settings()
+    end = _as_date(s.season.get("end")) or (today + timedelta(days=365))
+    deposits = Decimal(0)
+    balances = Decimal(0)
+    deposit_n = balance_n = 0
+    rows = booking_model.list_by_date_range(today, max(end, today), ACTIVE_STATUSES)
+    ids = [int(b["id"]) for b in rows]
+    paid: dict[int, Decimal] = {}
+    if ids:
+        for r in query(
+            f"SELECT booking_id, COALESCE(SUM(amount), 0) AS paid FROM payments WHERE booking_id IN ({','.join(['%s'] * len(ids))}) GROUP BY booking_id",
+            tuple(ids),
+        ):
+            paid[int(r["booking_id"])] = Decimal(str(r["paid"]))
+    for b in rows:
+        fin = booking_service.booking_finance(b, paid_total=paid.get(int(b["id"]), Decimal(0)), settings=s)
+        if b["status"] == "proforma_sent":
+            due = Decimal(str(fin.get("deposit_outstanding") or 0))
+            if due > 0:
+                deposits += due
+                deposit_n += 1
+        elif b["status"] == "confirmed":
+            due = Decimal(str(fin.get("balance_due") or 0))
+            if due > 0:
+                balances += due
+                balance_n += 1
+    return {
+        "deposits": round(float(deposits), 2),
+        "deposits_count": deposit_n,
+        "balances": round(float(balances), 2),
+        "balances_count": balance_n,
+    }
+
+
+def next_visit_days(today: date, limit: int = 5) -> list[dict]:
+    """The next days with groups booked, with their numbers and day kind."""
+    from src.services import day_kinds, pricing
+    from src.services.settings import get_settings
+
+    rows = query(
+        """
+        SELECT visit_date, COUNT(*) AS groups_n, COALESCE(SUM(people_booked), 0) AS people,
+               COALESCE(SUM(CASE WHEN status IN %s THEN people_booked ELSE 0 END), 0) AS confirmed
+        FROM bookings WHERE visit_date >= %s AND status IN %s
+        GROUP BY visit_date ORDER BY visit_date LIMIT %s
+        """,
+        (tuple(FIRM_STATUSES), today, tuple(ACTIVE_STATUSES), int(limit)),
+    )
+    if not rows:
+        return []
+    s = get_settings()
+    first = _as_date(rows[0]["visit_date"]) or today
+    last = _as_date(rows[-1]["visit_date"]) or first
+    season_days = pricing.load_season_days(first, last)
+    out = []
+    for r in rows:
+        day = _as_date(r["visit_date"])
+        if day is None:
+            continue
+        out.append(
+            {
+                "date": day.isoformat(),
+                "groups": int(r["groups_n"]),
+                "people": int(r["people"]),
+                "confirmed_people": int(r["confirmed"]),
+                "pending_people": int(r["people"]) - int(r["confirmed"]),
+                "kind": day_kinds.primary_kind(day, s, season_days),
+            }
+        )
+    return out
+
+
 def today(d: date | None = None, *, for_manager: bool = False) -> dict:
-    """Everything the Today page shows. ``for_manager`` strips the money tile,
-    the Needs-you tile and Up next (the manager cannot open Work)."""
+    """Everything the Today page shows: the day's groups and tiles for everyone;
+    for the admin also the season, this month, money outstanding, the next visit
+    days and the Work counts (UI round two, 26 Oct 2026)."""
     d = d or get_today()
     day = booking_service.day_detail(d)
     cards = [_group_card(item) for item in day["bookings"]]
@@ -266,16 +414,21 @@ def today(d: date | None = None, *, for_manager: bool = False) -> dict:
         "is_closed": bool(day["is_closed"]),
         "is_peak": bool(day["is_peak"]),
         "day_label": day.get("label"),
+        "kind": day.get("kind"),
+        "kinds": day.get("kinds") or [],
         "tiles": tiles,
         "groups": cards,
         "next_visit_day": next_visit_day(d) if (day["is_closed"] or not active) else None,
         "seven_day_strip": seven_day_strip(d),
-        "system": system_status(),
     }
     if not for_manager:
-        snap = work.snapshot(get_today())
+        now = get_today()
+        snap = work.snapshot(now)
         tiles["owed_at_gate"] = {"total": round(float(owed), 2), "paid": round(float(paid), 2)}
-        tiles["needs_you"] = work.needs_you(snap)
+        out["season"] = season_block(now)
+        out["month"] = month_block(d)
+        out["money"] = money_block(now)
+        out["next_visit_days"] = next_visit_days(now)
         try:
             from src.models import mail_skipped
             from src.services.inbound import _cfg
@@ -284,6 +437,5 @@ def today(d: date | None = None, *, for_manager: bool = False) -> dict:
             tiles["skipped_mail"] = {"count": mail_skipped.count_recent(days), "days": days}
         except Exception:  # noqa: BLE001 - never block Today on the log
             tiles["skipped_mail"] = {"count": 0, "days": 7}
-        out["up_next"] = snap["up_next"][:UP_NEXT_ON_TODAY]
         out["work_counts"] = snap["counts"]
     return out

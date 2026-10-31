@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from flask import request
 
 from src.services import booking as booking_service
+from src.services import day_kinds
+from src.services.settings import get_settings
 from src.utils.date import get_today
 from web.api import ApiError, allow_manager, make_blueprint, ok
 from web.api.bookings import register_booking_errors
@@ -48,7 +50,18 @@ def calendar():
             "validation_error", f"Range may not exceed {MAX_SPAN_DAYS} days", 422, {"to": "Range too long"}
         )
     days = booking_service.calendar_days(from_date, to_date)
-    return ok({"from": from_date.isoformat(), "to": to_date.isoformat(), "days": days})
+    s = get_settings()
+    return ok(
+        {
+            "from": from_date.isoformat(),
+            "to": to_date.isoformat(),
+            "days": days,
+            # Managers cannot read GET /settings: the calendar carries what it draws with.
+            "capacity": booking_service.capacity_of(s),
+            "over_threshold": booking_service.over_threshold(s),
+            "day_kinds": day_kinds.legend(s),
+        }
+    )
 
 
 @bp.get("/days/<day>")

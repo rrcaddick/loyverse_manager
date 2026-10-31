@@ -186,3 +186,46 @@ folded); display names from From, To and Cc are kept on the message
 the Conversation tab, not a mail client. The sheet is read live from Google
 Drive (the "FY Bookings" sheet, first tab) rather than a downloaded copy.
 
+
+## Today and Calendar (31 Oct 2026)
+
+Backend: `src/services/day_kinds.py`, `settings.day_kinds` and `settings.capacity`
+(`capacity` 1 500, `over_threshold` 1 200), `GET /calendar` carries `capacity`,
+`over_threshold` and `day_kinds` (the legend), every day carries `kind`
+(the primary kind: code, label, colour), `kinds` and `over`; `GET /days/:date`
+and `GET /today` carry `kind` and `kinds`. `GET /today` for the admin now
+carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_next`,
+`needs_you` and `system` are gone (System lives under Settings).
+
+- **Day kinds** (`Settings › Day kinds`, `DayKindsTab.tsx`): the ordered list
+  with ▲▼ priority, colour (the 2014 Material swatches), name and an On
+  switch; built-in kinds show their rule, an added kind takes a list of dates.
+  Peak days are MM-DD, every year (26 Dec, 1 and 2 Jan by default; explicit
+  `season_days` rows of kind peak still count, and pricing's peak tier uses
+  the same set). Ramadan comes from the tabular Islamic calendar with two
+  override dates (first and last day) for the moon sighting. Public holidays
+  are the local calculation. School holidays are the Season page's ranges.
+  Closed is a kind, never a block on a group booking.
+- **Capacity** (`Settings › Capacity`, `CapacityTab.tsx`): people a day and
+  the OVER threshold; the Season page lost its Capacity section.
+- **Calendar cell** (`day-cell.tsx`, the owner's 29 Oct layout): the day kind
+  is the 2 px border colour and the tag top right (OVER in red replaces it
+  from the threshold); the people booked centred and large with the group
+  count under it; confirmed left with its green dot, pending right with its
+  amber dot; the bar against capacity. The heat fill is five blues
+  (`gen-m3-tokens.mjs`, hue 264), ink text on all five, checks unchanged.
+  The hatch, the dashed Avoid border and the peak rule are gone. Month title
+  at the Today date size (`text-title`), weekday headers one step up.
+- **Legend** (`calendar-legend.tsx`): the heat bands of the capacity, the bar,
+  the enabled kinds in their colours, OVER with its threshold, today.
+- **Day panel and Today header**: the kind as a pill in its colour
+  (`kind-pill.tsx`), a holiday or special-day name when it adds something,
+  OVER; the rate pills are gone everywhere.
+- **Today** (`TodayPage.tsx`): tiles Groups today · People today · Owed at the
+  gate · This month (confirmed + pending people, groups, linking to the
+  calendar); the day's groups with live arrivals on the left; on the right
+  Needs attention (the Work views with something in them, each a link into
+  Work, plus the automated-mail line), The season (bookings, people,
+  deposits and balances still to come in) and Next visit days (five, each
+  with its kind). Up next, Needs you and the System line are gone; the
+  manager keeps Expected · Arrived · Still to come and the table.

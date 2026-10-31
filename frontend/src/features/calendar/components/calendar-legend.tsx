@@ -1,9 +1,10 @@
 /**
  * The 28 px legend line: the six heat swatches labelled with the band
- * thresholds (scaled from the capacity setting), the split bar, and the
- * day-type marks (closed, peak, avoid, over capacity, today).
+ * thresholds (scaled from the capacity), the split bar, the day kinds in
+ * their colours (Settings › Day kinds), OVER and today.
  */
 
+import type { DayKind } from "@/types/api";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +14,10 @@ import "../calendar.css";
 
 const SWATCH = ["border border-border bg-card", "bg-heat-1", "bg-heat-2", "bg-heat-3", "bg-heat-4", "bg-heat-5"] as const;
 
-/**
- * The legend is its own container: the least informative items drop first
- * as it narrows (the panel takes 400 px), so nothing is ever clipped.
- */
-export function CalendarLegend({ capacity, className }: { capacity: number; className?: string }) {
+/** Lower-priority kinds drop first as the line narrows (the panel takes 400 px). */
+const KIND_HIDE = ["", "", "", "@max-[1180px]:hidden", "@max-[1180px]:hidden", "@max-[1320px]:hidden", "@max-[1320px]:hidden", "@max-[1440px]:hidden"];
+
+export function CalendarLegend({ capacity, overThreshold, kinds, className }: { capacity: number; overThreshold: number; kinds: DayKind[]; className?: string }) {
   const labels = heatLegendLabels(capacity, formatNumber);
   return (
     <div className={cn("@container h-7 shrink-0 border-t border-border", className)}>
@@ -31,28 +31,24 @@ export function CalendarLegend({ capacity, className }: { capacity: number; clas
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-1.5 @max-[760px]:hidden">
+        <div className="flex items-center gap-1.5 @max-[860px]:hidden">
           <span className="flex h-1.5 w-8 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
             <span className="h-full w-7/12 bg-green-solid" />
             <span className="h-full w-5/12 bg-amber-solid" />
           </span>
-          confirmed · pending
+          confirmed · pending of {formatNumber(capacity)}
         </div>
+        {kinds.map((kind, index) => (
+          <div key={kind.code} className={cn("flex items-center gap-1.5", KIND_HIDE[index] ?? "@max-[1440px]:hidden")}>
+            <span className="size-3 rounded-sm border-2 bg-card" style={{ borderColor: kind.colour }} aria-hidden="true" />
+            {kind.label}
+          </div>
+        ))}
         <div className="flex items-center gap-1.5">
-          <span className="fy-swatch-hatched size-3 rounded-sm border border-border bg-nested" aria-hidden="true" />
-          Closed
-        </div>
-        <div className="flex items-center gap-1.5 @max-[900px]:hidden">
-          <span className="size-3 rounded-sm border border-border bg-card shadow-[inset_0_2px_0_0_var(--amber-solid)]" aria-hidden="true" />
-          Peak
-        </div>
-        <div className="flex items-center gap-1.5 @max-[900px]:hidden">
-          <span className="size-3 rounded-sm border border-dashed border-border-strong bg-card" aria-hidden="true" />
-          Avoid
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-sm border border-border bg-card shadow-[inset_0_3px_0_0_var(--red-solid)]" aria-hidden="true" />
-          Over {formatNumber(capacity)}
+          <span className="rounded-sm bg-red-solid px-1 text-[0.625rem] leading-3 font-semibold text-on-solid uppercase" aria-hidden="true">
+            Over
+          </span>
+          {formatNumber(overThreshold)}+
         </div>
         <div className="flex items-center gap-1.5 @max-[1020px]:hidden">
           <span className="inline-flex size-3.5 items-center justify-center rounded-full bg-primary text-[0.5rem] font-semibold text-primary-foreground" aria-hidden="true">

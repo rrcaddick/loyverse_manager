@@ -75,10 +75,10 @@ def test_people_are_split_by_status(s):
 
 
 def test_capacity_warning(s):
-    s.capacity["daily_warning_people"] = 500
+    s.capacity["over_threshold"] = 500
     rows = [booking(1, SAT, "confirmed", 300), booking(2, SAT, "enquiry", 200)]
     (day,) = aggregate_calendar(SAT, SAT, rows, s, {})
-    assert day["capacity_warning"] is True
+    assert day["capacity_warning"] is True and day["over"] is True
     rows[1]["people_booked"] = 199
     (day,) = aggregate_calendar(SAT, SAT, rows, s, {})
     assert day["capacity_warning"] is False

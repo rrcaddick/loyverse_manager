@@ -102,8 +102,33 @@ export interface RemindersSettings {
   lapse_days_before: number;
 }
 
+/** A kind of day on the calendar (Settings › Day kinds): border colour and tag. */
+export interface DayKind {
+  code: string;
+  label: string;
+  colour: string;
+}
+
+export interface DayKindSetting extends DayKind {
+  on: boolean;
+  /** Only a kind the operator added: the ISO dates it applies to. */
+  dates?: string[];
+}
+
+export interface DayKindsSettings {
+  /** Highest priority first; the first kind a day matches colours its cell. */
+  kinds: DayKindSetting[];
+  /** MM-DD, every year. */
+  peak_days: string[];
+  /** The first and last day of Ramadan when the moon sighting is known. */
+  ramadan: { start: string | null; end: string | null };
+}
+
 export interface CapacitySettings {
-  daily_warning_people: number;
+  /** The calendar bar is drawn against this. */
+  capacity: number;
+  /** People booked on one day from which the calendar shows OVER. */
+  over_threshold: number;
 }
 
 export interface EmailSettings {
@@ -138,6 +163,7 @@ export interface Settings {
   documents: DocumentsSettings;
   reminders: RemindersSettings;
   capacity: CapacitySettings;
+  day_kinds: DayKindsSettings;
   email: EmailSettings;
   form: FormSettings;
 }

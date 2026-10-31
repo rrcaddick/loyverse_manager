@@ -1,7 +1,7 @@
 /**
  * /settings/:section — Settings with a left rail (spec §2, §10):
  *
- *   Park              Season · Pricing & deposits
+ *   Park              Season · Day kinds · Capacity · Pricing & deposits
  *   Documents & mail  Documents · Email · Reminders · Templates · Mail rules
  *   Public            Booking form
  *   Personal          Appearance · Password
@@ -55,6 +55,8 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     title: "Park",
     items: [
       { value: "season", label: "Season", roles: ADMIN, kind: "settings", component: lazy(() => import("./SeasonTab")) },
+      { value: "day-kinds", label: "Day kinds", roles: ADMIN, kind: "settings", component: lazy(() => import("./DayKindsTab")) },
+      { value: "capacity", label: "Capacity", roles: ADMIN, kind: "settings", component: lazy(() => import("./CapacityTab")) },
       { value: "pricing", label: "Pricing & deposits", roles: ADMIN, kind: "settings", component: lazy(() => import("./PricingTab")) },
     ],
   },

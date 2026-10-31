@@ -38,7 +38,7 @@ from src.models.booking import (
     STATUSES,
     TENTATIVE_STATUSES,
 )
-from src.services import pricing
+from src.services import day_kinds, pricing
 from src.services.barcode import generate_barcode
 from src.services.settings import (
     Settings,
@@ -1078,7 +1078,7 @@ def aggregate_calendar(
         if b["status"] in ACTIVE_STATUSES:
             by_day[b["visit_date"]].append(b)
 
-    warn_at = int(s.capacity.daily_warning_people)
+    over_at = over_threshold(s)
     days = []
     d = from_date
     while d <= to_date:
@@ -1086,6 +1086,7 @@ def aggregate_calendar(
         total = sum(int(b["people_booked"] or 0) for b in todays)
         firm = sum(int(b["people_booked"] or 0) for b in todays if b["status"] in FIRM_STATUSES)
         tentative = sum(int(b["people_booked"] or 0) for b in todays if b["status"] in TENTATIVE_STATUSES)
+        kinds = day_kinds.kinds_for(d, s, season_days)
         days.append(
             {
                 "date": d.isoformat(),
@@ -1096,11 +1097,14 @@ def aggregate_calendar(
                 "is_peak": pricing.is_peak(d, s, season_days),
                 "is_school_holiday": pricing.is_school_holiday(d, s),
                 "label": pricing.day_label(d, season_days) or holiday_name(d),
+                "kind": kinds[0] if kinds else None,
+                "kinds": [k["code"] for k in kinds],
                 "total_people": total,
                 "confirmed_people": firm,
                 "tentative_people": tentative,
                 "booking_count": len(todays),
-                "capacity_warning": total >= warn_at,
+                "over": total >= over_at,
+                "capacity_warning": total >= over_at,
                 "bookings": [
                     {k: _json_value(b.get(k)) for k in CALENDAR_BOOKING_FIELDS} for b in todays
                 ],
@@ -1108,6 +1112,18 @@ def aggregate_calendar(
         )
         d += timedelta(days=1)
     return days
+
+
+def capacity_of(s: Settings | None = None) -> int:
+    """The day's capacity the calendar bar is drawn against (Settings › Capacity)."""
+    s = s or get_settings()
+    return int(s.capacity.get("capacity") or 1500)
+
+
+def over_threshold(s: Settings | None = None) -> int:
+    """People booked on one day from which the calendar shows OVER."""
+    s = s or get_settings()
+    return int(s.capacity.get("over_threshold") or s.capacity.get("daily_warning_people") or capacity_of(s))
 
 
 def calendar_days(from_date: date, to_date: date) -> list[dict]:
@@ -1168,7 +1184,10 @@ def day_detail(d: date) -> dict:
         "is_peak": pricing.is_peak(d, s, season_days),
         "label": pricing.day_label(d, season_days) or holiday_name(d),
         "public_holiday": holiday_name(d),
-        "capacity_warning": totals["total_people"] >= int(s.capacity.daily_warning_people),
+        "kind": day_kinds.primary_kind(d, s, season_days),
+        "kinds": [k["code"] for k in day_kinds.kinds_for(d, s, season_days)],
+        "over": totals["total_people"] >= over_threshold(s),
+        "capacity_warning": totals["total_people"] >= over_threshold(s),
         "totals": serialize_row(totals),
         "bookings": items,
     }

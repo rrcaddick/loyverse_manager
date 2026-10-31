@@ -116,8 +116,16 @@ def is_avoid(d: date, s: Settings) -> bool:
 
 
 def is_peak(d: date, s: Settings, season_days: Mapping[date, dict] | None = None) -> bool:
+    """An explicit season_days row of kind peak, or one of the yearly peak
+    days on ``settings.day_kinds.peak_days`` (MM-DD; 26 Dec, 1 and 2 Jan)."""
     row = season_day(d, season_days)
-    return row is not None and row["kind"] == "peak"
+    if row is not None and row["kind"] == "peak":
+        return True
+    try:
+        yearly = s.day_kinds.get("peak_days") or []
+    except AttributeError:
+        yearly = []
+    return d.strftime("%m-%d") in {str(v) for v in yearly}
 
 
 def day_label(d: date, season_days: Mapping[date, dict] | None = None) -> str | None:
