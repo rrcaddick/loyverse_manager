@@ -5,12 +5,15 @@
  * a Work item. A request's review (Accept, Decline) is the first item.
  */
 
-import { AtSign, Bell, CheckCircle2, FileCheck, UserCheck } from "lucide-react";
+import { AtSign, Bell, CheckCircle2, FileCheck, Mail, UserCheck } from "lucide-react";
+import { toast } from "sonner";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { NextStepStrip, type Urgency } from "@/components/next-step-strip";
 import { Button } from "@/components/ui/button";
+import { usePartyDone } from "@/features/mail/api";
+import { errorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 
 import { availability } from "../../actions";
@@ -22,15 +25,63 @@ import { useBookingActions } from "../../use-booking-actions";
 import { NextStepCard } from "../record-header";
 import { RequestBanner } from "./request-banner";
 
-export function AttentionTab({ booking, onPayments, onContacts }: { booking: BookingDetail; onPayments: () => void; onContacts: () => void }) {
+export function AttentionTab({
+  booking,
+  unanswered = 0,
+  onPayments,
+  onContacts,
+  onConversation,
+}: {
+  booking: BookingDetail;
+  /** Messages the customer sent that nobody has answered (the conversation's count). */
+  unanswered?: number;
+  onPayments: () => void;
+  onContacts: () => void;
+  onConversation: () => void;
+}) {
   const actions = useBookingActions();
+  const partyDone = usePartyDone();
   const reminders = booking.status === "requested" ? [] : dueReminders(booking);
   const step = nextStep(booking);
-  const items: { key: string; urgency: Urgency; icon: typeof Bell; title: string; detail: string; action: ReactNode }[] = reminders.map((r) => {
+  const items: { key: string; urgency: Urgency; icon: typeof Bell; title: string; detail: string; action: ReactNode; secondary?: ReactNode }[] = [];
+  if (unanswered > 0) {
+    // A customer waiting for an answer comes before every send we owe.
+    items.push({
+      key: "unanswered",
+      urgency: "amber",
+      icon: Mail,
+      title: unanswered === 1 ? "1 message waiting on you" : `${unanswered} messages waiting on you`,
+      detail: "The customer wrote last. Reply from the conversation, or mark it handled if nothing is needed.",
+      action: (
+        <Button size="sm" className="min-w-32" onClick={onConversation}>
+          Reply
+        </Button>
+      ),
+      secondary: (
+        <Button
+          size="sm"
+          variant="outline"
+          className="min-w-32"
+          disabled={partyDone.isPending}
+          onClick={async () => {
+            try {
+              await partyDone.mutateAsync({ partyKey: `b:${booking.id}` });
+              toast.success("Marked as handled");
+            } catch (err) {
+              toast.error(errorMessage(err));
+            }
+          }}
+        >
+          Mark handled
+        </Button>
+      ),
+    });
+  }
+  items.push(...reminders.map((r) => {
     const av = availability(booking, r.action);
     return {
       key: `reminder-${r.id}`,
-      urgency: r.kind === "lapse" ? "red" : "amber",
+      urgency: (r.kind === "lapse" ? "red" : "amber") as Urgency,
       icon: Bell,
       title: `${REMINDER_KIND_LABELS[r.kind as keyof typeof REMINDER_KIND_LABELS] ?? r.kind} due`,
       detail: `Due ${formatDate(r.due_on)} · ${relativeTo(r.due_on)}`,
@@ -40,7 +91,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
         </Button>
       ),
     };
-  });
+  }));
   if (booking.status !== "requested" && lapseNoticeDue(booking)) {
     const av = availability(booking, "send-expiry");
     items.push({
@@ -105,7 +156,7 @@ export function AttentionTab({ booking, onPayments, onContacts }: { booking: Boo
     <div className="flex flex-col gap-3">
       {booking.status === "requested" ? <RequestBanner booking={booking} /> : step.primary ? <NextStepCard booking={booking} verbSize="sm" verbClassName="min-w-32" /> : null}
       {items.map((e) => (
-        <NextStepStrip key={e.key} urgency={e.urgency} icon={e.icon} title={e.title} detail={e.detail} primary={e.action} />
+        <NextStepStrip key={e.key} urgency={e.urgency} icon={e.icon} title={e.title} detail={e.detail} primary={e.action} secondary={e.secondary} />
       ))}
       {empty ? <EmptyState variant="card" icon={CheckCircle2} title="Nothing needs you" hint="Every send is done and no payment is waiting." /> : null}
     </div>

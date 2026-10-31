@@ -50,10 +50,11 @@ export function onSiteMissing(booking: BookingDetail): boolean {
   return !ended && !booking.contacts.some((c) => c.on_site);
 }
 
-/** The tab's badge: the request review, the next step, due reminders, the lapse notice, proofs waiting, missing details. */
-export function attentionCount(booking: BookingDetail): number {
-  if (booking.status === "requested") return 1 + booking.pops.length;
+/** The tab's badge: the request review, the next step, a message waiting on us, due reminders, the lapse notice, proofs waiting, missing details. */
+export function attentionCount(booking: BookingDetail, unanswered = 0): number {
+  const waiting = unanswered > 0 ? 1 : 0;
+  if (booking.status === "requested") return 1 + booking.pops.length + waiting;
   const step = nextStep(booking);
-  return (step.primary ? 1 : 0) + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
+  return (step.primary ? 1 : 0) + waiting + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
 }
 

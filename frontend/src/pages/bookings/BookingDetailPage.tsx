@@ -112,9 +112,10 @@ function Record({ booking }: { booking: BookingDetail }) {
   const tab: Tab = (TABS as readonly string[]).includes(raw ?? "") ? (raw as Tab) : booking.status === "requested" ? "attention" : "overview";
   // ?message=<id> (from an Activity row): open that message and bring it to the top of the thread.
   const focusMessageId = Number(params.get("message")) || undefined;
-  const attention = attentionCount(booking);
   const actions = useBookingActions();
   const conversation = useBookingConversation(booking.id);
+  const unanswered = conversation.data?.unanswered_count ?? 0;
+  const attention = attentionCount(booking, unanswered);
 
   function setTab(next: Tab) {
     setParams(
@@ -156,7 +157,7 @@ function Record({ booking }: { booking: BookingDetail }) {
       />
 
       {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} /> : null}
-      {tab === "attention" ? <AttentionTab booking={booking} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} /> : null}
+      {tab === "attention" ? <AttentionTab booking={booking} unanswered={unanswered} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} onConversation={() => setTab("conversation")} /> : null}
       {tab === "conversation" ? (
         <Suspense fallback={<PageSkeleton rows={6} />}>
           <ConversationView bookingId={booking.id} focusMessageId={focusMessageId} />

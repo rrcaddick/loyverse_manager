@@ -58,6 +58,16 @@ export function listTime(value: string | null | undefined): string {
 }
 
 /** Card time: "Today, 15:35" / "Yesterday, 09:12" / "12 Aug 2026, 11:32". */
+/** The stamp on a collapsed row: the time today, "Yesterday", else the date (with the year once it is not this year's). */
+export function lineTime(value: string | null | undefined): string {
+  const rel = formatRelativeDay(value);
+  if (rel === "Today") return formatTime(value);
+  if (rel === "Yesterday") return "Yesterday";
+  const date = parseDate(value);
+  if (!date) return "—";
+  return date.getFullYear() === new Date().getFullYear() ? formatDateShort(value) : formatDate(value);
+}
+
 export function cardTime(value: string | null | undefined): string {
   const rel = formatRelativeDay(value);
   return rel === "Today" || rel === "Yesterday" ? `${rel}, ${formatTime(value)}` : formatDateTime(value);

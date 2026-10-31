@@ -35,10 +35,10 @@ import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { API_BASE } from "@/lib/api";
-import { formatTime, initials, pluralise } from "@/lib/format";
+import { initials, pluralise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-import { cardTime, firstLine, formatBytes, kindChip, senderName } from "./lib";
+import { cardTime, firstLine, formatBytes, kindChip, lineTime, senderName } from "./lib";
 import { MessageHtml, MessageText } from "./message-body";
 import type { EventItem, MessageItem, NoteItem } from "./types";
 
@@ -184,7 +184,7 @@ function CollapsedLine({ message, onToggle, id, unanswered }: MessageCardProps) 
       {inbound && unanswered ? <UnansweredMark /> : null}
       <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{firstLine(message)}</span>
       {message.has_attachments ? <Paperclip aria-label="Has attachments" className="size-3.5 shrink-0 text-muted-foreground" /> : null}
-      <span className={cn("shrink-0 text-xs tabular", failed ? "font-medium text-red-text" : "text-muted-foreground")}>{failed ? "Failed" : formatTime(message.at)}</span>
+      <span className={cn("shrink-0 text-xs tabular", failed ? "font-medium text-red-text" : "text-muted-foreground")}>{failed ? "Failed" : lineTime(message.at)}</span>
     </button>
   );
 }
