@@ -1,18 +1,18 @@
-"""The shop till (Aronium) feed and its live view.
+"""The shop till (Aronium) feed and the day's rows behind it.
 
 POST /api/shop/sales   one Aronium document, from the Farmyard card terminal module on the till
                        (header X-Shop-Token = SHOP_FEED_TOKEN; a body with "probe": true only checks the token)
-GET  /shop/till        today's sales as they come in (login), auto-refreshing
-GET  /shop/till/data   the rows behind it (login), ?day=YYYY-MM-DD
+GET  /shop/till/data   today's sales as they come in (session), ?day=YYYY-MM-DD; the React app's
+                       Shop till page reads this (the AdminLTE page went with the old portal)
 """
 import hmac
 from datetime import date, datetime
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 
 from config.settings import SHOP_FEED_TOKEN
 from src.models.shop_sales import ShopSale
-from web.routes.auth import login_required
+from web.api import public_endpoint
 
 shop_bp = Blueprint("shop", __name__)
 
@@ -24,6 +24,7 @@ def _token_ok():
 
 
 @shop_bp.route("/api/shop/sales", methods=["POST"])
+@public_endpoint  # the till authenticates with X-Shop-Token, there is no session
 def shop_sales():
     if not _token_ok():
         return jsonify({"error": "invalid shop token"}), 401
@@ -36,14 +37,7 @@ def shop_sales():
     return jsonify({"status": "ok", "id": row_id, "created": created})
 
 
-@shop_bp.route("/shop/till")
-@login_required
-def till():
-    return render_template("shop_till.html", today=date.today().isoformat())
-
-
 @shop_bp.route("/shop/till/data")
-@login_required
 def till_data():
     try:
         day = datetime.strptime(request.args.get("day") or date.today().isoformat(), "%Y-%m-%d").date()

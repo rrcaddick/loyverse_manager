@@ -1,0 +1,707 @@
+"""The Work list: one list, a rail of kinds, every row the same shape.
+
+docs/research/01 replaced the ten-section queue with a single list whose views
+sit in a rail in pipeline order. ``list_work(view, page, page_size)`` is the
+one call behind ``GET /work``; ``counts()`` feeds the rail and the sidebar
+badge; ``up_next`` merges the most urgent rows across kinds for the default
+view and the Today page.
+
+Views, in pipeline order, and what each selects:
+
+    reply          PARTIES waiting on us (src/services/waiting.py): a booking
+                   with all its contacts and threads, or an unattached sender
+                   address, with at least one unanswered inbound message
+    new_requests   status enquiry with no proforma sent
+    send_tickets   confirmed, no ticket by either channel, visit today or later
+    reminders      due today or earlier, not stale, kind other than ``lapse``
+                   (holds have their own view); contiguous by kind
+    holds          tentative and unpaid with the hold expiring within
+                   HOLD_WINDOW_DAYS or already past; hidden once the lapse
+                   reminder is dismissed or stale
+    stale          reminders flagged stale by the daily recompute (any kind)
+
+Row shape (identical in every view)::
+
+    {kind, id, booking | null, title, context, amount, age_days, group,
+     primary: {verb, action, ...payload}, secondary: [{verb, action, ...payload}],
+     sort_key}
+
+``id`` is kind-prefixed (``"reply:1878…"``, ``"reminder:12"``). ``primary`` is
+the one filled button; ``action`` names the call the UI makes (see
+docs/handoff/work-today.md for the vocabulary) and every other key is its
+payload. ``group`` is the kind title for reminder rows (so the reminders view
+can show headings) and null elsewhere. ``sort_key`` orders rows within a view
+and across kinds in up_next; treat it as opaque.
+
+Urgency tiers in ``sort_key``: 1 holds already past, 3 replies waiting
+longest, 5 new requests oldest, 6 tickets by visit date, 7 reminders and
+upcoming holds by due date. Confirm money and Arrivals went on 31 Oct 2026
+(payments are found from the booking; arrivals are live from the terminals).
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import Any, Mapping
+
+from src.models.base import loads, query, serialize_row
+from src.services.reminders import KIND_TITLES, LIVE_DUE_SQL
+from src.services.settings import get_settings
+from src.utils.date import get_today
+
+VIEWS = (
+    "reply",
+    "new_requests",
+    "enquiries",
+    "allocate",
+    "pops",
+    "send_tickets",
+    "reminders",
+    "holds",
+    "stale",
+)
+LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds")
+HOLD_WINDOW_DAYS = 3
+
+TIER_HOLD_PAST = 1
+TIER_ARRIVAL = 2
+TIER_REPLY = 3
+TIER_MONEY = 4
+TIER_NEW_REQUEST = 5
+TIER_TICKET = 6
+TIER_DUE = 7  # reminders and holds not yet past, by due date
+
+REMINDER_ORDER = ("lapse", "deposit_reminder", "still_interested", "final_details")
+
+# date.max.toordinal() is 3 652 059; subtracting from this keeps "newest first" keys positive.
+REVERSE_DATE_BASE = 4_000_000
+
+SOURCE_LABELS = {
+    "form": "Form request",
+    "email": "Email request",
+    "import": "Imported",
+    "manual": "Added by hand",
+}
+
+TENTATIVE = ("enquiry", "proforma_sent")
+
+BOOKING_COLS = (
+    "b.id AS booking_id, b.reference, b.group_name, b.visit_date, b.status, b.people_booked"
+)
+UNPAID_SQL = "NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id AND p.amount > 0)"
+
+
+# ------------------------------------------------------------- formatting ---
+
+
+def _day(d: date | datetime | None) -> str:
+    """``Sat 31 Oct``."""
+    if d is None:
+        return ""
+    if isinstance(d, datetime):
+        d = d.date()
+    return f"{d:%a} {d.day} {d:%b}"
+
+
+def _rel(days: int) -> str:
+    """Relative day count: ``3 d ago``, ``today``, ``in 2 d``."""
+    if days > 0:
+        return f"{days} d ago"
+    if days == 0:
+        return "today"
+    return f"in {-days} d"
+
+
+def _rands(value: Any) -> str:
+    """``R3 800`` or ``R3 290.50`` (thousands separated by a space)."""
+    amount = Decimal(str(value or 0)).quantize(Decimal("0.01"))
+    whole = int(amount)
+    cents = int((amount - whole) * 100)
+    text = f"{whole:,}".replace(",", " ")
+    return f"R{text}" if cents == 0 else f"R{text}.{cents:02d}"
+
+
+def _money(value: Any) -> float | None:
+    return None if value is None else round(float(value), 2)
+
+
+def _as_date(value: Any) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _days_since(value: Any, today: date) -> int:
+    d = _as_date(value)
+    return max(0, (today - d).days) if d else 0
+
+
+def _key(tier: int, *parts: Any) -> str:
+    """Lexicographically sortable key: ``07:2026-10-05:00000012``."""
+    out = [f"{tier:02d}"]
+    for p in parts:
+        if isinstance(p, (date, datetime)):
+            out.append(p.isoformat())
+        elif isinstance(p, int):
+            out.append(f"{p:08d}")
+        else:
+            out.append(str(p))
+    return ":".join(out)
+
+
+# -------------------------------------------------------------- row shape ---
+
+
+def _act(verb: str, action: str, **payload: Any) -> dict:
+    return {"verb": verb, "action": action, **payload}
+
+
+def _chip(r: Mapping[str, Any]) -> dict | None:
+    if r.get("booking_id") is None:
+        return None
+    return {
+        "id": int(r["booking_id"]),
+        "reference": r["reference"],
+        "group_name": r["group_name"],
+        "visit_date": _as_date(r["visit_date"]).isoformat() if r.get("visit_date") else None,
+        "status": r["status"],
+        "people_booked": int(r["people_booked"] or 0),
+    }
+
+
+def _row(
+    kind: str,
+    ident: str,
+    *,
+    booking: dict | None,
+    title: str,
+    context: str,
+    amount: Any,
+    age_days: int,
+    primary: dict,
+    secondary: list[dict],
+    sort_key: str,
+    group: str | None = None,
+) -> dict:
+    return {
+        "kind": kind,
+        "id": ident,
+        "booking": booking,
+        "title": title,
+        "context": context,
+        "amount": _money(amount),
+        "age_days": int(age_days),
+        "group": group,
+        "primary": primary,
+        "secondary": secondary,
+        "sort_key": sort_key,
+    }
+
+
+def _open(booking_id: int) -> dict:
+    return _act("Open", "open_booking", booking_id=int(booking_id))
+
+
+# ------------------------------------------------------------------ reply ---
+
+
+def _short_day(value: Any) -> str:
+    """``4 Jun`` (the contract's "oldest 4 Jun")."""
+    d = _as_date(value)
+    return f"{d.day} {d:%b}" if d else ""
+
+
+def _reply_rows(today: date, parties: list[dict] | None = None) -> list[dict]:
+    """One row per PARTY waiting on us (src/services/waiting.py): a booking
+    with all its contacts and threads, or an unattached sender address.
+    Oldest unanswered message first."""
+    from src.services import waiting
+
+    if parties is None:
+        parties = waiting.waiting_parties()
+    # Work is about bookings; a waiting sender with no booking is handled in
+    # Mail (Needs reply / Unmatched), not here.
+    parties = [p for p in parties if p.get("booking")]
+    chips: dict[int, dict] = {}
+    ids = sorted({int(p["booking"]["id"]) for p in parties if p.get("booking")})
+    if ids:
+        marks = ",".join(["%s"] * len(ids))
+        for b in query(f"SELECT {BOOKING_COLS} FROM bookings b WHERE b.id IN ({marks})", ids):
+            chips[int(b["booking_id"])] = _chip(b)
+    out = []
+    for p in parties:
+        key = p["party_key"]
+        booking_id = int(p["booking"]["id"]) if p.get("booking") else None
+        chip = chips.get(booking_id) if booking_id else None
+        oldest = p.get("oldest_unanswered_at")
+        waiting_days = _days_since(oldest, today)
+        n = int(p.get("unanswered_count") or 0)
+        context = f"{n} message{'s' if n != 1 else ''} waiting · oldest {_short_day(oldest)}"
+        who = p.get("counterpart_name") or p.get("counterpart_email") or "Customer"
+        title = chip["group_name"] if chip else who
+        if chip and p.get("counterpart_name"):
+            context = f"{who} · {context}"
+        primary = _act("Reply", "open_conversation", party_key=key, thrid=p.get("primary_thrid"))
+        if booking_id:
+            primary["booking_id"] = booking_id
+        secondary = [_open(booking_id)] if booking_id else []
+        out.append(
+            _row(
+                "reply",
+                f"reply:{key}",
+                booking=chip,
+                title=title,
+                context=context,
+                amount=None,
+                age_days=waiting_days,
+                primary=primary,
+                secondary=secondary,
+                sort_key=_key(TIER_REPLY, oldest or datetime.min.isoformat(), key),
+            )
+        )
+    return out
+
+
+# ----------------------------------------------------------- new requests ---
+
+
+def _new_request_rows(today: date) -> list[dict]:
+    rows = query(
+        f"""
+        SELECT {BOOKING_COLS}, b.source, b.created_at, b.enquiry_date, b.contact_name,
+               b.email_thread_id,
+               (SELECT COUNT(*) FROM booking_questions q
+                 WHERE q.booking_id = b.id AND q.answer IS NULL) AS unanswered
+        FROM bookings b
+        WHERE b.status = 'requested' OR (b.status = 'enquiry' AND b.proforma_sent_at IS NULL)
+        ORDER BY COALESCE(b.enquiry_date, DATE(b.created_at)), b.created_at, b.id
+        """
+    )
+    out = []
+    for r in rows:
+        since = r.get("enquiry_date") or r.get("created_at")
+        waiting = _days_since(since, today)
+        bits = [SOURCE_LABELS.get(r["source"], r["source"] or "Request")]
+        if r.get("contact_name"):
+            bits.append(r["contact_name"])
+        if int(r["unanswered"] or 0):
+            n = int(r["unanswered"])
+            bits.append(f"{n} question{'s' if n != 1 else ''}")
+        bits.append(f"waiting {waiting} d")
+        secondary: list[dict] = []
+        if r.get("email_thread_id"):
+            secondary.append(
+                _act(
+                    "Reply",
+                    "open_conversation",
+                    thrid=str(r["email_thread_id"]),
+                    booking_id=int(r["booking_id"]),
+                )
+            )
+        out.append(
+            _row(
+                "new_request",
+                f"new_request:{r['booking_id']}",
+                booking=_chip(r),
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=None,
+                age_days=waiting,
+                primary=_act(
+                    "Review request" if r["status"] == "requested" else "Send proforma",
+                    "open_booking", booking_id=int(r["booking_id"]),
+                ),
+                secondary=secondary,
+                sort_key=_key(TIER_NEW_REQUEST, _as_date(since) or today, int(r["booking_id"])),
+            )
+        )
+    return out
+
+
+# -------------------------------------------------------------- enquiries ---
+
+
+def _enquiry_rows(today: date) -> list[dict]:
+    """Open enquiries: unmatched conversations waiting on us."""
+    rows = query(
+        """
+        SELECT id, sender_email, sender_name, subject, status, last_inbound_at, first_message_at,
+               message_count, snippet, convert_sent_at
+        FROM enquiries WHERE status IN ('open','replied')
+        ORDER BY COALESCE(last_inbound_at, created_at), id
+        """
+    )
+    out = []
+    for r in rows:
+        waiting = _days_since(r.get("last_inbound_at") or r.get("first_message_at"), today)
+        bits = [(r.get("subject") or "(no subject)")[:80]]
+        if r["status"] == "replied":
+            bits.append("replied, customer wrote again")
+        if r.get("convert_sent_at"):
+            bits.append("form sent")
+        bits.append(f"waiting {waiting} d")
+        out.append(
+            _row(
+                "enquiry",
+                f"enquiry:{r['id']}",
+                booking=None,
+                title=r.get("sender_name") or r.get("sender_email"),
+                context=" · ".join(bits),
+                amount=None,
+                age_days=waiting,
+                primary=_act("Reply", "open_enquiry", enquiry_id=int(r["id"])),
+                secondary=[_act("Convert", "open_enquiry", enquiry_id=int(r["id"]), tab="convert")],
+                sort_key=_key(TIER_NEW_REQUEST, _as_date(r.get("last_inbound_at")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
+def _allocate_rows(today: date) -> list[dict]:
+    """Mail that belongs to one of several bookings of the same people."""
+    rows = query(
+        """
+        SELECT id, gmail_thrid, from_name, from_email, subject, sent_at, candidate_booking_ids
+        FROM email_messages
+        WHERE direction = 'inbound' AND inbound_outcome = 'allocate' AND booking_id IS NULL
+        ORDER BY sent_at, id
+        """
+    )
+    out = []
+    for r in rows:
+        import json as _json
+
+        try:
+            ids = [int(x) for x in _json.loads(r.get("candidate_booking_ids") or "[]")]
+        except Exception:  # noqa: BLE001
+            ids = []
+        if not ids:
+            continue
+        marks = ",".join(["%s"] * len(ids))
+        cands = query(f"SELECT {BOOKING_COLS} FROM bookings b WHERE b.id IN ({marks}) ORDER BY b.visit_date", ids)
+        waiting = _days_since(r.get("sent_at"), today)
+        out.append(
+            _row(
+                "allocate",
+                f"allocate:{r['id']}",
+                booking=None,
+                title=r.get("from_name") or r.get("from_email"),
+                context=f"{(r.get('subject') or '(no subject)')[:70]} · which of {len(cands)} bookings? · waiting {waiting} d",
+                amount=None,
+                age_days=waiting,
+                primary=_act("Assign", "open_conversation", thrid=str(r["gmail_thrid"]) if r.get("gmail_thrid") else None, message_id=int(r["id"])),
+                secondary=[
+                    _act(f"{c['reference']} · {_short_day(c['visit_date'])}", "assign_message", message_id=int(r["id"]), booking_id=int(c["booking_id"]))
+                    for c in cands
+                ],
+                sort_key=_key(TIER_REPLY, _as_date(r.get("sent_at")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
+def _pop_rows(today: date) -> list[dict]:
+    """Proof of payment to verify: the search opens pre-filled on the booking."""
+    rows = query(
+        """
+        SELECT p.id, p.booking_id, p.amount, p.reference, p.bank_name, p.parsed, p.created_at,
+               b.reference AS booking_reference, b.group_name, b.visit_date, b.status, b.people_booked
+        FROM pop_candidates p JOIN bookings b ON b.id = p.booking_id
+        WHERE p.status = 'pending' ORDER BY p.created_at
+        """
+    )
+    out = []
+    for r in rows:
+        waiting = _days_since(r.get("created_at"), today)
+        bits = ["Proof of payment" + (" (read from the PDF)" if r.get("parsed") else " (needs a look)")]
+        if r.get("bank_name"):
+            bits.append(str(r["bank_name"]))
+        if r.get("reference"):
+            bits.append(f"ref {r['reference']}")
+        bits.append(f"waiting {waiting} d")
+        chip = _chip({**r, "reference": r["booking_reference"]})
+        out.append(
+            _row(
+                "pop",
+                f"pop:{r['id']}",
+                booking=chip,
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=r.get("amount"),
+                age_days=waiting,
+                primary=_act("Verify payment", "open_booking", booking_id=int(r["booking_id"]), tab="payments", pop_id=int(r["id"])),
+                secondary=[],
+                sort_key=_key(TIER_MONEY, _as_date(r.get("created_at")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
+# ------------------------------------------------------------------ money ---
+
+
+def _reason_text(reason: str | None) -> str:
+    if not reason:
+        return "possible match"
+    text = reason[0].lower() + reason[1:]
+    return text[7:] if text.startswith("amount ") else text
+
+
+def _ticket_rows(today: date) -> list[dict]:
+    rows = query(
+        f"""
+        SELECT {BOOKING_COLS}, b.contact_email, b.contact_mobile, b.confirmed_at
+        FROM bookings b
+        WHERE b.status = 'confirmed' AND b.ticket_sent_at IS NULL AND b.ticket_emailed_at IS NULL
+          AND b.visit_date >= %s
+        ORDER BY b.visit_date, b.group_name, b.id
+        """,
+        (today,),
+    )
+    out = []
+    for r in rows:
+        bid = int(r["booking_id"])
+        visit = _as_date(r["visit_date"])
+        bits = [f"Visit {_day(visit)}", _rel((today - visit).days)]
+        email, mobile = r.get("contact_email"), r.get("contact_mobile")
+        secondary: list[dict] = []
+        if email:
+            primary = _act("Send ticket", "booking_action", booking_id=bid, name="send-ticket-email")
+            if mobile:
+                secondary.append(
+                    _act("WhatsApp", "booking_action", booking_id=bid, name="send-ticket-whatsapp")
+                )
+        elif mobile:
+            primary = _act("Send ticket", "booking_action", booking_id=bid, name="send-ticket-whatsapp")
+            bits.append("WhatsApp only")
+        else:
+            primary = _act("Add contact", "open_booking", booking_id=bid)
+            bits.append("no contact details")
+        secondary.append(_open(bid))
+        out.append(
+            _row(
+                "ticket",
+                f"ticket:{bid}",
+                booking=_chip(r),
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=None,
+                # Tickets are scheduled by visit date, not aged: an imported
+                # booking confirmed in January is not "276 days overdue".
+                age_days=0,
+                primary=primary,
+                secondary=secondary,
+                sort_key=_key(TIER_TICKET, visit, bid),
+            )
+        )
+    return out
+
+
+# -------------------------------------------------------------- reminders ---
+
+
+def _reminder_sql(where: str) -> str:
+    return f"""
+        SELECT {BOOKING_COLS}, r.id AS reminder_id, r.kind, r.due_on, r.stale,
+               b.contact_email, b.deposit_due, b.deposit_waived, b.hold_expires_on,
+               (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.booking_id = b.id) AS paid
+        FROM booking_reminders r
+        JOIN bookings b ON b.id = r.booking_id
+        WHERE {where}
+        ORDER BY FIELD(r.kind, {", ".join(repr(k) for k in REMINDER_ORDER)}), r.due_on, b.visit_date, r.id
+    """
+
+
+def _reminder_row(r: Mapping[str, Any], today: date, *, stale: bool) -> dict:
+    bid = int(r["booking_id"])
+    rid = int(r["reminder_id"])
+    kind = r["kind"]
+    due = _as_date(r["due_on"])
+    overdue = (today - due).days
+    bits = [f"Due {_rel(overdue)}", f"visit {_day(r['visit_date'])}"]
+    outstanding = None
+    if kind in ("deposit_reminder", "still_interested", "lapse") and not r.get("deposit_waived"):
+        outstanding = max(Decimal(str(r["deposit_due"] or 0)) - Decimal(str(r["paid"] or 0)), Decimal(0))
+        if outstanding > 0:
+            bits.append(f"deposit {_rands(outstanding)} outstanding")
+    if not r.get("contact_email"):
+        bits.append("no email on booking")
+    if stale:
+        bits.append("stale")
+        primary = _act("Dismiss", "dismiss_reminders", ids=[rid])
+        secondary = [_open(bid)]
+        if kind == "lapse":
+            hold = _as_date(r.get("hold_expires_on"))
+            secondary.append(
+                _act("Extend", "extend_hold", booking_id=bid, hold_expires_on=hold.isoformat() if hold else None)
+            )
+        tier = TIER_DUE
+    else:
+        if r.get("contact_email"):
+            primary = _act("Send reminder", "booking_action", booking_id=bid, name="send-reminder", kind=kind)
+        else:
+            primary = _act("Add email", "open_booking", booking_id=bid)
+        secondary = [_open(bid), _act("Dismiss", "dismiss_reminders", ids=[rid])]
+        tier = TIER_DUE
+    return _row(
+        "reminder",
+        f"reminder:{rid}",
+        booking=_chip(r),
+        title=r["group_name"],
+        context=" · ".join(bits),
+        amount=outstanding if outstanding and outstanding > 0 else None,
+        age_days=max(0, overdue),
+        primary=primary,
+        secondary=secondary,
+        sort_key=_key(tier, due, rid),
+        group=KIND_TITLES.get(kind, kind),
+    )
+
+
+def _reminder_rows(today: date) -> list[dict]:
+    rows = query(_reminder_sql(f"{LIVE_DUE_SQL} AND r.kind <> 'lapse'"), (today,))
+    return [_reminder_row(r, today, stale=False) for r in rows]
+
+
+def _stale_rows(today: date) -> list[dict]:
+    rows = query(_reminder_sql("r.status = 'due' AND r.stale = 1"))
+    return [_reminder_row(r, today, stale=True) for r in rows]
+
+
+# ------------------------------------------------------------------ holds ---
+
+
+def _hold_rows(today: date, lapse_days_before: int) -> list[dict]:
+    rows = query(
+        f"""
+        SELECT {BOOKING_COLS}, b.contact_email, b.deposit_due, b.deposit_waived,
+               COALESCE(b.hold_expires_on, DATE_SUB(b.visit_date, INTERVAL %s DAY)) AS hold_on,
+               r.id AS reminder_id
+        FROM bookings b
+        LEFT JOIN booking_reminders r ON r.booking_id = b.id AND r.kind = 'lapse'
+        WHERE b.status IN ('enquiry', 'proforma_sent')
+          AND COALESCE(b.hold_expires_on, DATE_SUB(b.visit_date, INTERVAL %s DAY)) <= %s
+          AND b.visit_date >= %s
+          AND {UNPAID_SQL}
+          AND (r.id IS NULL OR (r.status = 'due' AND r.stale = 0))
+        ORDER BY hold_on, b.visit_date, b.id
+        """,
+        (lapse_days_before, lapse_days_before, today + timedelta(days=HOLD_WINDOW_DAYS), today),
+    )
+    out = []
+    for r in rows:
+        bid = int(r["booking_id"])
+        hold_on = _as_date(r["hold_on"])
+        past = (today - hold_on).days
+        deposit = Decimal(str(r["deposit_due"] or 0))
+        if past > 0:
+            bits = [f"Booking expired {_rel(past)}"]
+        else:
+            bits = [f"Booking expires {_rel(past)}"]
+        if deposit > 0 and not r.get("deposit_waived"):
+            bits.append(f"deposit {_rands(deposit)} outstanding")
+        bits.append(f"visit {_day(r['visit_date'])}")
+        secondary: list[dict] = []
+        if r.get("contact_email"):
+            secondary.append(_act("Send expiry", "booking_action", booking_id=bid, name="send-expiry"))
+        secondary.append(_open(bid))
+        if r.get("reminder_id"):
+            secondary.append(_act("Dismiss", "dismiss_reminders", ids=[int(r["reminder_id"])]))
+        tier = TIER_HOLD_PAST if past > 0 else TIER_DUE
+        out.append(
+            _row(
+                "hold",
+                f"hold:{bid}",
+                booking=_chip(r),
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=deposit if deposit > 0 else None,
+                age_days=max(0, past),
+                primary=_act("Extend", "extend_hold", booking_id=bid, hold_expires_on=hold_on.isoformat()),
+                secondary=secondary,
+                sort_key=_key(tier, hold_on, bid),
+            )
+        )
+    return out
+
+
+# --------------------------------------------------------------- arrivals ---
+
+
+def _reminder_group_rank(row: dict) -> int:
+    title = row.get("group")
+    for i, kind in enumerate(REMINDER_ORDER):
+        if KIND_TITLES.get(kind) == title:
+            return i
+    return len(REMINDER_ORDER)
+
+
+def _view_sorted(view: str, rows: list[dict]) -> list[dict]:
+    if view in ("reminders", "stale"):
+        return sorted(rows, key=lambda r: (_reminder_group_rank(r), r["sort_key"]))
+    return sorted(rows, key=lambda r: r["sort_key"])
+
+
+def snapshot(today: date | None = None) -> dict:
+    """Every view's rows in one pass (about ten small queries).
+
+    Returns ``{"today", "views": {view: rows}, "counts": {...}}``. ``list_work``,
+    ``counts`` and the Today page all build on this so the numbers agree
+    everywhere.
+    """
+    today = today or get_today()
+    cfg = get_settings()["reminders"]
+    views = {
+        "reply": _reply_rows(today),
+        "new_requests": _new_request_rows(today),
+        "enquiries": _enquiry_rows(today),
+        "allocate": _allocate_rows(today),
+        "pops": _pop_rows(today),
+        "send_tickets": _ticket_rows(today),
+        "reminders": _reminder_rows(today),
+        "holds": _hold_rows(today, int(cfg["lapse_days_before"])),
+        "stale": _stale_rows(today),
+    }
+    views = {view: _view_sorted(view, rows) for view, rows in views.items()}
+    counts = {view: len(rows) for view, rows in views.items()}
+    counts["total"] = sum(len(views[v]) for v in LIVE_VIEWS)
+    return {"today": today.isoformat(), "views": views, "counts": counts}
+
+
+def counts(today: date | None = None) -> dict:
+    """Per-view counts for the nav plus ``total`` (live rows, stale excluded).
+    Zeros are returned; hiding at zero is the UI's job."""
+    return snapshot(today)["counts"]
+
+
+def list_work(view: str, page: int = 1, page_size: int = 50, today: date | None = None) -> dict:
+    """One view of the Work list: ``{items, total, page, page_size, view, counts}``."""
+    if view not in VIEWS:
+        raise ValueError(f"Unknown view: {view}")
+    snap = snapshot(today)
+    rows = snap["views"][view]
+    page = max(1, int(page))
+    page_size = max(1, int(page_size))
+    start = (page - 1) * page_size
+    return {
+        "view": view,
+        "items": rows[start : start + page_size],
+        "total": len(rows),
+        "page": page,
+        "page_size": page_size,
+        "counts": snap["counts"],
+        "today": snap["today"],
+    }
+
+
+def serialize(rows: list[dict]) -> list[dict]:
+    """Rows are already JSON-safe; kept for symmetry with the other services."""
+    return [serialize_row(r) or {} for r in rows]

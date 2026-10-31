@@ -1,0 +1,266 @@
+/* Finance documents (proforma, invoice, final invoice). Rendered by WeasyPrint.
+   This file is included through Jinja, so {{ font_url }} and the footer text
+   are resolved at render time. Monochrome first: everything reads correctly in
+   black and white; the single accent (deep oak green) marks the figure the
+   customer acts on and the payment reference. */
+
+@font-face {
+  font-family: "Inter";
+  src: url("{{ font_url }}") format("truetype");
+  font-style: normal;
+}
+
+@page {
+  size: A4;
+  margin: 14mm 18mm 18mm 18mm;
+
+  @bottom-left {
+    content: "{{ company.company_name|replace('"', '') }}  ·  Reg {{ company.company_reg }}  ·  VAT {{ company.vat_no }}";
+    font-family: "Inter", sans-serif;
+    font-size: 7pt;
+    letter-spacing: 0.02em;
+    color: #8c8b86;
+    vertical-align: top;
+    padding-top: 4mm;
+  }
+
+  @bottom-right {
+    content: "{{ doc.number }}  ·  Page " counter(page) " of " counter(pages);
+    font-family: "Inter", sans-serif;
+    font-size: 7pt;
+    letter-spacing: 0.02em;
+    color: #8c8b86;
+    font-variant-numeric: tabular-nums;
+    vertical-align: top;
+    padding-top: 4mm;
+  }
+}
+
+html {
+  font-family: "Inter", sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  color: #161615;
+}
+
+body { margin: 0; }
+p { margin: 0 0 1mm; }
+table { border-collapse: collapse; }
+td, th { vertical-align: top; }
+
+h2 {
+  font-size: 6.8pt;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8c8b86;
+  margin: 0 0 1.6mm;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.muted { color: #6e6e6a; }
+.name { font-weight: 600; }
+.accent { color: #2f5d3b; }
+
+/* Masthead ---------------------------------------------------------- */
+
+.masthead { width: 100%; margin-bottom: 4mm; }
+.masthead td { padding: 0; }
+.masthead-brand { width: 55%; }
+.logo { width: 44mm; display: block; }
+.masthead-doc { text-align: right; }
+
+.doc-title {
+  font-size: 20pt;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 1mm 0 3.5mm;
+}
+.doc-subtitle {
+  font-size: 8.6pt;
+  color: #6e6e6a;
+  margin: -2.5mm 0 3mm;
+}
+
+.meta { margin-left: auto; }
+.meta th {
+  font-weight: 400;
+  color: #8c8b86;
+  text-align: right;
+  padding: 0 3mm 0.5mm 0;
+  white-space: nowrap;
+}
+.meta td {
+  text-align: right;
+  font-weight: 500;
+  padding: 0 0 0.5mm;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rule { border-top: 0.6pt solid #161615; margin: 0 0 6mm; }
+
+/* Parties and visit ------------------------------------------------- */
+
+.parties { width: 100%; margin-bottom: 5mm; }
+.party { width: 33.33%; padding: 0 5mm 0 0; }
+.party p { line-height: 1.5; }
+.party p { margin: 0; }
+
+.visit {
+  width: 100%;
+  background: #f4f3ef;
+  margin-bottom: 6mm;
+}
+.visit-cell { padding: 3.6mm 5mm 3.8mm; }
+.visit-cell h2 { margin-bottom: 1mm; }
+.visit .big {
+  font-size: 11.5pt;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Line items -------------------------------------------------------- */
+
+.lines, .payments-table { width: 100%; margin-bottom: 2mm; }
+.lines thead, .payments-table thead { display: table-header-group; }
+.lines th, .payments-table th {
+  text-align: left;
+  font-size: 6.8pt;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8c8b86;
+  padding: 0 3mm 2mm 0;
+  border-bottom: 0.6pt solid #161615;
+  white-space: nowrap;
+}
+.lines td, .payments-table td {
+  padding: 2.8mm 3mm 2.8mm 0;
+  border-bottom: 0.3pt solid #d8d7d1;
+}
+.lines th.num, .lines td.num,
+.payments-table th.num, .payments-table td.num { text-align: right; padding-right: 0; }
+.lines .qty { width: 14mm; }
+.lines .unit { width: 28mm; }
+.lines .amount { width: 32mm; }
+.lines tr { page-break-inside: avoid; }
+.lines .desc-sub {
+  display: block;
+  color: #6e6e6a;
+  font-size: 8.5pt;
+  margin-top: 0.8mm;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  color: #6e6e6a;
+  font-size: 8.5pt;
+  margin: 0 0 1.5mm;
+}
+.note strong { color: #161615; font-weight: 600; }
+.totals-aside .note:last-child { margin-bottom: 0; }
+
+/* Totals ------------------------------------------------------------- */
+
+.totals-wrap { width: 100%; margin: 2mm 0 7mm; page-break-inside: avoid; }
+.totals-aside { vertical-align: bottom; padding: 0 12mm 1.5mm 0; }
+.totals-cell { width: 80mm; }
+
+.totals { width: 100%; }
+.totals th {
+  text-align: left;
+  font-weight: 400;
+  color: #4b4b48;
+  padding: 1.3mm 0;
+  white-space: nowrap;
+}
+.totals td {
+  text-align: right;
+  padding: 1.3mm 0 1.3mm 6mm;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.totals tr.total th, .totals tr.total td {
+  border-top: 0.6pt solid #161615;
+  font-weight: 600;
+  font-size: 10.5pt;
+  color: #161615;
+  padding-top: 2.4mm;
+}
+.totals tr.minor th, .totals tr.minor td {
+  color: #6e6e6a;
+}
+.totals tr.due th, .totals tr.due td {
+  border-top: 0.3pt solid #d8d7d1;
+  font-weight: 600;
+  font-size: 12.5pt;
+  color: #2f5d3b;
+  padding-top: 2.6mm;
+  padding-bottom: 1mm;
+}
+.totals tr.due th { font-size: 9.5pt; padding-top: 3.4mm; }
+.totals tr.settled th, .totals tr.settled td {
+  border-top: 0.3pt solid #d8d7d1;
+  font-weight: 600;
+  color: #161615;
+  padding-top: 2.6mm;
+}
+
+/* Payments received ------------------------------------------------- */
+
+.section-title { margin: 1mm 0 2.5mm; }
+.payments-block { margin: 5mm 0 3mm; page-break-inside: avoid; }
+.payments-table td { padding-top: 2mm; padding-bottom: 2mm; }
+.payments-table .date { width: 32mm; }
+.payments-table .method { width: 24mm; }
+
+/* Payment details and terms ----------------------------------------- */
+
+.foot { width: 100%; margin-top: 1mm; page-break-inside: avoid; }
+.pay {
+  width: 50%;
+  padding: 3.8mm 5mm 3.6mm;
+  border: 0.6pt solid #161615;
+}
+.terms {
+  padding: 3.8mm 0 3.6mm 9mm;
+  color: #4b4b48;
+  font-size: 8.6pt;
+}
+.terms.full { padding-left: 0; }
+.terms p { margin: 0 0 1.8mm; }
+
+.kv th {
+  text-align: left;
+  font-weight: 400;
+  color: #6e6e6a;
+  padding: 0 5mm 0.7mm 0;
+  white-space: nowrap;
+}
+.kv td { padding: 0 0 0.7mm; font-weight: 500; }
+.kv td.num { text-align: left; }
+.kv tr.ref th { padding-top: 1.6mm; color: #161615; }
+.kv tr.ref td {
+  padding-top: 1.6mm;
+  color: #2f5d3b;
+  font-weight: 700;
+  font-size: 12pt;
+  letter-spacing: 0.03em;
+}
+.pop { margin: 2.5mm 0 0; font-size: 8.5pt; color: #4b4b48; }
+.pop strong { font-weight: 600; color: #161615; }
+
+.thanks {
+  margin: 4mm 0 0;
+  font-size: 9pt;
+  font-weight: 500;
+  color: #161615;
+}

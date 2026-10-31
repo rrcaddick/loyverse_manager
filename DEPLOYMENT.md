@@ -1,199 +1,161 @@
 # Deployment
 
-The stack is fully containerised and self-contained. MySQL and Chromium run as
-containers on a private Docker network; nothing but the web port is published,
-and that only on `127.0.0.1`. There is no database process loose on the host.
+The stack is fully containerised. MySQL and Chromium run as containers on a
+private Docker network; nothing but the web port is published, and that only
+on `127.0.0.1`. nginx on the host terminates TLS for two hostnames that both
+proxy to the same app: the admin portal and the public booking request form.
 
 ```
-                    ┌──────────────────────────────────────────┐
-  A record ──▶ nginx│  farmyard (docker compose project)        │
-   + certbot   │    │                                           │
-   (host)      └───▶│  web ──────┐                              │
-        127.0.0.1:8000           ├──▶ db      (mysql:8.4)       │
-                    │  scheduler ┤                              │
-                    │            └──▶ chrome  (standalone       │
-                    │                          chromium)        │
-                    └──────────────────────────────────────────┘
+  admin.farmyardpark.co.za ─┐           ┌──────────────────────────────────────────┐
+  bookings.farmyardpark.co.za┴▶ nginx ──▶│  farmyard (docker compose project)        │
+        127.0.0.1:8000                   │  web ───────┐                             │
+                                         │  worker ────┼──▶ db      (mysql:8.4)      │
+                                         │  scheduler ─┤                             │
+                                         │             └──▶ chrome  (standalone      │
+                                         │                           chromium)       │
+                                         └──────────────────────────────────────────┘
 ```
 
 | Service | Role | Published |
 | --- | --- | --- |
-| `web` | gunicorn + Flask admin portal | `127.0.0.1:8000` only |
-| `scheduler` | supercronic running the daily jobs | no |
+| `web` | gunicorn: JSON API + the React app | `127.0.0.1:8000` only |
+| `worker` | supercronic: mailbox sync (1 min), FNB poll (5 min), reminders (06:30), DB backup (02:15) | no |
+| `scheduler` | supercronic: the daily Loyverse inventory jobs (profile `scheduled`) | no |
 | `migrate` | one-shot migration runner, exits | no |
 | `db` | MySQL 8.4, named volume `db_data` | no |
 | `chrome` | Selenium standalone Chromium for the Quicket bot | no |
+
+Two named volumes carry state: `db_data` (MySQL) and `data` (`/app/data`:
+generated PDFs, mail attachments, nightly dumps, lock files).
 
 ## First run
 
 ```bash
 git clone <repo> /opt/farmyard && cd /opt/farmyard
 cp .env.example .env
-# fill in .env - see the notes at the top of that file
+# fill in .env - see the notes at the top of that file and "Booking system" below
 docker compose up -d --build
 docker compose ps
 ```
 
-`migrate` runs automatically before `web` and `scheduler` start, and is
-idempotent — already-applied files are skipped.
+The image builds the React app in a Node stage, so the server needs no Node
+installed. `migrate` runs automatically before `web` and `worker` start and is
+idempotent. On a network that cannot reach `deb.debian.org`, build with
+`--build-arg DEBIAN_MIRROR=https://mirror.lstn.net --build-arg DEBIAN_SECURITY_MIRROR=https://cdn-aws.deb.debian.org`
+(`docker compose build --build-arg ...`); production uses the defaults.
 
 Two things in `.env` will bite you otherwise:
 
 - **`MYSQL_USER` must not be `root`** — the MySQL image refuses it.
-- **Avoid `$` in any value.** Compose interpolates it. PythonAnywhere database
-  names look like `user$dbname`; use a plain name such as `farmyard`.
+- **Avoid `$` in any value.** Compose interpolates it.
 
-Generate the two secrets with:
+Generate the secrets with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+
+## Login and roles
+
+Accounts live in the `users` table. There is no shared password any more.
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose run --rm web create-user --email ray@example.com --name "Ray" --role admin
 ```
 
-## Login
-
-The portal is gated by a single shared account. There is no open page except
-the login form itself.
+prints a temporary password once; the account must set a new one on first
+sign-in. Roles: `admin` sees everything; `manager` sees only the calendar and
+the day view (arrivals and gate payments). Reset a password from the Users
+page. Failed logins are throttled per
+IP and logged with the source address.
 
 | Public (no session) | Why |
 | --- | --- |
-| `/login`, `/logout` | the gate itself |
-| `/static/...` | stylesheet for the login page |
-| `/healthz` | container healthcheck |
-| `/group-bookings/ticket/image/<barcode>` | **Meta fetches this** to render the WhatsApp ticket. It has no session and never will, so it carries its own 5-minute JWT instead. |
+| `/login`, `/request/*`, `/static/...`, `/healthz` | the app shell and the three-step public form |
+| `/api/v1/public/*` | the booking request form's endpoints (Turnstile, honeypot, rate limit) |
+| `/group-bookings/ticket/image/<barcode>` | **Meta fetches this** to render the WhatsApp ticket; its own 5-minute JWT |
+| `/open_tickets/*`, `/api/stock/*` | the Loyverse bridge; `BRIDGE_TOKEN` |
 
-Everything else - bookings, the Scripts page, `/api/groups`, the ticket PDFs -
-requires a session. AJAX callers get `401` JSON rather than an HTML login page,
-and the browser is redirected to `/login` automatically.
-
-Set or change the password:
-
-```bash
-docker compose run --rm web python -c \
-  "import getpass; from werkzeug.security import generate_password_hash as g; \
-   print(g(getpass.getpass('new password: ')))"
-# paste the hash into AUTH_PASSWORD_HASH in .env, then:
-docker compose up -d --force-recreate web
-```
-
-**While `AUTH_PASSWORD_HASH` is empty the portal fails closed** - it refuses
-every login rather than leaving the site open. Failed attempts are logged with
-the source IP, so scanner traffic is visible in `docker compose logs web` and
-in `logs/inventory_updates.log`.
-
-CSRF is handled by the `SameSite=Lax` session cookie: browsers withhold a Lax
-cookie on cross-origin form submissions, so a hostile page cannot drive
-`/scripts/run` or `/group-bookings/delete` using an operator's session. If you
-later move to per-user accounts, add `Flask-WTF` tokens at the same time.
+Everything else requires a session; non-GET API calls also need the session's
+CSRF token (`X-CSRF-Token`), which the app handles.
 
 ## nginx
 
-Copy `deploy/nginx.conf.example` to `/etc/nginx/sites-available/farmyard`, point
-`server_name` at your A record, symlink it into `sites-enabled`, then run
-`certbot --nginx -d <your-host>`.
+Two sites, both proxying to `127.0.0.1:8000`: `admin.farmyardpark.co.za`
+(see `deploy/nginx.conf.example`) and `bookings.farmyardpark.co.za` (same
+block with the other `server_name`; `/` on that host redirects to the form).
+Run `certbot --nginx -d <host>` for each.
 
-**`proxy_set_header X-Forwarded-Proto $scheme;` is not optional.** The group
-ticket is delivered by handing Meta a URL it fetches, and that URL is built with
-`url_for(..., _external=True)`. Without the header the app emits `http://` and
-WhatsApp delivery fails. `PREFERRED_URL_SCHEME=https` in `.env` is the fallback
-for the same reason.
+**`proxy_set_header X-Forwarded-Proto $scheme;` is not optional.** The WhatsApp
+ticket URL and the links inside emails are built from it.
 
-The proxy timeouts in the example are long on purpose: the Scripts page runs
-`add-inventory` synchronously inside the request, and that drives Selenium.
+## Booking system: go-live checklist
+
+1. `.env` on the server: add every key under "booking system" in
+   `.env.example` (Gmail app password, FNB production credentials, Turnstile
+   keys, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL=https://admin.farmyardpark.co.za`,
+   `BOOKING_FORM_HOST`, `DEV_MAIL_RECIPIENT`). `ENV=prod` is what switches
+   outbound email from the developer rewrite to real recipients.
+2. `docker compose up -d --build` — migration 007 creates the tables and
+   carries the old `group_bookings` rows across.
+3. Create the user accounts (above).
+4. One-off imports, in this order, from the repo root on the server:
+   ```bash
+   docker compose run --rm -v "$PWD/data/import:/app/data/import" worker \
+     import-sheet --file /app/data/import/fy-bookings-2026-27.csv --dry-run   # review
+   docker compose run --rm -v "$PWD/data/import:/app/data/import" worker \
+     import-sheet --file /app/data/import/fy-bookings-2026-27.csv
+   docker compose run --rm worker poll-bank          # matches deposits already in the bank
+   docker compose run --rm worker import-mail        # full mailbox sync + thread linking
+   docker compose run --rm worker recompute-reminders
+   ```
+   The sheet import keeps the sheet's document numbers and moves the counter
+   past the highest one. Deposits recorded from the sheet are placeholders
+   that the bank matcher absorbs when the real credit is seen.
+5. Point the website's "bookings by email" line at
+   `https://bookings.farmyardpark.co.za/request`. Decide in Settings › Booking form
+   whether the automatic acknowledgement email is on (it is off by default).
+6. Watch `docker compose logs -f worker` for the first few sync and poll runs.
 
 ## Day-to-day
 
 ```bash
 docker compose up -d --build     # start / apply changes
 docker compose down              # stop, keep data
-docker compose down -v           # stop and destroy the database
-docker compose logs -f web       # tail
-docker compose ps                # health
-```
+docker compose logs -f web worker
+docker compose ps
 
-A `Makefile` wraps the same commands (`make up`, `make down`, `make logs`,
-`make db-shell`, …); run `make` on its own for the list.
-
-Run a job by hand:
-
-```bash
+docker compose run --rm worker sync-mail
+docker compose run --rm worker poll-bank
+docker compose run --rm worker backup
 docker compose run --rm scheduler add-inventory
 docker compose run --rm scheduler clear-inventory
-docker compose run --rm scheduler hide-quicket-event
 ```
 
-## Schedule — off by default
+The Ops page in the app runs the same jobs and shows the last sync and poll.
 
-**Nothing runs on a timer unless you switch it on.** The `scheduler` service
-sits behind the `scheduled` compose profile, so `docker compose up -d` does not
-create it. Confirm with `docker compose ps` — there should be no `scheduler`
-row.
+## Schedules
 
-The jobs are still available on demand, and `docker compose run` activates the
-profile for that one invocation:
+`worker` is always on. Its times are in `TZ` and can be overridden with
+`MAIL_SYNC_CRON`, `BANK_POLL_CRON`, `REMINDERS_CRON`, `BACKUP_CRON`.
 
-```bash
-docker compose run --rm scheduler add-inventory
-docker compose run --rm scheduler clear-inventory
-docker compose run --rm scheduler hide-quicket-event
-```
-
-### Turning the daily schedule on
-
-Uncomment `COMPOSE_PROFILES=scheduled` in `.env`, then:
-
-```bash
-docker compose up -d          # scheduler container is created and starts
-docker compose ps             # verify it is running
-docker compose logs scheduler # prints the crontab it loaded
-```
-
-### Turning it off again
-
-```bash
-# comment COMPOSE_PROFILES out in .env, then:
-docker compose stop scheduler && docker compose rm -f scheduler
-```
-
-Once enabled it runs supercronic in the `TZ` from `.env`
-(`Africa/Johannesburg`), with these defaults, matching the historical
-PythonAnywhere runs:
-
-| Job | Default | Env var |
-| --- | --- | --- |
-| Morning Quicket + group sync | 06:01 | `ADD_INVENTORY_CRON` |
-| End-of-day teardown | 18:00 | `CLEAR_INVENTORY_CRON` |
-
-`hide-quicket-event` is never scheduled — `add-inventory` already hides the
-day's event as its second step.
-
-Supercronic will not start a job while the previous run of the same job is still
-going, so a slow morning sync cannot overlap itself.
-
-## Email notifications
-
-The scripts email `NOTIFICATION_RECIPIENTS` on success and failure. **Use
-`SMTP_PORT=587`.** Hetzner blocks outbound 25 and 465 on cloud servers by
-default, and a connection to a blocked port sits in the kernel's SYN-retry
-cycle for about two minutes before failing — which looked like a hung Scripts
-page. TLS mode follows the port automatically (465 → implicit TLS, otherwise
-STARTTLS), and `SMTP_TIMEOUT` (default 10s) bounds the wait if the port is
-ever unreachable.
+`scheduler` (the Loyverse inventory jobs) sits behind the `scheduled` compose
+profile, exactly as before: set `COMPOSE_PROFILES=scheduled` in `.env` to
+run it on a timer, or run the jobs by hand with `docker compose run`.
 
 ## Backups
 
-Everything durable lives in the `farmyard_db_data` volume.
+`scripts/backup_db.sh` runs nightly in `worker`: a `mysqldump` gzipped to
+`/app/data/backups/farmyard-YYYY-MM-DD.sql.gz`, keeping `BACKUP_KEEP_DAYS`
+(default 14). Set `BACKUP_OFFSITE_CMD` to a command that receives the file
+path to ship it off the server (the ERP's offsite script is the model).
+Restore into a fresh stack with `docker compose exec -T db sh -c 'mysql ...' < dump.sql`.
 
-```bash
-docker compose exec db sh -c \
-  'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-  > backup-$(date +%F).sql
-```
+## Email notifications and safety
 
-Restore into a fresh stack with `docker compose exec -T db sh -c 'mysql ...' < backup.sql`.
+The inventory scripts still email `NOTIFICATION_RECIPIENTS` over `SMTP_*`
+(use port 587). Customer email goes through the Gmail account in
+`GMAIL_ADDRESS`. Outside `ENV=prod` every customer email is redirected to
+`DEV_MAIL_RECIPIENT` with a `[DEV → ...]` subject prefix, so a local stack can
+never reach a customer.
 
 ## What is not deployed
 
-Payment audits (PayCloud/AddPay), the Aronium POS reconciliation, and the
-Loyverse open-ticket observer are out of scope. The code is still present but
-the audit blueprint is not registered, and the PayCloud RSA keys under `keys/`
-are optional — the app starts normally without them.
+Payment audits (PayCloud/AddPay) and the Aronium reconciliation remain out
+of scope; the audit blueprint is not registered.

@@ -1,0 +1,13 @@
+{% extends "emails/base.html" %}
+{% block body %}
+<h1>Your questions, answered</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you for your questions about {{ booking.group_name }}'s visit on {{ booking.visit_date_long }}. Here is what you asked, with our answers.</p>
+{% for q in questions %}
+<table role="presentation" class="qa" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr><td class="qa-q">{{ q.question }}</td></tr>
+  <tr><td class="qa-a">{{ q.answer or "We will come back to you on this one." }}</td></tr>
+</table>
+{% endfor %}
+<p>Anything else? Just reply to this email.</p>
+{% endblock %}

@@ -157,6 +157,8 @@ def add_inventory():
         # ========================================
         logger.info("Checking for group bookings")
 
+        # Reads the bookings table; returns confirmed/completed bookings only,
+        # so enquiries and unpaid proformas never become Loyverse items.
         group_bookings = GroupBooking.get_by_date(TODAY)
 
         if group_bookings:

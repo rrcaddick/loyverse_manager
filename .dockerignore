@@ -30,3 +30,12 @@ CLAUDE.md
 REAMDE.md
 DEPLOYMENT.md
 deploy/
+
+# Booking system
+frontend/node_modules/
+frontend/dist/
+web/static/app/
+data/
+.venv/
+tests/
+docs/

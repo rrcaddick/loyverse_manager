@@ -1,0 +1,57 @@
+{# Building blocks shared by the email bodies. Rows are (label, value) or
+   (label, value, emphasis) tuples. #}
+
+{% macro summary(rows, title=None) -%}
+<table role="presentation" class="summary" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td class="summary-cell">
+      {% if title %}<p class="summary-title">{{ title }}</p>{% endif %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% for row in rows %}
+        {% if row and row[1] is not none and row[1] != "" %}
+        <tr>
+          <td class="row-k" width="40%">{{ row[0] }}</td>
+          <td class="row-v{% if row|length > 2 and row[2] %} row-v-strong{% endif %}" width="60%">{{ row[1] }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </table>
+    </td>
+  </tr>
+</table>
+{%- endmacro %}
+
+{% macro bank_details(company, reference) -%}
+<table role="presentation" class="bank" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td class="bank-cell">
+      <p class="summary-title">Bank details</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% for label, value in [
+          ("Bank", company.bank_name ~ " " ~ company.bank_account_type),
+          ("Account name", company.bank_account_name),
+          ("Account number", company.bank_account_number),
+          ("Branch code", company.bank_branch_code),
+        ] %}
+        {% if value %}
+        <tr>
+          <td class="row-k">{{ label }}</td>
+          <td class="row-v">{{ value }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        <tr>
+          <td class="row-k">Reference</td>
+          <td class="row-v row-ref">{{ reference }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+{%- endmacro %}
+
+{% macro button(label, url) -%}
+<table role="presentation" class="btn-table" cellpadding="0" cellspacing="0" border="0">
+  <tr><td class="btn"><a href="{{ url }}">{{ label }}</a></td></tr>
+</table>
+{%- endmacro %}

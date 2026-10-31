@@ -1,0 +1,44 @@
+/*
+ * Calendar v2 sizing. The fills come from the shell's --heat-1…5 ramp and all
+ * text on a heat cell is full ink (--heat-text), so nothing here touches
+ * colour. Structural widths are px (the viewport maths in
+ * docs/handoff/frontend-calendar-v2.md assume them); type is rem so the
+ * text-size preference scales it.
+ *
+ *   --fy-week-col        week-summary column        128 px → 144 px at ≥ 1920
+ *   --fy-panel           side panel                 400 px → 440 px
+ *   --fy-interest        cell interest number       30 px → 36 px
+ *   --fy-week-interest   week-column interest       24 px → 28 px
+ */
+.fy-cal {
+  --fy-week-col: 128px;
+  --fy-panel: 400px;
+  --fy-interest: 1.875rem;
+  --fy-week-interest: 1.5rem;
+}
+
+@media (min-width: 1920px) {
+  .fy-cal {
+    --fy-week-col: 144px;
+    --fy-panel: 440px;
+    --fy-interest: 2.25rem;
+    --fy-week-interest: 1.75rem;
+  }
+}
+
+/* Legend hatch swatch: the same hatch as a closed cell, denser so it reads at 12 px. */
+.fy-swatch-hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    color-mix(in oklch, var(--foreground) 22%, transparent) 3px 4px
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fy-cell {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
+  }
+}

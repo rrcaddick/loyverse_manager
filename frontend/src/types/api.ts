@@ -1,0 +1,304 @@
+/**
+ * Types for the /api/v1 contract (docs/booking-system.md §6).
+ * Keep these in step with web/api/*.py. Money arrives as numbers with 2dp.
+ */
+
+export type Role = "admin" | "manager";
+
+/** Appearance preference stored per user (PUT /users/me/preferences). */
+export interface UserPreferences {
+  theme: string;
+  mode: "light" | "dark" | "system";
+  text_size: "default" | "large" | "xlarge";
+}
+
+export interface User {
+  id: number;
+  email: string;
+  full_name: string;
+  role: Role;
+  must_change_password: boolean;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  /** Absent until the preferences endpoint is deployed. */
+  preferences?: UserPreferences;
+}
+
+export interface Session {
+  user: User;
+  csrf_token: string;
+}
+
+export interface ApiErrorBody {
+  error: {
+    code: string;
+    message: string;
+    fields?: Record<string, string>;
+  };
+}
+
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// ---------------------------------------------------------------- settings
+
+/** Python weekday numbers: 0 = Monday … 6 = Sunday. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface SeasonSettings {
+  start: string; // YYYY-MM-DD
+  end: string;
+  closed_weekdays: number[];
+  avoid_weekdays: number[];
+  /** Inclusive ISO date ranges that price as weekends (the group rate, no children's rate). */
+  school_holidays: SchoolHoliday[];
+}
+
+export interface SchoolHoliday {
+  from: string; // YYYY-MM-DD
+  to: string;
+  label?: string | null;
+}
+
+export interface PricingSettings {
+  vat_rate: number;
+  /** Fewer people than this is not a group: public rate, unless another group opens the park that weekday. */
+  group_minimum: number;
+}
+
+export interface DepositSettings {
+  min_people: number;
+  percent: number;
+}
+
+export interface DocumentsSettings {
+  next_number: number;
+  proforma_prefix: string;
+  invoice_prefix: string;
+  company_name: string;
+  trading_name: string;
+  address_line1: string;
+  address_line2: string;
+  company_reg: string;
+  vat_no: string;
+  bank_name: string;
+  bank_account_name: string;
+  bank_account_type: string;
+  bank_account_number: string;
+  bank_branch_code: string;
+  pop_email: string;
+  payment_terms: string;
+}
+
+export interface RemindersSettings {
+  still_interested_days: number;
+  deposit_reminder_days_before: number;
+  final_details_days_before: number;
+  lapse_days_before: number;
+}
+
+/** A kind of day on the calendar (Settings › Day kinds): border colour and tag. */
+export interface DayKind {
+  code: string;
+  label: string;
+  colour: string;
+}
+
+export interface DayKindSetting extends DayKind {
+  on: boolean;
+  /** Only a kind the operator added: the ISO dates it applies to. */
+  dates?: string[];
+}
+
+export interface DayKindsSettings {
+  /** Highest priority first; the first kind a day matches colours its cell. */
+  kinds: DayKindSetting[];
+  /** MM-DD, every year. */
+  peak_days: string[];
+  /** The first and last day of Ramadan when the moon sighting is known. */
+  ramadan: { start: string | null; end: string | null };
+}
+
+/** How inbound mail is handled (Settings › Inbound). */
+export interface InboundSettings {
+  /** A customer's mail still joins their booking this many days after the visit. */
+  active_days_after_visit: number;
+  /** A sender is offered the booking form at most once in this many hours. */
+  form_window_hours: number;
+  /** How often unanswered mail is swept into enquiries. */
+  sweep_interval_hours: number;
+  bounce_back_enabled: boolean;
+  labels_enabled: boolean;
+  archive_enabled: boolean;
+  label_bookings: string;
+  label_enquiries: string;
+  label_process: string;
+  /** Today's automated-mail line looks back this many days. */
+  skipped_days: number;
+}
+
+export interface CapacitySettings {
+  /** The calendar bar is drawn against this. */
+  capacity: number;
+  /** People booked on one day from which the calendar shows OVER. */
+  over_threshold: number;
+}
+
+export interface EmailSettings {
+  sender_name: string;
+  signature_name: string;
+  signature_title: string;
+  signature_company: string;
+  phone: string;
+  website: string;
+  bounce_back_enabled: boolean;
+  review_window_days: number;
+}
+
+export interface GroupType {
+  code: string;
+  label: string;
+  /** The children's rate can apply on a term-time weekday. */
+  children: boolean;
+}
+
+export interface FormSettings {
+  group_types: GroupType[];
+  max_questions: number;
+  min_group_size: number;
+  intro: string;
+}
+
+export interface Settings {
+  season: SeasonSettings;
+  pricing: PricingSettings;
+  deposit: DepositSettings;
+  documents: DocumentsSettings;
+  reminders: RemindersSettings;
+  capacity: CapacitySettings;
+  day_kinds: DayKindsSettings;
+  inbound: InboundSettings;
+  email: EmailSettings;
+  form: FormSettings;
+}
+
+export type SettingsSection = keyof Settings;
+
+export type DayType = "weekday" | "weekend";
+
+export interface PriceTier {
+  id?: number;
+  code: string;
+  label: string;
+  day_type: DayType;
+  price: number;
+  min_group_size: number;
+  notes: string | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export type SeasonDayKind = "closed" | "peak" | "open";
+
+export interface SeasonDay {
+  day: string; // YYYY-MM-DD
+  kind: SeasonDayKind;
+  label: string | null;
+}
+
+export interface SettingsResponse {
+  settings: Settings;
+  price_tiers: PriceTier[];
+  season_days: SeasonDay[];
+}
+
+// -------------------------------------------------------------------- ops
+
+/** GET /ops/status (web/api/ops.py). */
+export interface OpsMailFolder {
+  folder: string;
+  uidvalidity: number | null;
+  last_uid: number | null;
+  last_synced_at: string | null;
+  last_error: string | null;
+}
+
+export interface OpsBankPoll {
+  id: number;
+  started_at: string | null;
+  finished_at: string | null;
+  window_from: string | null;
+  window_to: string | null;
+  entries: number | null;
+  new_entries: number | null;
+  status: string | null;
+  error: string | null;
+}
+
+export interface OpsImportRun {
+  id: number;
+  kind: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  status: string | null;
+  summary: Record<string, unknown> | string | null;
+}
+
+export interface OpsStatus {
+  server_time: string;
+  today: string;
+  mail: { folders: OpsMailFolder[]; pending_review: number };
+  bank: { last_poll: OpsBankPoll | null; suggested: number };
+  reminders: { due_count: number; due_total: number; sent: number; dismissed: number };
+  bookings: { counts: Partial<Record<BookingStatus, number>>; total: number };
+  imports: { last_run: OpsImportRun | null };
+  scheduler: { add_inventory_cron: string; clear_inventory_cron: string; profile_enabled: boolean; timezone: string };
+  /** Names accepted by POST /ops/run. */
+  jobs: string[];
+}
+
+export interface OpsRunResult {
+  ok: boolean;
+  name: string;
+  duration_ms: number;
+  summary?: string | number | boolean | Record<string, unknown> | unknown[] | null;
+  error?: string | null;
+}
+
+export interface OpsLogs {
+  path: string;
+  lines: string[];
+  count: number;
+  requested: number;
+}
+
+// --------------------------------------------------------------- bookings
+
+/** Booking lifecycle (docs §5). Used by StatusBadge and the pages to come. */
+export type BookingStatus =
+  | "requested"
+  | "enquiry"
+  | "proforma_sent"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "lapsed"
+  | "no_show"
+  | "declined";
+
+export const BOOKING_STATUSES: BookingStatus[] = [
+  "requested",
+  "enquiry",
+  "proforma_sent",
+  "confirmed",
+  "completed",
+  "cancelled",
+  "lapsed",
+  "no_show",
+  "declined",
+];
