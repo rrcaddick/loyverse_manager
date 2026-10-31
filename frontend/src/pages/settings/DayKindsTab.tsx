@@ -2,8 +2,9 @@
  * Settings › Day kinds: the ordered list that colours the calendar. Highest
  * priority first; when a day matches several, the first one wins. Built-in
  * kinds follow their rule (peak days, public holidays, Ramadan from the
- * Islamic calendar, weekends, school holidays, closed weekdays); a kind added
- * here applies to the dates listed on it.
+ * Islamic calendar, weekends, school holidays); a kind added here applies to
+ * the dates listed on it. Closed days are not a kind: the Season page lists
+ * them and the calendar hatches them.
  */
 
 import { ArrowDown, ArrowUp, CalendarRange, Plus, Trash2 } from "lucide-react";
@@ -22,7 +23,7 @@ import { cn } from "@/lib/utils";
 import type { SettingsTabProps } from "./SettingsPage";
 import { SettingsForm, monthDay, runSave } from "./shared";
 
-const BUILT_IN = new Set(["peak", "public_holiday", "ramadan_eve", "eid", "weekend", "school_holiday", "closed"]);
+const BUILT_IN = new Set(["peak", "public_holiday", "ramadan_eve", "eid", "weekend", "school_holiday"]);
 
 const RULES: Record<string, string> = {
   peak: "The peak days below, every year",
@@ -31,7 +32,6 @@ const RULES: Record<string, string> = {
   eid: "The day after Ramadan ends",
   weekend: "Saturdays and Sundays",
   school_holiday: "The school holidays on the Season page",
-  closed: "The closed weekdays on the Season page. Groups can still book.",
 };
 
 /** The 2014 Material swatches at 600, plus grey. */

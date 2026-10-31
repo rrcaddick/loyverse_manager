@@ -122,10 +122,7 @@ def date_problem(
         return f"The season opens on {_fmt(start)}"
     if end and d > end:
         return f"The season ends on {_fmt(end)}"
-    closed_weekdays = [int(w) for w in (season.closed_weekdays or [])]
-    if d.weekday() in closed_weekdays:
-        names = [WEEKDAY_NAMES[w] + "s" for w in sorted(closed_weekdays) if 0 <= w <= 6]
-        return f"We are closed on {_join(names)}." + _next_open_sentence(d, settings, closed_days, today)
+    # No weekday is closed to groups (31 Oct 2026); only explicit closures are.
     if closed_days and d in closed_days:
         label = closed_days.get(d) if isinstance(closed_days, Mapping) else None
         suffix = f" ({label})" if label else ""
@@ -150,8 +147,8 @@ def next_open_day_after(
     today: date | None = None,
     horizon: int = NEXT_OPEN_DAY_HORIZON,
 ) -> date | None:
-    """The first bookable day after ``d`` (closed weekdays and closures skipped),
-    or None when the season ends first."""
+    """The first bookable day after ``d`` (closures skipped), or None when the
+    season ends first."""
     today = today or get_today()
     if closed_days is None:
         closed_days = season_days_by_kind("closed")

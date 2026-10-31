@@ -53,8 +53,9 @@ def form_config():
         ],
         "min_date": min_date.isoformat(),
         "max_date": season_end.isoformat() if season_end else None,
-        "closed_weekdays": [int(w) for w in (s["season"].closed_weekdays or [])],
-        "avoid_weekdays": [int(w) for w in (s["season"].get("avoid_weekdays") or [])],
+        # Kept for the form's shape; no weekday is closed or discouraged any more (31 Oct 2026).
+        "closed_weekdays": [],
+        "avoid_weekdays": [],
         "closed_days": [d.isoformat() for d in sorted(closed) if in_range(d)],
         "peak_days": [d.isoformat() for d in sorted(peak) if in_range(d)],
         "max_questions": int(s["form"].get("max_questions") or 0),

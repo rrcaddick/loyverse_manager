@@ -264,3 +264,25 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
   verb. Stale keeps Dismiss all.
 - The nav accordion lists the same views (`WORK_CHILDREN`), "Expiring" for
   the holds view.
+
+## Calendar, Work nav and Settings: the owner's pass of 31 Oct (evening)
+
+- **Cell**: no day-kind tag; OVER is the only tag. The split is confirmed
+  against pending (a ratio of the two, `split-bar.tsx`), with the numbers
+  under it, confirmed left and pending right, no dots. The people and group
+  count are centred and sized so nothing clips at 104 px rows. Borders are
+  3 px in bolder, more distinct colours (red, purple, cyan, indigo, orange,
+  green; editable). The week column is in the same style, no "people".
+- **Closed is not a day kind.** A closed day is hatched across the whole
+  square and says CLOSED. Closures are the list on Settings › Season
+  ("Closed days": date and label, `season_days` rows of kind closed); the
+  weekday rules (closed Mon/Tue, avoid Wed) are gone from the Season page,
+  the calendar and the public form (`pricing.is_closed` is explicit closures
+  and out-of-season only; the form no longer refuses Mondays and Tuesdays).
+  The peak and open rows that were in `season_days` were dropped locally;
+  peak days live on Day kinds (26 Dec, 1 and 2 Jan).
+- **Work in the nav**: no total badge; the whole row toggles the accordion;
+  the views' badges sit on one right edge whatever the label length.
+- **Settings**: the page is pinned to the viewport (route layout "fill");
+  the sections list and the settings scroll independently.
+- Shortcut `g e` opens Enquiries (`g m` went with Mail).

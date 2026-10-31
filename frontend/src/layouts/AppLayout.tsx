@@ -123,7 +123,7 @@ export function AppLayout() {
   useShortcut("g c", () => navigate("/calendar"));
   useShortcut("g w", () => navigate("/work"), { enabled: isAdmin });
   useShortcut("g b", () => navigate("/bookings"), { enabled: isAdmin });
-  useShortcut("g m", () => navigate("/mail"), { enabled: isAdmin });
+  useShortcut("g e", () => navigate("/enquiries"), { enabled: isAdmin });
 
   const full = handle.layout === "full";
   const fill = handle.layout === "fill";

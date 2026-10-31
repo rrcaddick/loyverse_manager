@@ -30,10 +30,9 @@ def test_priority_order_picks_one_kind():
     assert day_kinds.primary_kind(date(2026, 12, 16), s)["code"] == "public_holiday"
     # A Saturday in the holidays is a weekend before it is a school holiday.
     assert day_kinds.primary_kind(date(2026, 12, 19), s)["code"] == "weekend"
-    # A Monday in the holidays: school holiday beats closed; in term a Monday is closed.
+    # A Monday in the holidays is a school holiday; a term-time Monday is nothing in particular.
     assert day_kinds.primary_kind(date(2026, 12, 14), s)["code"] == "school_holiday"
-    assert day_kinds.primary_kind(date(2026, 11, 16), s)["code"] == "closed"
-    # A term-time Thursday is nothing in particular.
+    assert day_kinds.primary_kind(date(2026, 11, 16), s) is None
     assert day_kinds.primary_kind(date(2026, 11, 19), s) is None
 
 
@@ -70,3 +69,15 @@ def test_yearly_peak_days_price_as_peak():
     assert pricing.is_peak(date(2027, 1, 2), s) is True
     assert pricing.rate_day(date(2027, 1, 2), s) == "peak"
     assert pricing.is_peak(date(2027, 1, 5), s, {}) is False
+
+
+def test_closed_is_not_a_kind_even_when_stored():
+    from src.services import pricing
+
+    kinds = copy.deepcopy(DEFAULTS["day_kinds"]["kinds"]) + [{"code": "closed", "label": "Closed", "colour": "#9E9E9E", "on": True}]
+    s = settings(kinds=kinds)
+    assert "closed" not in [k["code"] for k in day_kinds.legend(s)]
+    assert day_kinds.primary_kind(date(2026, 11, 16), s) is None
+    # Closures are explicit rows (or out of season), never a weekday rule.
+    assert pricing.is_closed(date(2026, 12, 24), s, {date(2026, 12, 24): {"day": "2026-12-24", "kind": "closed", "label": "Christmas Eve"}})
+    assert not pricing.is_closed(date(2026, 11, 16), s, {})

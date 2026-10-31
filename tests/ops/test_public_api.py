@@ -77,11 +77,11 @@ def test_submit_then_fetch_receipt(client):
 
 
 def test_validation_messages_reach_the_client(client):
-    bad = {**PAYLOAD, "visit_date": "2026-11-02", "visitors": 5, "policy_accepted": False}
+    bad = {**PAYLOAD, "visit_date": "2026-12-24", "visitors": 5, "policy_accepted": False}
     r = client.post("/api/v1/public/booking-request", json=bad)
     assert r.status_code == 422
     fields = r.get_json()["error"]["fields"]
-    assert fields["visit_date"].endswith("The next open day is Wednesday 4 November.")
+    assert fields["visit_date"].endswith("The next open day is Friday 25 December.")
     assert fields["visitors"].endswith("buy day tickets on Quicket.")
     assert fields["policy_accepted"] == "Agree to the booking terms to send your request"
 

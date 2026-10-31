@@ -67,11 +67,11 @@ def test_day_type(s):
     assert pricing.day_type(RECONCILIATION_DAY, s) == "weekend"
 
 
-def test_closed_weekdays_and_season(s):
-    assert pricing.is_closed(MON, s)
-    assert pricing.is_closed(TUE, s)
+def test_closed_days_are_explicit_closures_and_out_of_season(s):
+    # Weekdays are never closed by rule: groups visit on Mondays and Tuesdays.
+    assert not pricing.is_closed(MON, s)
+    assert not pricing.is_closed(TUE, s)
     assert not pricing.is_closed(WED, s)
-    assert not pricing.is_closed(THU, s)
     assert pricing.is_closed(date(2026, 10, 30), s)  # day before season start
     assert not pricing.is_closed(date(2026, 10, 31), s)  # season start (Saturday)
     assert pricing.is_closed(date(2027, 5, 1), s)  # after season end

@@ -517,3 +517,11 @@ reminders, holds, stale)`; `confirm_money`, `arrivals` and `up_next` are gone,
 as are `merge_up_next` and `needs_you`. `GET /work` defaults to `view=reply`;
 `counts` carries the views and `total` (no `up_next`). Rows keep their shape;
 the UI shows `primary` only.
+
+### Closed days (31 Oct 2026, evening)
+`pricing.is_closed(d, s, season_days)` is true only for an explicit
+`season_days` row of kind `closed` or a day outside the season; no weekday is
+closed by rule and the public form refuses only explicit closures
+(`season.closed_weekdays` / `avoid_weekdays` are no longer read; the public
+form config returns them empty). `closed` is not a day kind: stored entries are
+dropped on read. The calendar hatches a closed day and says CLOSED.

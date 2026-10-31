@@ -11,7 +11,9 @@ matches the dates listed on it.
     eid             the day after the last day of Ramadan (1 Shawwal, or the override)
     weekend         Saturday and Sunday
     school_holiday  season.school_holidays ranges
-    closed          season.closed_weekdays and explicit closures; never blocks a group
+
+A closed day (an explicit closure on Settings › Season, or outside the season)
+is not a kind: the cell is hatched and says CLOSED (``pricing.is_closed``).
 
 The Islamic dates are the tabular (Kuwaiti) calendar, right to a day; the moon
 sighting decides the real date, so ``ramadan.start`` and ``ramadan.end`` on
@@ -27,16 +29,15 @@ from typing import Any, Mapping
 from src.services import pricing
 from src.utils.holidays import is_public_holiday
 
-BUILT_IN = ("peak", "public_holiday", "ramadan_eve", "eid", "weekend", "school_holiday", "closed")
+BUILT_IN = ("peak", "public_holiday", "ramadan_eve", "eid", "weekend", "school_holiday")
 
 DEFAULT_KINDS: list[dict[str, Any]] = [
-    {"code": "peak", "label": "Peak day", "colour": "#E53935", "on": True},
-    {"code": "public_holiday", "label": "Public holiday", "colour": "#8E24AA", "on": True},
-    {"code": "ramadan_eve", "label": "Day before Ramadan", "colour": "#3949AB", "on": True},
-    {"code": "eid", "label": "Day after Ramadan", "colour": "#5E35B1", "on": True},
-    {"code": "weekend", "label": "Weekend", "colour": "#FB8C00", "on": True},
-    {"code": "school_holiday", "label": "School holiday", "colour": "#FFB300", "on": True},
-    {"code": "closed", "label": "Closed to the public", "colour": "#9E9E9E", "on": True},
+    {"code": "peak", "label": "Peak day", "colour": "#D50000", "on": True},
+    {"code": "public_holiday", "label": "Public holiday", "colour": "#AA00FF", "on": True},
+    {"code": "ramadan_eve", "label": "Day before Ramadan", "colour": "#00B8D4", "on": True},
+    {"code": "eid", "label": "Day after Ramadan", "colour": "#304FFE", "on": True},
+    {"code": "weekend", "label": "Weekend", "colour": "#FF6D00", "on": True},
+    {"code": "school_holiday", "label": "School holiday", "colour": "#00C853", "on": True},
 ]
 DEFAULT_PEAK_DAYS = ["12-26", "01-01", "01-02"]
 
@@ -117,8 +118,6 @@ def _matches(kind: Mapping[str, Any], d: date, s, season_days, cfg: Mapping[str,
         return d.weekday() >= 5
     if code == "school_holiday":
         return pricing.is_school_holiday(d, s)
-    if code == "closed":
-        return pricing.is_closed(d, s, season_days)
     return d.isoformat() in {str(v)[:10] for v in kind.get("dates") or []}
 
 
@@ -131,7 +130,7 @@ def kinds_for(d: date, s, season_days: Mapping[date, dict] | None = None) -> lis
     cfg = _kinds_cfg(s)
     out: list[dict[str, Any]] = []
     for kind in (cfg.get("kinds") if cfg else None) or []:
-        if not isinstance(kind, Mapping) or not kind.get("code") or kind.get("on", True) is False:
+        if not isinstance(kind, Mapping) or not kind.get("code") or kind.get("on", True) is False or kind.get("code") == "closed":
             continue
         if _matches(kind, d, s, season_days, cfg):
             out.append(_public(kind))
@@ -146,4 +145,4 @@ def primary_kind(d: date, s, season_days: Mapping[date, dict] | None = None) -> 
 def legend(s) -> list[dict[str, Any]]:
     """The enabled kinds in priority order, for the calendar's legend."""
     cfg = _kinds_cfg(s)
-    return [_public(k) for k in (cfg.get("kinds") if cfg else None) or [] if isinstance(k, Mapping) and k.get("code") and k.get("on", True) is not False]
+    return [_public(k) for k in (cfg.get("kinds") if cfg else None) or [] if isinstance(k, Mapping) and k.get("code") and k.get("code") != "closed" and k.get("on", True) is not False]

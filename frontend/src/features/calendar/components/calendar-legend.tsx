@@ -1,7 +1,7 @@
 /**
  * The 28 px legend line: the six heat swatches labelled with the band
- * thresholds (scaled from the capacity), the split bar, the day kinds in
- * their colours (Settings › Day kinds), OVER and today.
+ * thresholds (scaled from the capacity), the split, the day kinds as their
+ * border colours (Settings › Day kinds), the hatched Closed, OVER and today.
  */
 
 import type { DayKind } from "@/types/api";
@@ -32,18 +32,21 @@ export function CalendarLegend({ capacity, overThreshold, kinds, className }: { 
           ))}
         </div>
         <div className="flex items-center gap-1.5 @max-[860px]:hidden">
-          <span className="flex h-1.5 w-8 overflow-hidden rounded-full bg-foreground/10" aria-hidden="true">
+          <span className="flex h-1.5 w-8 overflow-hidden rounded-full bg-amber-solid" aria-hidden="true">
             <span className="h-full w-7/12 bg-green-solid" />
-            <span className="h-full w-5/12 bg-amber-solid" />
           </span>
-          confirmed · pending of {formatNumber(capacity)}
+          confirmed · pending
         </div>
         {kinds.map((kind, index) => (
           <div key={kind.code} className={cn("flex items-center gap-1.5", KIND_HIDE[index] ?? "@max-[1440px]:hidden")}>
-            <span className="size-3 rounded-sm border-2 bg-card" style={{ borderColor: kind.colour }} aria-hidden="true" />
+            <span className="size-3.5 rounded-sm border-[3px] bg-card" style={{ borderColor: kind.colour }} aria-hidden="true" />
             {kind.label}
           </div>
         ))}
+        <div className="flex items-center gap-1.5">
+          <span className="fy-swatch-hatched size-3.5 rounded-sm border border-border bg-card" aria-hidden="true" />
+          Closed
+        </div>
         <div className="flex items-center gap-1.5">
           <span className="rounded-sm bg-red-solid px-1 text-[0.625rem] leading-3 font-semibold text-on-solid uppercase" aria-hidden="true">
             Over

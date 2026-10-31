@@ -123,7 +123,7 @@ export const router = createBrowserRouter([
             handle: { crumb: "Settings", crumbTo: "/settings" },
             children: [
               { index: true, element: <SettingsIndexRedirect /> },
-              { path: ":section", lazy: page(() => import("@/pages/settings/SettingsPage")) },
+              { path: ":section", lazy: page(() => import("@/pages/settings/SettingsPage")), handle: { layout: "fill" } },
             ],
           },
         ],

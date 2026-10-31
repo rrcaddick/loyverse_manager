@@ -3,30 +3,22 @@ import { useState } from "react";
 import { useFieldArray } from "react-hook-form";
 import { z } from "zod";
 
-import { DateField, FieldRow, SelectField, TextField, WeekdayToggleField, useZodForm } from "@/components/form";
+import { DateField, FieldRow, TextField, useZodForm } from "@/components/form";
 import { EmptyState } from "@/components/empty-state";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { useReplaceSeasonDays, useUpdateSection } from "@/features/settings/api";
-import { WEEKDAYS, formatDate, formatWeekday, todayIso } from "@/lib/format";
+import { formatDate, formatWeekday, todayIso } from "@/lib/format";
 import type { SeasonDay } from "@/types/api";
 
 import type { SettingsTabProps } from "./SettingsPage";
 import { SettingsForm, dirtyKeys, isoDate, pick, runSave } from "./shared";
-
-const KIND_OPTIONS = [
-  { value: "closed", label: "Closed", description: "No bookings on this day" },
-  { value: "peak", label: "Peak", description: "The peak price for everyone" },
-  { value: "open", label: "Open", description: "Open even if the weekday is normally closed" },
-];
 
 const schema = z
   .object({
     season: z.object({
       start: isoDate,
       end: isoDate,
-      closed_weekdays: z.array(z.number().int().min(0).max(6)),
-      avoid_weekdays: z.array(z.number().int().min(0).max(6)),
       school_holidays: z.array(
         z.object({
           from: isoDate,
@@ -38,7 +30,6 @@ const schema = z
     season_days: z.array(
       z.object({
         day: isoDate,
-        kind: z.enum(["closed", "peak", "open"]),
         label: z.string().trim().max(80, "Keep labels short"),
       }),
     ),
@@ -46,14 +37,6 @@ const schema = z
   .superRefine((value, ctx) => {
     if (value.season.end <= value.season.start) {
       ctx.addIssue({ code: "custom", path: ["season", "end"], message: "The season must end after it starts" });
-    }
-    const overlap = value.season.avoid_weekdays.filter((d) => value.season.closed_weekdays.includes(d));
-    if (overlap.length) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["season", "avoid_weekdays"],
-        message: `${overlap.map((d) => WEEKDAYS[d]?.label).join(", ")} is already closed`,
-      });
     }
     value.season.school_holidays.forEach((r, index) => {
       if (r.to < r.from) ctx.addIssue({ code: "custom", path: ["season", "school_holidays", index, "to"], message: "Ends before it starts" });
@@ -80,10 +63,11 @@ export default function SeasonTab({ data }: SettingsTabProps) {
     schema,
     defaultValues: {
       season: {
-        ...data.settings.season,
+        start: data.settings.season.start,
+        end: data.settings.season.end,
         school_holidays: (data.settings.season.school_holidays ?? []).map((r) => ({ from: r.from, to: r.to, label: r.label ?? "" })),
       },
-      season_days: data.season_days.map((d) => ({ day: d.day, kind: d.kind, label: d.label ?? "" })),
+      season_days: data.season_days.filter((d) => d.kind === "closed").map((d) => ({ day: d.day, label: d.label ?? "" })),
     },
   });
   const days = useFieldArray({ control: form.control, name: "season_days" });
@@ -105,9 +89,9 @@ export default function SeasonTab({ data }: SettingsTabProps) {
         if (dirty.season_days) {
           const items: SeasonDay[] = [...values.season_days]
             .sort((a, b) => a.day.localeCompare(b.day))
-            .map((d) => ({ day: d.day, kind: d.kind, label: d.label || null }));
+            .map((d) => ({ day: d.day, kind: "closed" as const, label: d.label || null }));
           const saved = await saveDays.mutateAsync(items);
-          values.season_days = saved.season_days.map((d) => ({ day: d.day, kind: d.kind, label: d.label ?? "" }));
+          values.season_days = saved.season_days.filter((d) => d.kind === "closed").map((d) => ({ day: d.day, label: d.label ?? "" }));
         }
         form.reset(values as FormValues);
       }),
@@ -123,23 +107,6 @@ export default function SeasonTab({ data }: SettingsTabProps) {
           <DateField control={form.control} name="season.start" label="Season opens" />
           <DateField control={form.control} name="season.end" label="Season closes" min={season.start} />
         </FieldRow>
-      </Section>
-
-      <Section title="Weekdays" description="Which days of the week the park takes groups.">
-        <div className="flex flex-col gap-5">
-          <WeekdayToggleField
-            control={form.control}
-            name="season.closed_weekdays"
-            label="Closed"
-            description="The park does not take group bookings on these days. The public form will not offer them."
-          />
-          <WeekdayToggleField
-            control={form.control}
-            name="season.avoid_weekdays"
-            label="Avoid"
-            description="Open, but discouraged: the calendar flags these days and the form suggests an alternative."
-          />
-        </div>
       </Section>
 
       <Section
@@ -172,29 +139,28 @@ export default function SeasonTab({ data }: SettingsTabProps) {
       </Section>
 
       <Section
-        title="Special days"
-        description="Individual dates that override the weekday rules: public-holiday closures, peak-price days, or a normally closed weekday that is open."
+        title="Closed days"
+        description="Days the park is closed. The calendar hatches them and says CLOSED."
         flush
         actions={
-          <Button type="button" variant="outline" size="sm" onClick={() => days.append({ day: nextFreeDay(form.getValues("season_days")), kind: "closed", label: "" })}>
+          <Button type="button" variant="outline" size="sm" onClick={() => days.append({ day: nextFreeDay(form.getValues("season_days")), label: "" })}>
             <Plus data-icon="inline-start" />
             Add day
           </Button>
         }
       >
         {days.fields.length === 0 ? (
-          <EmptyState compact icon={CalendarOff} title="No special days" description="Add public holidays the park closes on, and the peak days over Christmas and New Year." />
+          <EmptyState compact icon={CalendarOff} title="No closed days" description="Add the days the park is closed, such as Christmas Eve and New Year's Eve." />
         ) : (
           <ul className="divide-y divide-border">
             {days.fields.map((field, index) => {
               const day = form.watch(`season_days.${index}.day`);
               return (
-                <li key={field.id} className="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,11rem)_minmax(0,9rem)_1fr_auto] sm:items-start">
+                <li key={field.id} className="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,11rem)_1fr_auto] sm:items-start">
                   <div className="space-y-1">
                     <DateField control={form.control} name={`season_days.${index}.day`} label={`Date for row ${index + 1}`} hideLabel />
                     <p className="text-xs text-muted-foreground tabular">{day ? formatWeekday(day) : " "}</p>
                   </div>
-                  <SelectField control={form.control} name={`season_days.${index}.kind`} label={`Kind for row ${index + 1}`} hideLabel options={KIND_OPTIONS} />
                   <TextField control={form.control} name={`season_days.${index}.label`} label={`Label for row ${index + 1}`} hideLabel placeholder="e.g. Christmas Day" maxLength={80} />
                   <Button type="button" variant="ghost" size="icon-sm" className="justify-self-end text-muted-foreground hover:text-destructive" onClick={() => days.remove(index)} aria-label={`Remove ${day ? formatDate(day) : `row ${index + 1}`}`}>
                     <Trash2 />

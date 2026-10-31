@@ -370,7 +370,7 @@ function eventHref(event: EventItem): string | null {
     case "document":
       return link.id ? `${API_BASE}/documents/${link.id}/pdf` : null;
     case "payment":
-      return link.bank_transaction_id ? `/bank?tx=${link.bank_transaction_id}` : link.booking_id ? `/bookings/${link.booking_id}` : null;
+      return link.booking_id ? `/bookings/${link.booking_id}?tab=payments` : null;
     case "booking":
       return link.booking_id ? `/bookings/${link.booking_id}` : link.id ? `/bookings/${link.id}` : null;
     case "message":

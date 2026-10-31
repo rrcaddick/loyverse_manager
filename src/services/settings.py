@@ -83,13 +83,12 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         # Built-in codes carry a rule (src/services/day_kinds.py); a kind added
         # here matches the dates listed on it: {"code", "label", "colour", "on", "dates"}.
         "kinds": [
-            {"code": "peak", "label": "Peak day", "colour": "#E53935", "on": True},
-            {"code": "public_holiday", "label": "Public holiday", "colour": "#8E24AA", "on": True},
-            {"code": "ramadan_eve", "label": "Day before Ramadan", "colour": "#3949AB", "on": True},
-            {"code": "eid", "label": "Day after Ramadan", "colour": "#5E35B1", "on": True},
-            {"code": "weekend", "label": "Weekend", "colour": "#FB8C00", "on": True},
-            {"code": "school_holiday", "label": "School holiday", "colour": "#FFB300", "on": True},
-            {"code": "closed", "label": "Closed to the public", "colour": "#9E9E9E", "on": True},
+            {"code": "peak", "label": "Peak day", "colour": "#D50000", "on": True},
+            {"code": "public_holiday", "label": "Public holiday", "colour": "#AA00FF", "on": True},
+            {"code": "ramadan_eve", "label": "Day before Ramadan", "colour": "#00B8D4", "on": True},
+            {"code": "eid", "label": "Day after Ramadan", "colour": "#304FFE", "on": True},
+            {"code": "weekend", "label": "Weekend", "colour": "#FF6D00", "on": True},
+            {"code": "school_holiday", "label": "School holiday", "colour": "#00C853", "on": True},
         ],
         # Peak days every year, as MM-DD (explicit season_days rows of kind peak count too).
         "peak_days": ["12-26", "01-01", "01-02"],
@@ -230,6 +229,8 @@ def get_settings() -> Settings:
     stored = {r["setting_key"]: loads(r["value"]) or {} for r in rows}
     data = {k: _merge(v, stored.get(k)) for k, v in DEFAULTS.items()}
     data["form"]["group_types"] = _normalise_group_types(data["form"].get("group_types"))
+    # Closed stopped being a day kind on 31 Oct 2026 (closures are hatched instead).
+    data["day_kinds"]["kinds"] = [k for k in data["day_kinds"].get("kinds") or [] if not (isinstance(k, dict) and k.get("code") == "closed")]
     return Settings(data)
 
 

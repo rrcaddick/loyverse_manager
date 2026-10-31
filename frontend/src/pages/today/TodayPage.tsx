@@ -382,7 +382,7 @@ function QuietDay({ data, isToday, onAdd }: { data: TodayResponse; isToday: bool
       <div className="flex flex-wrap items-center gap-3">
         <CalendarDays aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <div className="text-body font-medium text-foreground">{data.is_closed ? `The park is closed to the public ${when}.` : `No groups ${when}.`}</div>
+          <div className="text-body font-medium text-foreground">{data.is_closed ? `The park is closed ${when}.` : `No groups ${when}.`}</div>
           <div className="text-sm text-muted-foreground tabular">
             {next ? (
               <>

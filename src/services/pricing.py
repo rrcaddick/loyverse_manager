@@ -97,17 +97,14 @@ def in_season(d: date, s: Settings) -> bool:
 
 
 def is_closed(d: date, s: Settings, season_days: Mapping[date, dict] | None = None) -> bool:
-    """Closed on configured weekdays, on explicit closures and outside the season.
-
-    An explicit ``season_days`` row is authoritative: ``closed`` closes a day the
-    rules would open, and ``open``/``peak`` opens a day the rules would close.
-    """
+    """Closed on an explicit closure (a ``season_days`` row of kind closed:
+    Christmas Eve, New Year's Eve, …) or outside the season. Weekdays are
+    never closed by rule (31 Oct 2026): groups visit on any day; the public
+    side of the week is not this system's business."""
     row = season_day(d, season_days)
     if row is not None:
         return row["kind"] == "closed"
-    if not in_season(d, s):
-        return True
-    return d.weekday() in set(s.season.closed_weekdays)
+    return not in_season(d, s)
 
 
 def is_avoid(d: date, s: Settings) -> bool:

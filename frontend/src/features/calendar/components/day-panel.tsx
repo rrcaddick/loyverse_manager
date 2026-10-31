@@ -4,8 +4,8 @@
  * (registered by the page).
  *
  * Content: the date, the relative day and the day's flags; the cell's
- * numbers at full size (interest 32 px, groups, an 8 px bar, confirmed /
- * pending); one 56 px row per group sorted by arrival time then size, with
+ * numbers at full size (people 32 px, groups, the 8 px confirmed-against-
+ * pending split with its numbers); one 56 px row per group sorted by arrival time then size, with
  * the admin-only balance in red when due (GET /days/:date); a footer with
  * Open day view and Add booking (admin).
  *
@@ -16,7 +16,6 @@ import { ArrowRight, CalendarPlus, ChevronRight, Plus, X } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
-import { CapacityBar } from "@/components/capacity-bar";
 import { EmptyState } from "@/components/empty-state";
 import { BOOKING_STATUS_META, StatusDot, StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { useDay } from "../api";
 import { relativeDayLabel } from "../month";
 import { KindPill } from "./kind-pill";
-import { SplitCaption } from "./split-caption";
+import { SplitBar } from "./split-bar";
 
 type DayFlagsInput = Pick<CalendarDay, "kind" | "label" | "over">;
 
@@ -90,9 +89,12 @@ export function DayPanel({ date, day, today, onClose, onAddBooking }: DayPanelPr
             </span>
           </div>
           {total > 0 ? (
-            <div className="mt-2 flex flex-col gap-1.5">
-              <CapacityBar confirmed={day.confirmed_people} pending={day.tentative_people} caption="none" height={8} label={`${formatNumber(day.confirmed_people)} confirmed of ${formatNumber(total)}`} />
-              <SplitCaption confirmed={day.confirmed_people} pending={day.tentative_people} mode="full-swatches" className="text-sm text-muted-foreground" />
+            <div className="mt-2 flex flex-col gap-1">
+              <SplitBar confirmed={day.confirmed_people} pending={day.tentative_people} height={8} />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>confirmed</span>
+                <span>pending</span>
+              </div>
             </div>
           ) : null}
         </div>

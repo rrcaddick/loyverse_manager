@@ -104,7 +104,10 @@ def test_weekend_and_closed_days(s):
     assert days["2026-11-12"]["day_type"] == "weekday"
     assert days["2026-11-14"]["day_type"] == "weekend"
     assert days["2026-11-15"]["day_type"] == "weekend"
-    assert days["2026-11-16"]["is_closed"] is True  # Monday
+    assert days["2026-11-16"]["is_closed"] is False  # a Monday is not closed by rule (31 Oct 2026)
+    closure = {date(2026, 11, 16): {"day": "2026-11-16", "kind": "closed", "label": "Closed"}}
+    closed = {d["date"]: d for d in aggregate_calendar(THU, MON, [], s, closure)}
+    assert closed["2026-11-16"]["is_closed"] is True and closed["2026-11-16"]["label"] == "Closed"
 
 
 def test_bookings_outside_range_are_ignored(s):

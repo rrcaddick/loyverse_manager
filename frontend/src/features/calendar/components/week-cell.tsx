@@ -1,18 +1,17 @@
 /**
- * The week-summary column: no heat, right-aligned, the interest 24/700
- * (28 at 1920) + "people", "9 groups", the same split bar and `550 · 250`.
- * The background alternates by calendar month (the week's Thursday) so a
- * two-month window reads as two months.
+ * The week-summary column, in the day cell's own style: the people booked
+ * centred and large, the group count under it, the confirmed-against-pending
+ * split with its numbers under. No heat. The background alternates by
+ * calendar month (the week's Thursday) so a two-month window reads as two.
  */
 
-import { CapacityBar } from "@/components/capacity-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CalendarDay } from "@/features/bookings/types";
 import { formatDateShort, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { weekMonthKey } from "../month";
-import { SplitCaption } from "./split-caption";
+import { SplitBar } from "./split-bar";
 
 interface WeekCellProps {
   week: string[];
@@ -33,28 +32,23 @@ export function WeekCell({ week, days, isLoading }: WeekCellProps) {
     <div
       role="gridcell"
       aria-label={`Week of ${formatDateShort(week[0]!)}: ${formatNumber(total)} people, ${formatNumber(confirmed)} confirmed, ${formatNumber(pending)} pending, ${groups} ${groups === 1 ? "group" : "groups"}`}
-      className={cn("flex min-h-0 flex-col items-end justify-end overflow-hidden rounded-lg border border-border px-2.5 py-2 text-right tabular", alternate ? "bg-nested" : "bg-card")}
+      className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border-[3px] border-border px-2 pt-1 pb-1.5 tabular", alternate ? "bg-nested" : "bg-card")}
     >
       {loading ? (
-        <>
-          <Skeleton className="h-6 w-16" />
-          <Skeleton className="mt-2 h-3 w-12" />
-        </>
+        <div className="flex flex-1 flex-col items-center justify-center gap-2">
+          <Skeleton className="h-7 w-16" />
+          <Skeleton className="h-3 w-12" />
+        </div>
       ) : (
         <>
-          <div className="flex items-baseline gap-1 whitespace-nowrap">
-            <span className={cn("text-(length:--fy-week-interest) leading-none font-bold tracking-tight", total === 0 && "text-muted-foreground")}>{formatNumber(total)}</span>
-            <span className="text-xs text-muted-foreground">people</span>
+          <div className="h-5 shrink-0" />
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden text-center leading-none whitespace-nowrap">
+            <span className={cn("text-(length:--fy-week-interest) leading-[0.95] font-bold tracking-tight", total === 0 && "text-muted-foreground")}>{formatNumber(total)}</span>
+            <span className={cn("mt-0.5 text-[0.8125rem] leading-4 font-medium", total === 0 && "text-muted-foreground")}>
+              {groups} {groups === 1 ? "group" : "groups"}
+            </span>
           </div>
-          <div className="mt-1 text-xs leading-4 text-muted-foreground">
-            {groups} {groups === 1 ? "group" : "groups"}
-          </div>
-          {total > 0 ? (
-            <>
-              <CapacityBar className="mt-1.5 w-full" confirmed={confirmed} pending={pending} caption="none" height={6} label={`${formatNumber(confirmed)} confirmed of ${formatNumber(total)}`} />
-              <SplitCaption confirmed={confirmed} pending={pending} mode="compact" className="mt-1 justify-end text-muted-foreground" />
-            </>
-          ) : null}
+          {total > 0 ? <SplitBar confirmed={confirmed} pending={pending} className="shrink-0" /> : null}
         </>
       )}
     </div>

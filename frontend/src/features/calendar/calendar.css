@@ -7,23 +7,32 @@
  *
  *   --fy-week-col        week-summary column        128 px → 144 px at ≥ 1920
  *   --fy-panel           side panel                 400 px → 440 px
- *   --fy-interest        cell interest number       30 px → 36 px
+ *   --fy-interest        cell interest number       28 px → 34 px
  *   --fy-week-interest   week-column interest       24 px → 28 px
  */
 .fy-cal {
   --fy-week-col: 128px;
   --fy-panel: 400px;
-  --fy-interest: 1.875rem;
-  --fy-week-interest: 1.5rem;
+  --fy-interest: 1.75rem;
+  --fy-week-interest: 1.75rem;
 }
 
 @media (min-width: 1920px) {
   .fy-cal {
     --fy-week-col: 144px;
     --fy-panel: 440px;
-    --fy-interest: 2.25rem;
-    --fy-week-interest: 1.75rem;
+    --fy-interest: 2.125rem;
+    --fy-week-interest: 2.125rem;
   }
+}
+
+/* A closed day: diagonal lines across the whole square, the fill still showing. */
+.fy-closed {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    color-mix(in oklch, var(--foreground) 16%, transparent) 7px 9px
+  );
 }
 
 /* Legend hatch swatch: the same hatch as a closed cell, denser so it reads at 12 px. */

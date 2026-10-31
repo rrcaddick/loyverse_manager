@@ -84,8 +84,6 @@ def test_foreign_mobile_accepted_when_fully_qualified():
         ("2026-10-08", "Choose a date after today"),
         ("2026-10-07", "Choose a date after today"),
         ("2026-10-22", "The season opens on 31 October 2026"),
-        ("2026-11-02", "We are closed on Mondays and Tuesdays. The next open day is Wednesday 4 November."),
-        ("2026-11-03", "We are closed on Mondays and Tuesdays. The next open day is Wednesday 4 November."),
         ("2026-12-24", "The park is closed on 24 December 2026 (Christmas Eve). The next open day is Friday 25 December."),
         ("2027-05-06", "The season ends on 30 April 2027"),
         ("05/11/2026", "Enter a date as YYYY-MM-DD"),
@@ -146,7 +144,7 @@ def test_visitors_wins_over_adults_and_children(settings):
 
 
 def test_next_open_day_after(settings):
-    assert next_open_day_after(date(2026, 11, 2), settings, CLOSED, TODAY) == date(2026, 11, 4)
+    assert next_open_day_after(date(2026, 11, 2), settings, CLOSED, TODAY) == date(2026, 11, 3)  # Mondays and Tuesdays are open to groups
     assert next_open_day_after(date(2026, 12, 23), settings, CLOSED, TODAY) == date(2026, 12, 25)
     assert next_open_day_after(date(2027, 4, 30), settings, CLOSED, TODAY) is None  # season over
 

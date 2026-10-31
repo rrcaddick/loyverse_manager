@@ -1,7 +1,8 @@
 /**
  * The sidebar (owner's UI notes, 26 Oct 2026): one short list in Linda's
- * words. Work is an accordion whose children are its views with live counts,
- * so the queue has no second menu of its own. Counts hide at zero. Settings
+ * words. Work is an accordion (the whole row toggles it) whose children are
+ * its views with live counts on one right edge; Work itself carries no
+ * total. Counts hide at zero. Settings
  * and Users at the bottom with the user menu. Collapses to an icon rail
  * (Ctrl/Cmd+B, the rail handle, or automatically on /calendar).
  */
@@ -61,7 +62,7 @@ export function AppSidebar() {
   if (!user) return null;
   const main = NAV_MAIN.filter((item) => item.roles.includes(user.role));
   const bottom = NAV_BOTTOM.filter((item) => item.roles.includes(user.role));
-  const currentView = onWork ? (params.get("view") ?? "up_next") : null;
+  const currentView = onWork ? params.get("view") : null;
 
   function renderItem(item: NavItem) {
     const active = isNavActive(item, pathname);
@@ -107,34 +108,39 @@ export function AppSidebar() {
       return <SidebarMenuItem key={item.to}>{button}</SidebarMenuItem>;
     }
 
+    // Work: the whole row toggles the accordion (owner, 31 Oct 2026); the
+    // views underneath are the links, each count on one right edge.
     return (
       <Collapsible key={item.to} open={workOpen} onOpenChange={setWorkOpen} asChild>
         <SidebarMenuItem>
-          <div className="relative">
-            {button}
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                aria-label={workOpen ? `Collapse ${item.title}` : `Expand ${item.title}`}
-                className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-              >
-                <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", workOpen && "rotate-180")} />
-              </button>
-            </CollapsibleTrigger>
-          </div>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton
+              isActive={active}
+              tooltip={item.title}
+              aria-expanded={workOpen}
+              className={cn(
+                "relative h-10 gap-3 px-3 text-body [&_svg]:size-5",
+                "data-active:before:absolute data-active:before:top-2 data-active:before:bottom-2 data-active:before:left-0 data-active:before:w-[3px] data-active:before:rounded-r-full data-active:before:bg-primary",
+              )}
+            >
+              <item.icon aria-hidden="true" className={cn("shrink-0", active ? "text-primary" : "text-sidebar-foreground/80")} />
+              <span className="flex-1 truncate">{item.title}</span>
+              <ChevronDown aria-hidden="true" className={cn("size-4 shrink-0 text-sidebar-foreground/70 transition-transform", workOpen && "rotate-180")} />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
           <CollapsibleContent>
-            <SidebarMenuSub className="mx-4 gap-0.5 py-1">
+            <SidebarMenuSub className="mr-1 ml-4 gap-0.5 py-1 pr-0">
               {item.children.map((child) => {
                 const n = counts.workViews[child.view] ?? 0;
                 if (child.muted && n === 0) return null;
                 const childActive = currentView === child.view;
                 return (
                   <SidebarMenuSubItem key={child.view}>
-                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-8 text-sm", child.muted && "text-muted-foreground")}>
-                      <NavLink to={child.view === "up_next" ? "/work" : `/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
+                    <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-8 pr-1 text-sm", child.muted && "text-muted-foreground")}>
+                      <NavLink to={`/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
                         <child.icon aria-hidden="true" />
-                        <span className="flex-1 truncate">{child.title}</span>
-                        {n > 0 ? <CountBadge count={n} tone={child.muted ? "muted" : "highlight"} aria-hidden="true" className="ml-auto" /> : null}
+                        <span className="min-w-0 flex-1 truncate">{child.title}</span>
+                        {n > 0 ? <CountBadge count={n} tone={child.muted ? "muted" : "highlight"} aria-hidden="true" className="ml-auto shrink-0" /> : null}
                       </NavLink>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>

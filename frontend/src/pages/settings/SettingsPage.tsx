@@ -9,8 +9,9 @@
  *
  * Pages are two-column: heading and one sentence on the left, the card of
  * fields on the right (every <Section> inside adopts the split layout
- * through SectionLayoutContext). Saving is the sticky bar "Unsaved changes ·
- * Discard · Save". Managers see Personal only.
+ * through SectionLayoutContext). The page is pinned to the viewport; the
+ * sections list and the settings scroll independently. Saving is the sticky
+ * bar "Unsaved changes · Discard · Save". Managers see Personal only.
  */
 
 import { AlertCircle, ArrowUpRight } from "lucide-react";
@@ -109,8 +110,9 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      <div className="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <nav aria-label="Settings sections" className="flex flex-col gap-5 lg:sticky lg:top-20 lg:self-start">
+      {/* The page pins to the viewport (route layout "fill"): the sections list and the settings scroll on their own. */}
+      <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <nav aria-label="Settings sections" className="flex flex-col gap-5 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:scrollbar-thin">
           {groups.map((group) => (
             <div key={group.title} className="flex flex-col gap-1">
               <div className="text-label px-3 text-muted-foreground uppercase">{group.title}</div>
@@ -135,7 +137,7 @@ export default function SettingsPage() {
           ))}
         </nav>
 
-        <div className="min-w-0">
+        <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pb-6 lg:scrollbar-thin">
           {needsSettings && settings.isPending ? (
             <PageSkeleton />
           ) : needsSettings && settings.isError ? (

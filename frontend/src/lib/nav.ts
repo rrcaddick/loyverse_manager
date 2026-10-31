@@ -4,7 +4,7 @@
  * an accordion whose children are its views with live counts.
  *
  *   Today      /today        admin + manager (the manager's home)
- *   Work       /work         admin   children: the Work views, counts from GET /work/counts
+ *   Work       /work         admin   an accordion: the Work views with their counts (no total on Work itself)
  *   Calendar   /calendar     admin + manager
  *   Bookings   /bookings     admin
  *   Enquiries  /enquiries    admin   count: open enquiries
@@ -75,7 +75,7 @@ export const WORK_CHILDREN: NavChild[] = [
 
 export const NAV_MAIN: NavItem[] = [
   { title: "Today", to: "/today", icon: Sun, roles: ["admin", "manager"], also: ["/day"], key: "t" },
-  { title: "Work", to: "/work", icon: ListChecks, roles: ["admin"], also: ["/queue"], count: "work", key: "w", children: WORK_CHILDREN },
+  { title: "Work", to: "/work", icon: ListChecks, roles: ["admin"], also: ["/queue"], key: "w", children: WORK_CHILDREN },
   { title: "Calendar", to: "/calendar", icon: CalendarDays, roles: ["admin", "manager"], key: "c" },
   { title: "Bookings", to: "/bookings", icon: BookOpenText, roles: ["admin"], key: "b" },
   { title: "Enquiries", to: "/enquiries", icon: MessageSquareText, roles: ["admin"], count: "enquiries", key: "e" },
