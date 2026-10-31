@@ -8,7 +8,7 @@
  *   Calendar   /calendar     admin + manager
  *   Bookings   /bookings     admin
  *   Enquiries  /enquiries    admin   count: open enquiries
- *   Settings   /settings     admin + manager (Users and System live inside)
+ *   Settings   /settings     admin + manager (Users and System live inside; Mail, Bank and Gate are gone)
  */
 
 import {
@@ -117,7 +117,6 @@ export const MANAGER_PATHS = [
   /^\/$/,
   /^\/today(\/[^/]+)?$/,
   /^\/calendar(\/|$)/,
-  /^\/gate(\/|$)/,
   /^\/day\/[^/]+$/,
   /^\/settings$/,
   /^\/settings\/(appearance|password)$/,

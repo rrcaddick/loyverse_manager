@@ -2,10 +2,10 @@
  * /settings/:section — Settings with a left rail (spec §2, §10):
  *
  *   Park              Season · Day kinds · Capacity · Pricing & deposits
- *   Documents & mail  Documents · Email · Reminders · Templates · Mail rules
+ *   Documents & mail  Documents · Email · Reminders · Templates · Inbound mail
  *   Public            Booking form
  *   Personal          Appearance · Password
- *   Admin             Users · System (links)
+ *   Admin             Users (link) · System
  *
  * Pages are two-column: heading and one sentence on the left, the card of
  * fields on the right (every <Section> inside adopts the split layout
@@ -67,7 +67,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
       { value: "email", label: "Email", roles: ADMIN, kind: "settings", component: lazy(() => import("./EmailTab")) },
       { value: "reminders", label: "Reminders", roles: ADMIN, kind: "settings", component: lazy(() => import("./RemindersTab")) },
       { value: "templates", label: "Templates", roles: ADMIN, kind: "page", component: lazy(() => import("./TemplatesSection")) },
-      { value: "mail-rules", label: "Mail rules", roles: ADMIN, kind: "page", component: lazy(() => import("./MailRulesSection")) },
+      { value: "inbound", label: "Inbound mail", roles: ADMIN, kind: "settings", component: lazy(() => import("./InboundTab")) },
     ],
   },
   {
@@ -85,7 +85,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     title: "Admin",
     items: [
       { value: "users", label: "Users", roles: ADMIN, kind: "link", to: "/users" },
-      { value: "system", label: "System", roles: ADMIN, kind: "link", to: "/system" },
+      { value: "system", label: "System", roles: ADMIN, kind: "page", component: lazy(() => import("./SystemTab")) },
     ],
   },
 ];

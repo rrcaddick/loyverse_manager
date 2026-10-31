@@ -124,6 +124,24 @@ export interface DayKindsSettings {
   ramadan: { start: string | null; end: string | null };
 }
 
+/** How inbound mail is handled (Settings › Inbound). */
+export interface InboundSettings {
+  /** A customer's mail still joins their booking this many days after the visit. */
+  active_days_after_visit: number;
+  /** A sender is offered the booking form at most once in this many hours. */
+  form_window_hours: number;
+  /** How often unanswered mail is swept into enquiries. */
+  sweep_interval_hours: number;
+  bounce_back_enabled: boolean;
+  labels_enabled: boolean;
+  archive_enabled: boolean;
+  label_bookings: string;
+  label_enquiries: string;
+  label_process: string;
+  /** Today's automated-mail line looks back this many days. */
+  skipped_days: number;
+}
+
 export interface CapacitySettings {
   /** The calendar bar is drawn against this. */
   capacity: number;
@@ -164,6 +182,7 @@ export interface Settings {
   reminders: RemindersSettings;
   capacity: CapacitySettings;
   day_kinds: DayKindsSettings;
+  inbound: InboundSettings;
   email: EmailSettings;
   form: FormSettings;
 }

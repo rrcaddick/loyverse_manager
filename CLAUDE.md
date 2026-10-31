@@ -14,7 +14,7 @@ Western Cape, South Africa. The repo is named `loyverse_manager` after its origi
 2. **Group bookings** — the whole pipeline from a customer's request to the visit day:
    public request form → proforma → deposit matched from the FNB bank feed → invoice →
    barcoded vehicle ticket (email + WhatsApp) → arrivals from Loyverse → final invoice.
-   A React admin app (Today, Work, Calendar, Bookings, Mail, Bank, Gate, Settings)
+   A React admin app (Today, Work, Calendar, Bookings, Enquiries, Settings)
    replaced the old Gmail + Google Sheet + Excel workflow. `docs/booking-system.md` is
    the data/API contract; `docs/redesign-spec.md` and `docs/research/` are the UI
    design authority — read them before changing a screen.

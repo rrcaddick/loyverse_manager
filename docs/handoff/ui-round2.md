@@ -229,3 +229,19 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
   deposits and balances still to come in) and Next visit days (five, each
   with its kind). Up next, Needs you and the System line are gone; the
   manager keeps Expected · Arrived · Still to come and the table.
+
+## Settings tidy-up (31 Oct 2026)
+
+- **Gone**: the Mail, Bank, Gate and Inbox pages and the old queue sections,
+  with their features (`features/bank`, `gate`, `inbox`, `payments`, `queue`,
+  `mail/context-panel`). `/mail` and `/inbox` redirect to Enquiries, `/bank`
+  and `/payments` to Bookings, `/system` and `/ops` to Settings › System.
+  Their APIs still answer. Managers no longer have `/gate`.
+- **Settings › System** (`SystemTab.tsx`, the old System page) under Admin:
+  status cards, the automated-mail list (`GET /inbound/skipped`) with
+  **Treat as enquiry** (`POST /inbound/skipped/:id/rescue`), the jobs and the
+  log. Today's automated-mail line links here.
+- **Settings › Inbound mail** (`InboundTab.tsx`, `settings.inbound`): the
+  windows (days after the visit, sweep interval), the booking-form reply and
+  its once-per window, the Gmail labels, the automated-mail look-back.
+  **Mail rules** is gone (there is no learned sender list).

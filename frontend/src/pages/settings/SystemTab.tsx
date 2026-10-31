@@ -1,12 +1,12 @@
 import { differenceInMinutes } from "date-fns";
 import { Activity, AlertCircle, CheckCircle2, Clock, Play, RefreshCw, TerminalSquare } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { KeyValue, type KeyValueItem } from "@/components/key-value";
-import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/section";
 import { StatusBadge, type StatusTone } from "@/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,30 +17,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { OPS_JOBS, useOpsLogs, useOpsStatus, useRunJob, type OpsJob } from "@/features/ops/api";
-import { useDocumentTitle } from "@/hooks/use-document-title";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
-import { errorMessage, isApiError } from "@/lib/api";
+import { api, errorMessage, isApiError } from "@/lib/api";
 import { formatDate, formatDateTime, formatDuration, formatNumber, formatRelativeDay, formatTime, humanise, parseDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BookingStatus, OpsRunResult, OpsStatus } from "@/types/api";
 
-export default function SystemPage() {
-  useDocumentTitle("System");
+export default function SystemTab() {
   const status = useOpsStatus();
   const notAvailable = status.isError && isApiError(status.error) && status.error.status === 404;
 
   return (
     <>
-      <PageHeader
-        title="System"
-        description="Is everything running? Mail sync, the bank poll, the scheduler and the Loyverse morning sync, with their last runs and the log. Nothing here changes a booking directly."
-        actions={
-          <Button variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
-            <RefreshCw data-icon="inline-start" className={cn(status.isFetching && "animate-spin")} />
-            Refresh status
-          </Button>
-        }
-      />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-prose text-body text-muted-foreground">Is everything running? Mail sync, the bank poll, the scheduler and the Loyverse morning sync, with their last runs and the log. Nothing here changes a booking.</p>
+        <Button variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
+          <RefreshCw data-icon="inline-start" className={cn(status.isFetching && "animate-spin")} />
+          Refresh status
+        </Button>
+      </div>
 
       {notAvailable ? (
         <Alert>
@@ -78,9 +73,88 @@ export default function SystemPage() {
         </p>
       ) : null}
 
+      <SkippedMailSection />
       <JobsSection disabled={notAvailable} available={status.data?.jobs} />
       <LogsSection disabled={notAvailable} />
     </>
+  );
+}
+
+// ------------------------------------------------------- automated mail
+
+interface SkippedMail {
+  id: number;
+  from_email: string | null;
+  from_name: string | null;
+  subject: string | null;
+  sent_at: string | null;
+  created_at: string;
+  grade: "certain" | "likely";
+  reason: string;
+  rescued_at: string | null;
+}
+
+/** What the automated-mail filter set aside, with a way to run one through as an enquiry. */
+function SkippedMailSection() {
+  const qc = useQueryClient();
+  const list = useQuery({
+    queryKey: ["inbound", "skipped"],
+    queryFn: () => api.get<{ items: SkippedMail[]; total: number; days: number }>("/inbound/skipped"),
+    refetchInterval: 60_000,
+  });
+  const rescue = useMutation({
+    mutationFn: (id: number) => api.post<{ outcome?: string }>(`/inbound/skipped/${id}/rescue`, {}),
+    onSuccess: () => {
+      toast.success("Treated as an enquiry");
+      void qc.invalidateQueries({ queryKey: ["inbound", "skipped"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+      void qc.invalidateQueries({ queryKey: ["enquiries"] });
+      void qc.invalidateQueries({ queryKey: ["work"] });
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  });
+  const items = list.data?.items ?? [];
+  return (
+    <Section
+      title="Automated mail set aside"
+      description={`Newsletters, receipts, bounces and the like from the last ${list.data?.days ?? 7} days. They stay in Gmail untouched. Treat one as an enquiry if a person wrote it.`}
+      flush
+    >
+      {list.isPending ? (
+        <div className="space-y-3 p-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-6" />
+          ))}
+        </div>
+      ) : list.isError ? (
+        <p className="px-5 py-4 text-sm text-red-text">{errorMessage(list.error)}</p>
+      ) : items.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-muted-foreground">Nothing set aside.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {items.map((m) => (
+            <li key={m.id} className="flex items-center gap-4 px-5 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-body text-foreground">
+                  <span className="font-medium">{m.from_name || m.from_email || "Unknown sender"}</span>
+                  {m.from_name && m.from_email ? <span className="text-muted-foreground"> · {m.from_email}</span> : null}
+                </div>
+                <div className="truncate text-sm text-muted-foreground">{m.subject?.trim() || "(no subject)"}</div>
+              </div>
+              <div className="hidden w-56 shrink-0 text-right text-xs text-muted-foreground lg:block">
+                <div>{formatDateTime(m.sent_at ?? m.created_at)}</div>
+                <div className="truncate" title={m.reason}>
+                  {m.reason}
+                </div>
+              </div>
+              <Button variant="outline-primary" size="sm" className="min-w-36 shrink-0" disabled={rescue.isPending} onClick={() => rescue.mutate(m.id)}>
+                Treat as enquiry
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }
 
