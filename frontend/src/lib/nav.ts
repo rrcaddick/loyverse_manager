@@ -16,10 +16,8 @@ import {
   Bell,
   BookOpenText,
   CalendarDays,
-  DoorOpen,
   Hourglass,
   Inbox,
-  Landmark,
   ListChecks,
   Mail,
   MessageSquareText,
@@ -69,11 +67,9 @@ export const WORK_CHILDREN: NavChild[] = [
   { title: "Reply", view: "reply", icon: Mail },
   { title: "Verify payments", view: "pops", icon: Receipt },
   { title: "Assign mail", view: "allocate", icon: Split },
-  { title: "Confirm money", view: "confirm_money", icon: Landmark },
   { title: "Send tickets", view: "send_tickets", icon: Ticket },
   { title: "Reminders", view: "reminders", icon: Bell },
-  { title: "Holds lapsing", view: "holds", icon: Hourglass },
-  { title: "Arrivals", view: "arrivals", icon: DoorOpen },
+  { title: "Expiring", view: "holds", icon: Hourglass },
   { title: "Stale", view: "stale", icon: AlertCircle, muted: true },
 ];
 

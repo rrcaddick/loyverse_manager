@@ -245,3 +245,22 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
   windows (days after the visit, sweep interval), the booking-form reply and
   its once-per window, the Gmail labels, the automated-mail look-back.
   **Mail rules** is gone (there is no learned sender list).
+
+## Work (31 Oct 2026)
+
+- **Views**: Reply, Requests, Enquiries, Assign mail, Verify payments, Send
+  tickets, Reminders, Expiring, Stale. **Confirm money, Arrivals and Up next
+  are gone** (`work.VIEWS`, `LIVE_VIEWS`; `merge_up_next`, `needs_you`,
+  `_money_rows` and `_arrival_rows` removed; `GET /work` defaults to `reply`).
+  Payments are found from the booking; arrivals are live from the terminals.
+- **One list, one verb** (`WorkPage.tsx`, `work-row.tsx`): the page shows one
+  view with a heading in plain words ("Unpaid bookings about to expire") and
+  its count; each row is the status dot, reference, group, date, people, the
+  context line and the one verb (`primary`). The row itself opens where the
+  work is done (`destinationFor`: the booking's Conversation, Payments,
+  Documents or Needs attention tab, or the enquiry); there is no side panel
+  and no ⋯ menu (`work-detail-panel.tsx` gone). With no `?view=` the first
+  live view with something in it opens. J/K move, Enter opens, 1 fires the
+  verb. Stale keeps Dismiss all.
+- The nav accordion lists the same views (`WORK_CHILDREN`), "Expiring" for
+  the holds view.

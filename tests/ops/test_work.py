@@ -1,4 +1,4 @@
-"""Work views, up_next ordering, the stale rule and the Work API against TEST rows.
+"""Work views, the stale rule and the Work API against TEST rows.
 
 Every row these tests create is a ``TEST ...`` booking, a thread id in the
 TEST_THRID range or a bank fingerprint starting ``TEST-work-``; all are deleted
@@ -221,7 +221,6 @@ def test_every_row_has_the_same_shape(rows):
                 "id", "reference", "group_name", "visit_date", "status", "people_booked"
             }
     assert snap["counts"]["total"] == sum(len(snap["views"][v]) for v in work.LIVE_VIEWS)
-    assert snap["counts"]["up_next"] == len(snap["up_next"]) <= work.UP_NEXT_SIZE
     assert work.counts() == snap["counts"]
 
 
@@ -245,21 +244,6 @@ def test_holds_view(rows):
         (rows["hold_past"]["id"],),
     )
     assert f"hold:{rows['hold_past']['id']}" not in ids(work.snapshot()["views"]["holds"])
-
-
-def test_arrivals_view(rows):
-    arrivals = work.snapshot()["views"]["arrivals"]
-    today_row = by_id(arrivals, f"arrival:{rows['arrival_today']['id']}")
-    yesterday = by_id(arrivals, f"arrival:{rows['arrival_yesterday']['id']}")
-    assert arrivals.index(today_row) < arrivals.index(yesterday)  # most recent first
-    assert today_row["context"] == "Visited today · 60 booked"
-    assert today_row["primary"] == {
-        "verb": "Record", "action": "open_day", "date": rows["today"].isoformat(),
-        "booking_id": rows["arrival_today"]["id"],
-    }
-    assert verbs(today_row) == ["Open"]
-    assert verbs(yesterday) == ["Open", "No show"]
-    assert yesterday["secondary"][1]["status"] == "no_show" and yesterday["age_days"] == 1
 
 
 def test_new_requests_tickets_and_reminders(rows):
@@ -305,7 +289,7 @@ def test_stale_view(rows):
     assert f"reminder:{quiet['id']}" not in ids(stale)  # old proforma alone no longer parks a deposit reminder
 
 
-def test_reply_and_money_views(rows):
+def test_reply_view(rows):
     views = work.snapshot()["views"]
     bid = rows["reminder"]["id"]
     reply = by_id(views["reply"], f"reply:b:{bid}")
@@ -318,24 +302,6 @@ def test_reply_and_money_views(rows):
         "booking_id": bid,
     }
     assert verbs(reply) == ["Open"]
-
-    money = views["confirm_money"]
-    sugg = query_one("SELECT id FROM bank_transactions WHERE fingerprint = 'TEST-work-sugg'")["id"]
-    unm = query_one("SELECT id FROM bank_transactions WHERE fingerprint = 'TEST-work-unm'")["id"]
-    old = query_one("SELECT id FROM bank_transactions WHERE fingerprint = 'TEST-work-old'")["id"]
-    s = by_id(money, f"money:{sugg}")
-    u = by_id(money, f"money:{unm}")
-    assert f"money:{old}" not in ids(money)
-    assert s["title"] == "TEST EFT DEPOSIT FY0000" and s["amount"] == 3800.0
-    assert s["context"] == f"Suggested {rows['reminder']['reference']} · equals the deposit"
-    assert s["booking"]["id"] == rows["reminder"]["id"]
-    assert s["primary"] == {"verb": "Confirm", "action": "match_transaction", "tx_id": sugg, "booking_id": rows["reminder"]["id"]}
-    assert verbs(s) == ["Open", "Ignore"]
-    assert u["booking"] is None and u["primary"] == {"verb": "Match", "action": "open_transaction", "tx_id": unm}
-    assert u["secondary"] == [{"verb": "Not a booking", "action": "ignore_transaction", "tx_id": unm, "reason": "Not a booking"}]
-    assert all(r["sort_key"] < u["sort_key"] for r in money if r["primary"]["verb"] == "Confirm")
-
-
 def test_reply_rows_are_parties_and_clear_once_written_to(rows):
     now = datetime.now().replace(microsecond=0)
     bid = rows["reminder"]["id"]
@@ -372,39 +338,6 @@ def test_reply_rows_are_parties_and_clear_once_written_to(rows):
     )
     reply = work.snapshot()["views"]["reply"]
     assert f"reply:b:{bid}" not in ids(reply) and "reply:e:walkin@example.test" not in ids(reply)
-
-
-# ---------------------------------------------------------------- up next ---
-
-
-def test_up_next_orders_by_tier_then_age(rows):
-    snap = work.snapshot()
-    up = snap["up_next"]
-    tiers = [int(r["sort_key"][:2]) for r in up]
-    assert tiers == sorted(tiers)
-    assert [r["sort_key"] for r in up] == sorted(r["sort_key"] for r in up)
-    order = ids(up)
-    past, today_row, yesterday = (
-        f"hold:{rows['hold_past']['id']}",
-        f"arrival:{rows['arrival_today']['id']}",
-        f"arrival:{rows['arrival_yesterday']['id']}",
-    )
-    assert order.index(past) < order.index(today_row) < order.index(yesterday)
-    assert all(r["kind"] != "reminder" or not r["context"].endswith("stale") for r in up)
-    needs = work.needs_you(snap)
-    assert needs["count"] == snap["counts"]["total"]
-    assert needs["oldest_days"] >= 93 - 0 or needs["oldest_days"] >= 4  # at least the live TEST ages
-
-
-def test_merge_up_next_is_pure_and_limited():
-    views = {
-        "reply": [{"sort_key": "03:a", "id": "reply:1"}],
-        "holds": [{"sort_key": "01:z", "id": "hold:1"}, {"sort_key": "07:b", "id": "hold:2"}],
-        "arrivals": [{"sort_key": "02:m", "id": "arrival:1"}],
-        "stale": [{"sort_key": "00:0", "id": "reminder:9"}],
-    }
-    merged = work.merge_up_next(views, limit=3)
-    assert [r["id"] for r in merged] == ["hold:1", "arrival:1", "reply:1"]
 
 
 def test_formatting_helpers():

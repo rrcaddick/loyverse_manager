@@ -12,17 +12,13 @@ Views, in pipeline order, and what each selects:
                    with all its contacts and threads, or an unattached sender
                    address, with at least one unanswered inbound message
     new_requests   status enquiry with no proforma sent
-    confirm_money  bank credits: every ``suggested`` one, plus ``unmatched``
-                   ones from the last MONEY_WINDOW_DAYS; suggested first
     send_tickets   confirmed, no ticket by either channel, visit today or later
     reminders      due today or earlier, not stale, kind other than ``lapse``
                    (holds have their own view); contiguous by kind
     holds          tentative and unpaid with the hold expiring within
                    HOLD_WINDOW_DAYS or already past; hidden once the lapse
                    reminder is dismissed or stale
-    arrivals       confirmed, visit today or earlier, no arrivals recorded
     stale          reminders flagged stale by the daily recompute (any kind)
-    up_next        the UP_NEXT_SIZE most urgent live rows across kinds
 
 Row shape (identical in every view)::
 
@@ -37,9 +33,10 @@ payload. ``group`` is the kind title for reminder rows (so the reminders view
 can show headings) and null elsewhere. ``sort_key`` orders rows within a view
 and across kinds in up_next; treat it as opaque.
 
-Urgency (up_next tiers): 1 holds already past, 2 arrivals to record, 3 replies
-waiting longest, 4 money oldest, 5 new requests oldest, 6 tickets by visit
-date, 7 reminders and upcoming holds by due date.
+Urgency tiers in ``sort_key``: 1 holds already past, 3 replies waiting
+longest, 5 new requests oldest, 6 tickets by visit date, 7 reminders and
+upcoming holds by due date. Confirm money and Arrivals went on 31 Oct 2026
+(payments are found from the booking; arrivals are live from the terminals).
 """
 
 from __future__ import annotations
@@ -54,23 +51,17 @@ from src.services.settings import get_settings
 from src.utils.date import get_today
 
 VIEWS = (
-    "up_next",
     "reply",
     "new_requests",
     "enquiries",
     "allocate",
     "pops",
-    "confirm_money",
     "send_tickets",
     "reminders",
     "holds",
-    "arrivals",
     "stale",
 )
-LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "confirm_money", "send_tickets", "reminders", "holds", "arrivals")
-
-UP_NEXT_SIZE = 10
-MONEY_WINDOW_DAYS = 30
+LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds")
 HOLD_WINDOW_DAYS = 3
 
 TIER_HOLD_PAST = 1
@@ -464,76 +455,6 @@ def _reason_text(reason: str | None) -> str:
     return text[7:] if text.startswith("amount ") else text
 
 
-def _money_rows(today: date) -> list[dict]:
-    rows = query(
-        """
-        SELECT id, amount, description, booking_date, match_status, suggestions
-        FROM bank_transactions
-        WHERE credit_debit = 'CREDIT'
-          AND (match_status = 'suggested' OR (match_status = 'unmatched' AND booking_date >= %s))
-        ORDER BY (match_status = 'suggested') DESC, booking_date, id
-        """,
-        (today - timedelta(days=MONEY_WINDOW_DAYS),),
-    )
-    # One lookup for every top suggestion's booking so the chip is canonical.
-    tops: dict[int, dict] = {}
-    for r in rows:
-        if r["match_status"] == "suggested":
-            suggestions = loads(r["suggestions"]) or []
-            if suggestions:
-                tops[int(r["id"])] = suggestions[0]
-    chips: dict[int, dict] = {}
-    ids = sorted({int(s["booking_id"]) for s in tops.values() if s.get("booking_id")})
-    if ids:
-        marks = ",".join(["%s"] * len(ids))
-        for b in query(f"SELECT {BOOKING_COLS} FROM bookings b WHERE b.id IN ({marks})", ids):
-            chips[int(b["booking_id"])] = _chip(b)
-
-    out = []
-    for r in rows:
-        tx_id = int(r["id"])
-        suggested = r["match_status"] == "suggested"
-        top = tops.get(tx_id)
-        chip = chips.get(int(top["booking_id"])) if top and top.get("booking_id") else None
-        age = _days_since(r["booking_date"], today)
-        title = " ".join(str(r["description"] or "").split()) or "Bank credit"
-        if suggested and chip:
-            reasons = top.get("reasons") or []
-            suggestions = loads(r["suggestions"]) or []
-            context = f"Suggested {chip['reference']} · {_reason_text(reasons[0] if reasons else None)}"
-            if len(suggestions) > 1:
-                context += f" · {len(suggestions) - 1} more"
-            primary = _act("Confirm", "match_transaction", tx_id=tx_id, booking_id=chip["id"])
-            secondary = [
-                _act("Open", "open_transaction", tx_id=tx_id),
-                _act("Ignore", "ignore_transaction", tx_id=tx_id),
-            ]
-        else:
-            context = f"Unmatched credit · {_day(r['booking_date'])}"
-            primary = _act("Match", "open_transaction", tx_id=tx_id)
-            secondary = [
-                _act("Not a booking", "ignore_transaction", tx_id=tx_id, reason="Not a booking")
-            ]
-        out.append(
-            _row(
-                "money",
-                f"money:{tx_id}",
-                booking=chip,
-                title=title,
-                context=context,
-                amount=r["amount"],
-                age_days=age,
-                primary=primary,
-                secondary=secondary,
-                sort_key=_key(TIER_MONEY, 0 if suggested else 1, r["booking_date"], tx_id),
-            )
-        )
-    return out
-
-
-# ---------------------------------------------------------------- tickets ---
-
-
 def _ticket_rows(today: date) -> list[dict]:
     rows = query(
         f"""
@@ -715,47 +636,6 @@ def _hold_rows(today: date, lapse_days_before: int) -> list[dict]:
 # --------------------------------------------------------------- arrivals ---
 
 
-def _arrival_rows(today: date) -> list[dict]:
-    rows = query(
-        f"""
-        SELECT {BOOKING_COLS}
-        FROM bookings b
-        WHERE b.status = 'confirmed' AND b.visit_date <= %s AND b.arrived_count IS NULL
-        ORDER BY b.visit_date DESC, b.group_name, b.id
-        """,
-        (today,),
-    )
-    out = []
-    for r in rows:
-        bid = int(r["booking_id"])
-        visit = _as_date(r["visit_date"])
-        ago = (today - visit).days
-        people = int(r["people_booked"] or 0)
-        secondary = [_open(bid)]
-        if ago > 0:
-            secondary.append(_act("No show", "set_status", booking_id=bid, status="no_show"))
-        out.append(
-            _row(
-                "arrival",
-                f"arrival:{bid}",
-                booking=_chip(r),
-                title=r["group_name"],
-                context=f"Visited {_rel(ago)} · {people} booked",
-                amount=None,
-                age_days=max(0, ago),
-                primary=_act("Record", "open_day", date=visit.isoformat(), booking_id=bid),
-                secondary=secondary,
-                # Most recent visit first: today's groups before last week's.
-                # (The base exceeds any date ordinal so the key stays positive.)
-                sort_key=_key(TIER_ARRIVAL, REVERSE_DATE_BASE - visit.toordinal(), bid),
-            )
-        )
-    return out
-
-
-# --------------------------------------------------------------- assembly ---
-
-
 def _reminder_group_rank(row: dict) -> int:
     title = row.get("group")
     for i, kind in enumerate(REMINDER_ORDER):
@@ -770,19 +650,12 @@ def _view_sorted(view: str, rows: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda r: r["sort_key"])
 
 
-def merge_up_next(views: Mapping[str, list[dict]], limit: int = UP_NEXT_SIZE) -> list[dict]:
-    """The most urgent live rows across kinds, by tiered sort_key. Pure."""
-    live = [row for view in LIVE_VIEWS for row in views.get(view, [])]
-    live.sort(key=lambda r: r["sort_key"])
-    return live[:limit]
-
-
 def snapshot(today: date | None = None) -> dict:
     """Every view's rows in one pass (about ten small queries).
 
-    Returns ``{"today", "views": {view: rows}, "counts": {...}, "up_next": [...]}``.
-    ``list_work``, ``counts`` and the Today page all build on this so the
-    numbers agree everywhere.
+    Returns ``{"today", "views": {view: rows}, "counts": {...}}``. ``list_work``,
+    ``counts`` and the Today page all build on this so the numbers agree
+    everywhere.
     """
     today = today or get_today()
     cfg = get_settings()["reminders"]
@@ -792,24 +665,20 @@ def snapshot(today: date | None = None) -> dict:
         "enquiries": _enquiry_rows(today),
         "allocate": _allocate_rows(today),
         "pops": _pop_rows(today),
-        "confirm_money": _money_rows(today),
         "send_tickets": _ticket_rows(today),
         "reminders": _reminder_rows(today),
         "holds": _hold_rows(today, int(cfg["lapse_days_before"])),
-        "arrivals": _arrival_rows(today),
         "stale": _stale_rows(today),
     }
     views = {view: _view_sorted(view, rows) for view, rows in views.items()}
-    up_next = merge_up_next(views)
     counts = {view: len(rows) for view, rows in views.items()}
-    counts["up_next"] = len(up_next)
     counts["total"] = sum(len(views[v]) for v in LIVE_VIEWS)
-    return {"today": today.isoformat(), "views": views, "counts": counts, "up_next": up_next}
+    return {"today": today.isoformat(), "views": views, "counts": counts}
 
 
 def counts(today: date | None = None) -> dict:
-    """Per-view counts for the rail plus ``total`` (live rows, stale excluded)
-    and ``up_next``. Zeros are returned; hiding at zero is the UI's job."""
+    """Per-view counts for the nav plus ``total`` (live rows, stale excluded).
+    Zeros are returned; hiding at zero is the UI's job."""
     return snapshot(today)["counts"]
 
 
@@ -818,7 +687,7 @@ def list_work(view: str, page: int = 1, page_size: int = 50, today: date | None 
     if view not in VIEWS:
         raise ValueError(f"Unknown view: {view}")
     snap = snapshot(today)
-    rows = snap["up_next"] if view == "up_next" else snap["views"][view]
+    rows = snap["views"][view]
     page = max(1, int(page))
     page_size = max(1, int(page_size))
     start = (page - 1) * page_size
@@ -830,16 +699,6 @@ def list_work(view: str, page: int = 1, page_size: int = 50, today: date | None 
         "page_size": page_size,
         "counts": snap["counts"],
         "today": snap["today"],
-    }
-
-
-def needs_you(snap: Mapping[str, Any] | None = None) -> dict:
-    """The Today tile: how many live rows and how long the oldest has waited."""
-    snap = snap or snapshot()
-    live = [row for v in LIVE_VIEWS for row in snap["views"][v]]
-    return {
-        "count": len(live),
-        "oldest_days": max((int(r["age_days"]) for r in live), default=0),
     }
 
 

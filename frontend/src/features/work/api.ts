@@ -18,7 +18,7 @@ import type { BookingDetail } from "@/features/bookings/types";
 import { api } from "@/lib/api";
 import type { BookingStatus } from "@/types/api";
 
-import type { DismissResponse, IgnoreInput, WorkCountsResponse, WorkListResponse, WorkRow, WorkView } from "./types";
+import type { DismissResponse, WorkCountsResponse, WorkListResponse, WorkView } from "./types";
 
 export const WORK_PAGE_SIZE = 50;
 
@@ -51,12 +51,12 @@ export function useWorkList(view: WorkView, page: number, enabled = true) {
 
 /** Everything a Work verb can change. */
 export function invalidateWorkWorld(qc: QueryClient) {
-  for (const key of [["work"], ["today"], ["bookings"], ["bank"], ["payments"], ["mail"], ["inbox"], ["queue"], ["day"], ["calendar"], ["gate"]]) {
+  for (const key of [["work"], ["today"], ["bookings"], ["enquiries"], ["day"], ["calendar"]]) {
     void qc.invalidateQueries({ queryKey: key });
   }
 }
 
-/** A finished row leaves every list (and Today's Up next) at once; the refetch confirms. */
+/** A finished row leaves every list at once; the refetch confirms. */
 export function removeWorkRow(qc: QueryClient, rowId: string) {
   qc.setQueriesData<WorkListResponse>({ queryKey: ["work", "list"] }, (old) => {
     if (!old) return old;
@@ -64,11 +64,7 @@ export function removeWorkRow(qc: QueryClient, rowId: string) {
     if (items.length === old.items.length) return old;
     return { ...old, items, total: Math.max(0, old.total - 1) };
   });
-  qc.setQueriesData<{ up_next?: WorkRow[] }>({ queryKey: ["today"] }, (old) => {
-    if (!old?.up_next) return old;
-    const up_next = old.up_next.filter((item) => item.id !== rowId);
-    return up_next.length === old.up_next.length ? old : { ...old, up_next };
-  });
+  void qc.invalidateQueries({ queryKey: ["today"] });
 }
 
 // --------------------------------------------------------------- mutations
@@ -93,39 +89,6 @@ export function useExtendHold() {
   });
 }
 
-export interface MatchResult {
-  transaction: { id: number; match_status: string; matched_booking_id: number | null };
-  payment: { id: number; amount: number } | null;
-}
-
-export function useMatchCredit() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ tx_id, booking_id }: { tx_id: number; booking_id: number }) =>
-      api.post<MatchResult>(`/payments/bank-transactions/${tx_id}/match`, { booking_id }),
-    onSuccess: () => invalidateWorkWorld(qc),
-  });
-}
-
-export function useUnmatchCredit() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (tx_id: number) => api.post<{ transaction: unknown; booking_reverted: unknown }>(`/payments/bank-transactions/${tx_id}/unmatch`),
-    meta: { successMessage: "Match undone" },
-    onSuccess: () => invalidateWorkWorld(qc),
-  });
-}
-
-export function useIgnoreCredit() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ tx_id, reason, note }: { tx_id: number } & IgnoreInput) =>
-      api.post<{ transaction: unknown }>(`/payments/bank-transactions/${tx_id}/ignore`, note ? { reason, note } : { reason }),
-    onSuccess: () => invalidateWorkWorld(qc),
-  });
-}
-
-/** POST /bookings/:id/actions/<name> with the row's extra keys as the body. */
 export function useWorkBookingAction() {
   const qc = useQueryClient();
   return useMutation({

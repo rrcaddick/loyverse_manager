@@ -4,7 +4,6 @@
  *   BookingActionDialog  — every send is confirmed with the recipient and the
  *                          attachment named (sends are never silent).
  *   ExtendHoldPopover    — pick the new hold date in a calendar, then Extend.
- *   IgnoreReasonMenu     — the reason list behind "Ignore" on a bank credit.
  *   SetStatusDialog      — "Mark as no show?" (the only set_status today).
  */
 
@@ -15,7 +14,6 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { KeyValue, type KeyValueItem } from "@/components/key-value";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -23,7 +21,7 @@ import { useBooking } from "@/features/bookings/api";
 import type { BookingDetail } from "@/features/bookings/types";
 import { formatDate, formatDateShort, formatPhone, parseDate, pluralise, todayIso, toIsoDate } from "@/lib/format";
 
-import { IGNORE_REASONS, type BookingActionAction, type IgnoreInput, type SendReminderAction, type SetStatusAction, type WorkRow } from "../types";
+import { type BookingActionAction, type SendReminderAction, type SetStatusAction, type WorkRow } from "../types";
 
 // ------------------------------------------------------------ send actions
 
@@ -190,32 +188,6 @@ export function ExtendHoldPopover({ open, onOpenChange, reference, currentHold, 
 }
 
 // ----------------------------------------------------------- ignore reason
-
-interface IgnoreReasonMenuProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onPick: (input: IgnoreInput) => void;
-  children: ReactNode;
-}
-
-export function IgnoreReasonMenu({ open, onOpenChange, onPick, children }: IgnoreReasonMenuProps) {
-  return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52" onClick={(event) => event.stopPropagation()}>
-        <DropdownMenuLabel>Ignore because it is…</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {IGNORE_REASONS.map((reason) => (
-          <DropdownMenuItem key={reason.label} onSelect={() => onPick(reason.note ? { reason: reason.value, note: reason.note } : { reason: reason.value })}>
-            {reason.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-// --------------------------------------------------------------- set status
 
 interface SetStatusDialogProps {
   open: boolean;

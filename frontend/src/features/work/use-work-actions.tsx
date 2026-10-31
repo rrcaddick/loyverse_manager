@@ -3,7 +3,7 @@
  * vocabulary). Pages call `run(action, row, input)`; navigation verbs go
  * straight to a route, sends open a confirmation that names the recipient,
  * and the rest fire at once. A finished row leaves its list immediately
- * (`removeWorkRow`) and the refetch confirms; a bank match gets an undo toast.
+ * (`removeWorkRow`) and the refetch confirms.
  *
  *   const work = useWorkActions();
  *   <WorkRow row={row} onAction={work.run} busy={work.busyRow === row.id} />
@@ -14,19 +14,21 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
-import type { BookingDetail } from "@/features/bookings/types";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
 import { api } from "@/lib/api";
-import { formatDate, formatMoney } from "@/lib/format";
-import { toast, toastWithAction, toastWithUndo } from "@/lib/toast";
+import { formatDate } from "@/lib/format";
+import { toast } from "@/lib/toast";
 
-import { removeWorkRow, useDismissReminders, useExtendHold, useIgnoreCredit, useMatchCredit, useSetBookingStatus, useUnmatchCredit, useWorkBookingAction } from "./api";
+import { removeWorkRow, useDismissReminders, useExtendHold, useSetBookingStatus, useWorkBookingAction } from "./api";
 import { BookingActionDialog, SetStatusDialog } from "./components/action-dialogs";
 import type { ActionInput } from "./components/work-row";
-import { fixedIgnoreReason, type BookingActionAction, type MatchTransactionAction, type SendReminderAction, type SetStatusAction, type WorkAction, type WorkRow } from "./types";
+import { destinationFor } from "./lib";
+import type { BookingActionAction, SendReminderAction, SetStatusAction, WorkAction, WorkRow } from "./types";
 
 export interface WorkActions {
   run: (action: WorkAction, row: WorkRow, input?: ActionInput) => void;
+  /** Open the booking or enquiry the row is about. */
+  open: (row: WorkRow) => void;
   /** Mount once near the list. */
   dialogs: ReactNode;
   /** The row whose action is in flight. */
@@ -36,9 +38,6 @@ export interface WorkActions {
 export function useWorkActions(): WorkActions {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const match = useMatchCredit();
-  const unmatch = useUnmatchCredit();
-  const ignore = useIgnoreCredit();
   const dismiss = useDismissReminders();
   const extend = useExtendHold();
   const bookingAction = useWorkBookingAction();
@@ -61,38 +60,17 @@ export function useWorkActions(): WorkActions {
     toast.success(message, { description });
   }
 
-  async function doMatch(action: MatchTransactionAction, row: WorkRow) {
-    const result = await guarded(row, () => match.mutateAsync({ tx_id: action.tx_id, booking_id: action.booking_id }));
-    removeWorkRow(qc, row.id);
-    const amount = result.payment?.amount ?? row.amount;
-    const reference = row.booking?.reference ?? "the booking";
-    toastWithUndo(`${formatMoney(amount, { compact: true })} recorded on ${reference}`, {
-      description: row.booking?.group_name,
-      onUndo: () => unmatch.mutateAsync(action.tx_id),
-    });
-    // Offer the follow-up when the deposit is now covered (spec §8).
-    try {
-      const detail = await qc.fetchQuery({ queryKey: ["bookings", action.booking_id], queryFn: () => api.get<BookingDetail>(`/bookings/${action.booking_id}`) });
-      if (detail.finance.deposit_covered && detail.contact_email) {
-        toastWithAction(`Deposit covered on ${detail.reference}`, {
-          label: "Send payment confirmation",
-          onClick: () =>
-            confirmSend.show({
-              action: { action: "booking_action", verb: "Send payment confirmation", booking_id: detail.id, name: "send-payment-confirmation" },
-              row,
-            }),
-        });
-      }
-    } catch {
-      // The match succeeded; the offer is optional.
-    }
+  function open(row: WorkRow) {
+    const to = destinationFor(row);
+    if (to) navigate(to);
   }
 
   function run(action: WorkAction, row: WorkRow, input?: ActionInput) {
     switch (action.action) {
       case "open_conversation":
-        // v3: a reply row is a person; Mail opens every conversation with them.
-        navigate(action.party_key ? `/mail?party=${encodeURIComponent(action.party_key)}` : `/mail/${action.thrid}`);
+        // A reply row is a person: their booking's conversation, or the enquiries that address is on.
+        if (action.party_key?.startsWith("e:")) navigate(`/enquiries?q=${encodeURIComponent(action.party_key.slice(2))}`);
+        else navigate(`/bookings/${action.booking_id}?tab=conversation`);
         return;
       case "open_booking":
         navigate(action.tab ? `/bookings/${action.booking_id}?tab=${action.tab}` : `/bookings/${action.booking_id}`);
@@ -106,12 +84,6 @@ export function useWorkActions(): WorkActions {
           done(row, "Mail assigned", row.title);
         });
         return;
-      case "open_transaction":
-        navigate(`/bank?tx=${action.tx_id}`);
-        return;
-      case "open_day":
-        navigate(`/today/${action.date}`);
-        return;
       case "booking_action":
       case "send_reminder":
         confirmSend.show({ action, row });
@@ -119,15 +91,6 @@ export function useWorkActions(): WorkActions {
       case "set_status":
         confirmStatus.show({ action, row });
         return;
-      case "match_transaction":
-        void doMatch(action, row);
-        return;
-      case "ignore_transaction": {
-        const chosen = input?.ignore ?? fixedIgnoreReason(action.reason);
-        if (!chosen) return;
-        void guarded(row, () => ignore.mutateAsync({ tx_id: action.tx_id, ...chosen })).then(() => done(row, "Credit ignored", row.title));
-        return;
-      }
       case "dismiss_reminders": {
         const count = action.ids.length;
         void guarded(row, () => dismiss.mutateAsync({ ids: action.ids })).then(() =>
@@ -178,5 +141,5 @@ export function useWorkActions(): WorkActions {
     </>
   );
 
-  return { run, dialogs, busyRow };
+  return { run, open, dialogs, busyRow };
 }

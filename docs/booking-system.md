@@ -510,3 +510,10 @@ or null), `kinds` (codes) and `over`; `GET /days/:date` and `GET /today`
 carry `kind` and `kinds`. `GET /today` (admin) also carries `season`,
 `month`, `money`, `next_visit_days`; `up_next`, `needs_you` and `system` are
 gone. `pricing.is_peak` counts `peak_days` as well as `season_days` rows.
+
+### Work views (31 Oct 2026)
+`work.VIEWS = (reply, new_requests, enquiries, allocate, pops, send_tickets,
+reminders, holds, stale)`; `confirm_money`, `arrivals` and `up_next` are gone,
+as are `merge_up_next` and `needs_you`. `GET /work` defaults to `view=reply`;
+`counts` carries the views and `total` (no `up_next`). Rows keep their shape;
+the UI shows `primary` only.

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
 import { KeyValue, type KeyValueItem } from "@/components/key-value";
-import { Section } from "@/components/section";
+import { Section, SectionLayoutContext } from "@/components/section";
 import { StatusBadge, type StatusTone } from "@/components/status-badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,8 @@ export default function SystemTab() {
   const notAvailable = status.isError && isApiError(status.error) && status.error.status === 404;
 
   return (
-    <>
+    // The status cards, the jobs and the log are cards, not the Settings split layout.
+    <SectionLayoutContext.Provider value="card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-prose text-body text-muted-foreground">Is everything running? Mail sync, the bank poll, the scheduler and the Loyverse morning sync, with their last runs and the log. Nothing here changes a booking.</p>
         <Button variant="outline" onClick={() => status.refetch()} disabled={status.isFetching}>
@@ -76,7 +77,7 @@ export default function SystemTab() {
       <SkippedMailSection />
       <JobsSection disabled={notAvailable} available={status.data?.jobs} />
       <LogsSection disabled={notAvailable} />
-    </>
+    </SectionLayoutContext.Provider>
   );
 }
 

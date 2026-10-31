@@ -31,7 +31,7 @@ MAX_PAGE_SIZE = 200
 @bp.get("")
 @require_role("admin")
 def list_view():
-    view = request.args.get("view", "up_next")
+    view = request.args.get("view", "reply")
     if view not in work.VIEWS:
         raise ApiError(
             "validation_error",
