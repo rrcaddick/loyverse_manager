@@ -114,7 +114,8 @@ function Record({ booking }: { booking: BookingDetail }) {
   const focusMessageId = Number(params.get("message")) || undefined;
   const actions = useBookingActions();
   const conversation = useBookingConversation(booking.id);
-  const unanswered = conversation.data?.unanswered_count ?? 0;
+  // The detail carries the count, so the badge and the item are there on first paint; the conversation refreshes it.
+  const unanswered = conversation.data?.unanswered_count ?? booking.unanswered_count ?? 0;
   const attention = attentionCount(booking, unanswered);
 
   function setTab(next: Tab) {
@@ -148,7 +149,7 @@ function Record({ booking }: { booking: BookingDetail }) {
         items={[
           { value: "overview", label: "Overview" },
           { value: "attention", label: "Needs attention", count: attention },
-          { value: "conversation", label: "Conversation", count: conversation.data?.unanswered_count ?? 0 },
+          { value: "conversation", label: "Conversation", count: unanswered },
           { value: "payments", label: "Payments", count: booking.pops.length },
           { value: "documents", label: "Documents" },
           { value: "activity", label: "Activity" },

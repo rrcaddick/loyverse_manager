@@ -324,6 +324,8 @@ export interface BookingDetail extends BookingRow {
   reminders: BookingReminder[];
   /** booking_contacts, primary first (UI round two). */
   contacts: BookingContact[];
+  /** Messages the customer sent that nobody answered (the conversation's count, served with the detail). */
+  unanswered_count: number;
   /** Pending proofs of payment waiting to be verified. */
   pops: PopCandidate[];
   action?: string;

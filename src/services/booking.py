@@ -1289,6 +1289,15 @@ def _pending_pops(booking_id: int) -> list[dict]:
     return [pop.serialize(r) for r in pop_model.list_for_booking(booking_id) if r.get("status") == "pending"]
 
 
+def _unanswered_count(booking_id: int) -> int:
+    try:
+        from src.services import waiting
+
+        return len(waiting.unanswered_messages(f"b:{int(booking_id)}"))
+    except Exception:  # noqa: BLE001 - the mail side must never break the record
+        return 0
+
+
 def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dict:
     """Everything the booking page shows, JSON-safe. Shape documented in
     docs/handoff/bookings.md."""
@@ -1311,6 +1320,10 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
             "is_school_holiday": pricing.is_school_holiday(booking["visit_date"], s),
             "rate_day": pricing.rate_day(booking["visit_date"], s),
             "finance": serialize_row(finance),
+            # Messages the customer sent that nobody answered: on the detail so the
+            # record's badges and Needs attention paint right, without waiting for
+            # the conversation to load.
+            "unanswered_count": _unanswered_count(booking_id),
             "questions": question_model.list_for_booking(booking_id),
             "payments": payment_model.list_for_booking(booking_id),
             "events": event_model.list_for_booking(booking_id),
