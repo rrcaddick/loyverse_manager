@@ -9,8 +9,9 @@
  *
  * Fill = heat band of the people booked against capacity, five shades of one
  * blue, ink text on all. The day kind (Settings › Day kinds) is the cell's
- * 3 px border colour; the legend names them. A closed day is hatched and
- * says CLOSED. No names: they live in the panel.
+ * 3 px border colour; the legend names them. A closed day with nothing on it
+ * is hatched and says CLOSED; a booking makes a day open. No names: they
+ * live in the panel.
  */
 
 import type { CalendarDay } from "@/features/bookings/types";
@@ -60,8 +61,9 @@ export function DayCell({ ref, date, day, isToday, capacity, isFocused, isSelect
   const level = heatLevel(total, capacity);
   const kind = day?.kind ?? null;
   const over = !!day?.over;
-  const closed = !!day?.is_closed;
   const hasNumbers = groups > 0 || total > 0;
+  // A day with a booking on it is open, whatever the closures list says.
+  const closed = !!day?.is_closed && !hasNumbers;
 
   return (
     <div
@@ -101,8 +103,8 @@ export function DayCell({ ref, date, day, isToday, capacity, isFocused, isSelect
       </div>
 
       {hasNumbers ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden pb-1.5 text-center leading-none whitespace-nowrap">
-          <span className="text-(length:--fy-interest) leading-[0.95] font-bold tracking-tight tabular">{formatNumber(total)}</span>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-1 text-center leading-none whitespace-nowrap">
+          <span className="text-(length:--fy-interest) leading-none font-bold tracking-tight tabular">{formatNumber(total)}</span>
           <span className={cn("mt-0.5 text-[0.8125rem] leading-4 font-medium", level === 0 && "text-muted-foreground")}>
             {groups} {groups === 1 ? "group" : "groups"}
           </span>

@@ -1092,7 +1092,8 @@ def aggregate_calendar(
                 "date": d.isoformat(),
                 "weekday": d.weekday(),
                 "day_type": pricing.day_type(d, s),
-                "is_closed": pricing.is_closed(d, s, season_days),
+                # A day with a booking on it is open, whatever the closures list says.
+                "is_closed": pricing.is_closed(d, s, season_days) and not todays,
                 "is_avoid": pricing.is_avoid(d, s),
                 "is_peak": pricing.is_peak(d, s, season_days),
                 "is_school_holiday": pricing.is_school_holiday(d, s),
@@ -1179,7 +1180,7 @@ def day_detail(d: date) -> dict:
         "date": d.isoformat(),
         "weekday": d.weekday(),
         "day_type": pricing.day_type(d, s),
-        "is_closed": pricing.is_closed(d, s, season_days),
+        "is_closed": pricing.is_closed(d, s, season_days) and not items,
         "is_avoid": pricing.is_avoid(d, s),
         "is_peak": pricing.is_peak(d, s, season_days),
         "label": pricing.day_label(d, season_days) or holiday_name(d),
