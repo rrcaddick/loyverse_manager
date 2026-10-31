@@ -126,7 +126,17 @@ Migration 024 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
 JSON, address → display name as written in the From, To and Cc headers, so a
 contact learned from a copied address gets a name (`mail_ingest.parse_message`
 keeps them; the migration and the live pipeline pass them to
-`booking_contact.upsert`; `migration.learn_contact_names()` backfills).
+`booking_contact.upsert`; `migration.learn_contact_names(mailbox=True)`
+backfills, and for an address no stored header names it reads the name off
+the newest message that address sent us, read-only).
+
+Two matching guards (31 Oct 2026): a contact name that is just the group name
+(a sheet row without one) adds nothing on top of the group match
+(`matching.score`), and a development copy of our own mail, subject prefixed
+`[DEV → …]` by `mail_send` outside prod, is classed automated and never
+stored or matched (`inbound.DEV_COPY_PREFIX`; the migration skips it too).
+The sheet importer treats a non-date in the date column ("Fully booked",
+"Est. pub 500") as a note on the day above, not the end of that day.
 
 ### booking_legacy_rows
 `booking_id` (PK, FK), `sheet_row JSON`, `imported_at`. The original sheet row
@@ -463,6 +473,12 @@ takes `{name?, mobile?, on_site?}`; setting `on_site: true` clears it on the
 booking's other contacts; returns `{items}`. `GET /api/v1/bookings/:id` now
 also carries `contacts` (the booking_contacts rows, primary first) and
 `pops` (the pending proof-of-payment candidates) for the record's tabs.
+
+A booking has exactly one `primary` row (31 Oct 2026,
+`booking_contact.adopt_email_on_primary`): when the booking's address changes,
+a learned row holding the new address is promoted, and the old address stays
+as a `learned` contact so its mail still matches; an address-less primary row
+simply takes the address.
 
 ### Ticket send, contact edits, cash deposits (29 Oct 2026, evening)
 

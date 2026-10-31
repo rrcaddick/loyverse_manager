@@ -358,6 +358,10 @@ def score(thread: ThreadFacts, booking: BookingFacts) -> tuple[int, list[str]]:
         pts += SCORE_GROUP_PARTIAL
         why.append("group~" + "+".join(hits))
     first, surname = name_parts(booking.contact_name)
+    if booking.contact_name and booking.group_name and set(words(booking.contact_name)) <= set(words(booking.group_name)):
+        # The sheet had no contact name and the group name stands in for it:
+        # the name must not count a second time on top of the group match.
+        first = surname = None
     surname_hit = bool(surname and fuzzy_word_in(surname, hay))
     if surname_hit:
         pts += SCORE_SURNAME

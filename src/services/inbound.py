@@ -135,11 +135,19 @@ def looks_like_booking(from_name: str | None, subject: str | None, body: str | N
     return personal and (hits >= 2 or bool(PEOPLE_RE.search(text)))
 
 
+# Outside prod every send is redirected and its subject prefixed (see
+# mail_send.DEV_PREFIX); those copies land in the same mailbox and must never
+# be read back as a customer's mail.
+DEV_COPY_PREFIX = "[DEV \u2192 "
+
+
 def classify_automated(
     headers: dict | None, from_email: str | None, from_name: str | None, subject: str | None, body: str | None = None,
 ) -> tuple[str | None, str]:
     """('certain' | 'likely' | None, reason). None means a person wrote it."""
     h = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+    if (subject or "").lstrip().startswith(DEV_COPY_PREFIX):
+        return "certain", "development copy of our own mail"
     sender = (from_email or "").lower()
     local, _, domain = sender.partition("@")
     auto = h.get("auto-submitted", "").strip().lower()

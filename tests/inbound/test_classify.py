@@ -49,3 +49,11 @@ def test_bounce_back_decision_rules(monkeypatch):
     assert send is False and "inside the window" in reason
     monkeypatch.setattr(inbound, "_cfg", lambda: {"bounce_back_enabled": False})
     assert bounce_back_decision({"from_email": "person@example.com"})[0] is False
+
+
+def test_a_development_copy_of_our_own_mail_is_never_a_customer():
+    # Outside prod every send is redirected to the developer and prefixed; the copy
+    # sits in the same mailbox and carries a real booking reference in its subject.
+    grade, reason = classify_automated({}, "thefarmyardpark@gmail.com", "Farmyard Park", "[DEV \u2192 test@example.com] Proforma FY1757 \u2013 Sat 28 Nov")
+    assert grade == "certain" and "development copy" in reason
+    assert classify_automated({}, "someone@gmail.com", "Someone", "Proforma FY1757")[0] is None

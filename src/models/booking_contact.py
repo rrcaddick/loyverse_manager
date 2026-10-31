@@ -57,33 +57,51 @@ def upsert_primary_without_email(booking_id: int, *, name: str | None, mobile: s
 
 
 def adopt_email_on_primary(booking_id: int, email: str, *, name: str | None, mobile: str | None) -> bool:
-    """The booking's own contact gained an email address. Put it on the primary
-    row that had none, or, when a row with that address already exists (a
-    learned contact), promote that row and fold the address-less one into it,
-    keeping "on site". True when a row was merged or adopted."""
+    """The booking's own contact has an email address (new, or changed). Keep
+    exactly one primary row: the address lands on the primary row that had
+    none; when a row with that address already exists (a learned contact) it
+    is promoted and the old primary folded into it or kept as a learned
+    contact; an old primary with another address is kept as a learned contact
+    so its mail still matches. True when the mirror is complete; False when
+    the caller should upsert the primary row itself (unchanged address, or a
+    changed address no row has yet)."""
     address = (email or "").strip().lower()
     if not address:
         return False
-    blank = query_one(
-        "SELECT id, on_site FROM booking_contacts WHERE booking_id = %s AND role = 'primary' AND email IS NULL",
+    primary = query_one(
+        "SELECT id, email, on_site FROM booking_contacts WHERE booking_id = %s AND role = 'primary' "
+        "ORDER BY (email IS NULL) DESC, id LIMIT 1",
         (int(booking_id),),
     )
-    if not blank:
+    if not primary:
         return False
-    same = query_one("SELECT id FROM booking_contacts WHERE booking_id = %s AND email = %s", (int(booking_id), address))
+    if (primary.get("email") or "").lower() == address:
+        return False
+    same = query_one(
+        "SELECT id FROM booking_contacts WHERE booking_id = %s AND email = %s AND id <> %s",
+        (int(booking_id), address, primary["id"]),
+    )
     if same:
         execute(
             "UPDATE booking_contacts SET role = 'primary', source = 'booking', name = COALESCE(%s, name), "
             "mobile = COALESCE(%s, mobile), on_site = GREATEST(on_site, %s) WHERE id = %s",
-            (name, mobile, int(blank["on_site"] or 0), same["id"]),
+            (name, mobile, int(primary["on_site"] or 0), same["id"]),
         )
-        execute("DELETE FROM booking_contacts WHERE id = %s", (blank["id"],))
-    else:
+        if primary.get("email"):
+            execute("UPDATE booking_contacts SET role = 'learned', on_site = 0 WHERE id = %s", (primary["id"],))
+        else:
+            execute("DELETE FROM booking_contacts WHERE id = %s", (primary["id"],))
+        return True
+    if not primary.get("email"):
         execute(
             "UPDATE booking_contacts SET email = %s, name = COALESCE(%s, name), mobile = COALESCE(%s, mobile) WHERE id = %s",
-            (address, name, mobile, blank["id"]),
+            (address, name, mobile, primary["id"]),
         )
-    return True
+        return True
+    # The address changed and nothing holds the new one yet: the old address
+    # stays as a learned contact; the caller writes the new primary row.
+    execute("UPDATE booking_contacts SET role = 'learned', on_site = 0 WHERE id = %s", (primary["id"],))
+    return False
 
 
 def dedupe_primary_rows() -> int:

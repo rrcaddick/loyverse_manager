@@ -40,7 +40,7 @@ EXPECTED = {
     "still_interested": ["Still planning to visit?", "R3 800.00", "Attached:</span> FY1703 Proforma.pdf"],
     "deposit_reminder": ["14 days", "R3 800.00", "31 October 2026", "Attached:</span> FY1703 Proforma.pdf"],
     "final_details": ["3 days", "sent earlier", "R2 565.00"],
-    "expiry": ["lapsed", "no longer reserved"],
+    "expiry": ["expired", "no longer reserved"],
     "answers": ["Can we bring a braai?", "braai facilities", "come back to you"],
     "bounce_back": ["Request a group booking", FORM],
     "convert_enquiry": ["Complete the booking request", FORM + "?enquiry=tok"],

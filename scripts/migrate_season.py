@@ -18,6 +18,10 @@ Options: --sheet PATH (default data/import/fy-bookings-2026-27.csv),
 (default 2026-06-01), --limit N, --upcoming (visit on/after today), --booking
 REF, --with-enquiries, --apply, --wipe (with --apply: clear bookings, mail and
 reminders first; bank rows and settings stay), --no-bank.
+
+Stop the mail worker first (``docker compose stop worker``): its minute-by-minute
+sync matches mail on its own rules and would attach conversations while this
+runs. Start it again afterwards.
 """
 
 from __future__ import annotations
@@ -124,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         # Names for learned contacts can come from mail outside their own booking's
         # conversations (the person wrote to us about something else): one pass
         # over everything stored, once every booking is in.
-        print("Contact names:", migration.learn_contact_names())
+        print("Contact names:", migration.learn_contact_names(mailbox=True))
         try:
             from src.services import bank, reminders
 

@@ -159,3 +159,19 @@ def test_own_contact_stays_one_row_when_the_email_arrives_later(created):
     rows = booking_contact.list_for_booking(b2["id"])
     assert [(r["role"], r["email"], r["name"]) for r in rows] == [("primary", "learned@example.com", "Jane Test")]
 
+
+
+def test_a_changed_email_keeps_one_primary_row_and_the_old_address_as_learned(created):
+    from src.models import booking_contact
+
+    b = make(created, group_name="TEST pytest school 3")
+    booking_contact.upsert(b["id"], "treasurer@example.com", name="Tom Treasurer", role="learned", source="inbound")
+    # The contact's address turns out to be one we already learned: that row is promoted,
+    # the old primary address stays known so its mail still matches.
+    bs.update_booking(b["id"], {"contact_email": "treasurer@example.com"}, actor=None)
+    rows = sorted(((r["role"], r["email"]) for r in booking_contact.list_for_booking(b["id"])))
+    assert rows == [("learned", "jane.test@example.com"), ("primary", "treasurer@example.com")]
+    # A brand-new address: a new primary row, the previous one demoted, still one primary.
+    bs.update_booking(b["id"], {"contact_email": "new.person@example.com"}, actor=None)
+    rows = sorted(((r["role"], r["email"]) for r in booking_contact.list_for_booking(b["id"])))
+    assert rows == [("learned", "jane.test@example.com"), ("learned", "treasurer@example.com"), ("primary", "new.person@example.com")]

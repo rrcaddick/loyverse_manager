@@ -154,11 +154,13 @@ def test_parse_sheet_walks_days_and_continuations():
             total="150", price="95", inv="1647", comment="Bring own gazebos\n"),
         row(group="New Apostolic Brackenfell        \n"),
         row(group="Buzzling Bumble Bee Educare", enquiry="8/18/2026", contact="Nadia", total="45+15", price="70/90", inv="1699"),
+        row(day="Fully booked"),
+        row(group="Cushion Church", enquiry="10/2/2026", contact="Noluthando Melani", total="40", price="95", inv="1731"),
     ]
     bookings, notes = parse_sheet(rows)
-    assert [b.group_name for b in bookings] == ["Daniels Family", "Fiona Brink", "St. Matthew's", "Buzzling Bumble Bee Educare"]
+    assert [b.group_name for b in bookings] == ["Daniels Family", "Fiona Brink", "St. Matthew's", "Buzzling Bumble Bee Educare", "Cushion Church"]
 
-    daniels, fiona, matthews, buzzling = bookings
+    daniels, fiona, matthews, buzzling, cushion = bookings
     assert daniels.visit_date == date(2026, 9, 24)
     assert daniels.status == "confirmed"
     assert daniels.deposit == Decimal("4600.00")
@@ -184,8 +186,11 @@ def test_parse_sheet_walks_days_and_continuations():
     assert buzzling.price_per_person == Decimal("70.00")
     assert buzzling.visit_date == date(2026, 12, 5)
 
+    # A note typed in the date column ("Fully booked") does not end the day above it.
+    assert cushion.visit_date == date(2026, 12, 5) and not cushion.warnings
+
     messages = [m for _, m in notes]
-    assert any("Could not read day label" in m for m in messages)
+    assert any("'Fully booked' in the date column is a note" in m for m in messages)
     assert any("name only" in m for m in messages)
 
 

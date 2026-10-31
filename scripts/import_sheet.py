@@ -296,8 +296,11 @@ def parse_sheet(rows: Iterable[list[str]]) -> tuple[list[SheetBooking], list[tup
         if day_label:
             parsed = parse_day_label(day_label)
             if parsed is None:
-                notes.append((number, f"Could not read day label '{day_label}'"))
-            current_day = parsed
+                # A note typed in the date column ("Fully booked", "Est. pub 500")
+                # belongs to the day above; the rows under it are still that day's.
+                notes.append((number, f"'{day_label}' in the date column is a note; the day above still applies"))
+            else:
+                current_day = parsed
         if clean_cell(_cell(row, COL_ENQUIRY)).upper() == "CLOSED":
             continue
         group_name = clean_cell(_cell(row, COL_GROUP))

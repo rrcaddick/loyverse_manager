@@ -131,3 +131,24 @@ def test_dates_in_reads_written_dates():
 
     found = mt.dates_in("Quotation: 19 December 2026 for 550 people, or 7/11/2026")
     assert date(2026, 12, 19) in found and date(2026, 11, 7) in found
+
+
+def test_a_contact_name_that_is_the_group_name_does_not_count_twice():
+    # The sheet had no contact name, so the group name stands in for it: a
+    # provincial lab report mentioning "Western Cape" and a "centre" must not
+    # collect group + surname + first and attach itself.
+    booking = mt.BookingFacts.from_row(
+        {"id": 3, "reference": "FY1772", "doc_number": 1772, "group_name": "Western Cape Rehab Centre",
+         "contact_name": "Western Cape Rehab Centre", "contact_mobile": None}
+    )
+    t = mt.ThreadFacts(thrid=5, participants={"lab@westerncape.gov.za"}, subjects={"LABORATORY REPORT: S2026/09"},
+                       text="Western Cape Government veterinary laboratory. Sample sent by the Western Cape Rehab Centre.")
+    pts, why = mt.score(t, booking)
+    assert why == ["group"] and mt.verdict(pts) == "review"
+    named = mt.BookingFacts.from_row(
+        {"id": 4, "reference": "FY1772", "doc_number": 1772, "group_name": "Western Cape Rehab Centre",
+         "contact_name": "Raees Safodien", "contact_mobile": None}
+    )
+    t2 = mt.ThreadFacts(thrid=6, participants={"raees.safodien@westerncape.gov.za"}, from_names={"Raees Safodien"},
+                        subjects={"Booking 20 Nov 2026"}, text="Western Cape Rehab Centre outing, 60 people.")
+    assert mt.score(t2, named)[1] == ["group", "surname", "first"]

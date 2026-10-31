@@ -36,6 +36,7 @@ from typing import Any, Iterable
 
 from config.settings import DATA_DIR, GMAIL_ADDRESS
 from src.clients.gmail import ALL_MAIL, INBOX, GmailImap
+from src.services.inbound import DEV_COPY_PREFIX
 from src.services import matching as mt
 from src.services.mail_ingest import ParsedMessage, parse_message, split_body, to_sast_naive
 from src.utils.date import get_today
@@ -190,6 +191,8 @@ def fetch_thread(imap: GmailImap, thrid: int, own: set[str]) -> ThreadPlan | Non
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"thread {thrid} uid {item['uid']}: unparseable: {exc}")
             continue
+        if (parsed.subject or "").lstrip().startswith(DEV_COPY_PREFIX):
+            continue  # a development copy of our own mail (see inbound.DEV_COPY_PREFIX)
         direction = "outbound" if is_own(parsed.from_email, own) else "inbound"
         sent_at = parsed.date or _sast(item.get("internaldate"))
         messages.append(
@@ -228,6 +231,8 @@ def fetch_thread(imap: GmailImap, thrid: int, own: set[str]) -> ThreadPlan | Non
             if not facts.last_at or sent_at > facts.last_at:
                 facts.last_at = sent_at
                 facts.last_direction = direction
+    if not messages:
+        return None
     facts.text = "\n".join(texts)
     messages.sort(key=lambda m: (m.sent_at or datetime.min, m.uid))
     return ThreadPlan(facts=facts, messages=messages)
@@ -698,13 +703,30 @@ def names_on_plan(plan: BookingPlan) -> dict[str, str]:
     return names
 
 
-def learn_contact_names() -> dict:
+def _mailbox_name(imap: GmailImap, address: str) -> str | None:
+    """The display name the address last signed a message with, from the
+    mailbox itself (read-only): the newest few messages it sent us."""
+    try:
+        uids = imap.search_gmail(f"from:{address}")
+    except Exception:  # noqa: BLE001 - a search failure just leaves the name blank
+        return None
+    for meta in imap.fetch_meta(sorted(uids)[-3:]):
+        name = (meta.get("from_name") or "").strip()
+        if name and "@" not in name and name.lower() != address.lower():
+            return name
+    return None
+
+
+def learn_contact_names(mailbox: bool = False) -> dict:
     """Backfill: every learned contact without a name takes the name a stored
-    message gives for that address (as sender first, then from To or Cc)."""
+    message gives for that address (as sender first, then from To or Cc).
+    With ``mailbox`` the ones still blank are looked up in the mailbox: the
+    name on the newest message that address sent us, whatever it was about."""
     from src.models import booking_contact
     from src.models.base import execute, query
 
-    out = {"nameless": 0, "named": 0}
+    out = {"nameless": 0, "named": 0, "from_mailbox": 0}
+    still_blank: list[dict] = []
     for c in query("SELECT id, email FROM booking_contacts WHERE role = 'learned' AND (name IS NULL OR name = '')"):
         out["nameless"] += 1
         row = query(
@@ -727,6 +749,20 @@ def learn_contact_names() -> dict:
         if name:
             execute("UPDATE booking_contacts SET name = %s WHERE id = %s", (name[:255], c["id"]))
             out["named"] += 1
+        else:
+            still_blank.append(c)
+    if mailbox and still_blank:
+        try:
+            with GmailImap() as imap:
+                imap.select(ALL_MAIL, readonly=True)
+                for c in still_blank:
+                    name = _mailbox_name(imap, c["email"])
+                    if name:
+                        execute("UPDATE booking_contacts SET name = %s WHERE id = %s", (name[:255], c["id"]))
+                        out["named"] += 1
+                        out["from_mailbox"] += 1
+        except Exception as exc:  # noqa: BLE001 - names are a nicety; the run must not fail here
+            logger.warning(f"Mailbox name lookup stopped: {exc}")
     del booking_contact
     return out
 
