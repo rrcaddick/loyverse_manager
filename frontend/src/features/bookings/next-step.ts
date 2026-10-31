@@ -61,8 +61,12 @@ function statusVerb(b: BookingDetail, target: BookingStatus): StepVerb | null {
   return { kind: "status", target, label: copy?.label ?? target, destructive: copy?.destructive };
 }
 
+/** The detail line: each fact starts with a capital, as a label does. */
 function join(...parts: (string | null | undefined | false)[]): string {
-  return parts.filter(Boolean).join(" · ");
+  return parts
+    .filter((p): p is string => !!p)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" · ");
 }
 
 export function nextStep(b: BookingDetail): NextStep {
