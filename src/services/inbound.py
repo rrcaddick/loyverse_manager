@@ -291,10 +291,20 @@ def match_open_booking(row: dict, bookings: list[dict] | None = None) -> tuple[d
     """(booking, candidates, method). Reference first (any status), then
     people (address, mobile), then a corroborated group name."""
     facts = _facts_for_message(row)
+    # One reference settles it; a mail that names two bookings (the Oasis
+    # accounts office writes "FY1735/34") is held for a click between them.
+    referenced: list[dict] = []
     for n in sorted(facts.references()):
         b = em.booking_by_doc_number(int(n))
-        if b:
-            return b, [], "reference"
+        if b and all(int(b["id"]) != int(x["id"]) for x in referenced):
+            referenced.append(b)
+    if len(referenced) == 1:
+        return referenced[0], [], "reference"
+    if len(referenced) > 1:
+        # Candidates carry the open-booking shape (learned addresses and numbers).
+        known = {int(b["id"]): b for b in (bookings if bookings is not None else open_bookings())}
+        candidates = [known.get(int(b["id"])) or {**b, "emails": {str(b["contact_email"]).lower()} if b.get("contact_email") else set(), "mobiles": set()} for b in referenced]
+        return None, candidates, "reference"
     bookings = bookings if bookings is not None else open_bookings()
     senders = {a for a in facts.participants}
     by_people = [b for b in bookings if (b["emails"] & senders)]
@@ -358,6 +368,7 @@ def attach_to_booking(message_id: int, row: dict, booking: dict, method: str) ->
     from src.services import conversations, pop
 
     bid = int(booking["id"])
+    sender = (row.get("from_email") or "").lower()
     em.link_to_booking(int(message_id), bid, method[:30], whole_thread=False)
     thrid = row.get("gmail_thrid")
     if thrid:

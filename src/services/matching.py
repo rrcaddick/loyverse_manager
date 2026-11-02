@@ -204,12 +204,24 @@ def mobiles_in_text(text: str | None) -> set[str]:
 REFERENCE_RE = re.compile(r"\b(FY|INV)[\s\-_:#]*0*(\d{3,5})\b", re.IGNORECASE)
 
 
+# "FY1735/34": the office's shorthand for two references that share their leading digits.
+REFERENCE_PAIR_RE = re.compile(r"\s*/\s*(\d{2,3})\b")
+
+
 def references_in(*texts: str | None) -> set[int]:
     out: set[int] = set()
     for t in texts:
-        if t:
-            for m in REFERENCE_RE.finditer(t):
-                out.add(int(m.group(2)))
+        if not t:
+            continue
+        for m in REFERENCE_RE.finditer(t):
+            number = int(m.group(2))
+            out.add(number)
+            pair = REFERENCE_PAIR_RE.match(t, m.end())
+            if pair:
+                digits = str(number)
+                suffix = pair.group(1)
+                if len(suffix) < len(digits):
+                    out.add(int(digits[: -len(suffix)] + suffix))
     return out
 
 

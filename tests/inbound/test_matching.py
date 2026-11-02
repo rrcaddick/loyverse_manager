@@ -174,3 +174,10 @@ def test_the_area_tells_same_named_churches_apart():
     assert mt.score(t2, named)[1] == ["group", "area"]
     # The park's own place is never a match on its own.
     assert mt.area_query("Klapmuts") is None and mt.area_query("Retreat-East.") is not None
+
+
+def test_two_references_written_as_a_pair_are_both_read():
+    assert mt.references_in("Proof of banking details for FY1735/34") == {1735, 1734}
+    assert mt.references_in("Deposits for FY1735 and FY1734") == {1735, 1734}
+    assert mt.references_in("Proforma FY1703 – R3 800 deposit by 15/11") == {1703}
+    assert mt.references_in("FY1748/2") == {1748}  # a single digit is not a second reference
