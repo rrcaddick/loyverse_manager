@@ -6,7 +6,8 @@
  * internal note, the hold and the collapsed record footer keep their places.
  */
 
-import { CalendarDays, Mail, Pencil, UserCheck, Users } from "lucide-react";
+import { CalendarDays, History, Mail, Pencil, RotateCcw, UserCheck, Users } from "lucide-react";
+import { toast } from "sonner";
 import { siWhatsapp } from "simple-icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
@@ -14,10 +15,14 @@ import { Link } from "react-router";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatDateLong, formatMoney, formatNumber, formatPhone } from "@/lib/format";
+import { errorMessage } from "@/lib/api";
+import { formatDate, formatDateLong, formatDateShort, formatMoney, formatNumber, formatPhone, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { ACTION_LABELS, availability, type ActionId } from "../../actions";
+import { useSetGroup } from "../../api";
+import { groupQuestion } from "../../attention";
+import { isPastBooking, suggestionLabel, summaryLines, whyText } from "../../groups";
 import { isTentative, relativeTo, sourceLabel, useGroupTypeLabel, useTierLabel } from "../../lib";
 import { CONTACT_ROLE_LABELS, primaryContact } from "../../contacts";
 import { nextStep } from "../../next-step";
@@ -27,13 +32,14 @@ import { QuestionsCard } from "../questions-card";
 import { HoldCard, InternalNoteCard, RecordCard, RemindersCard } from "../rail";
 import { Gated } from "../record-header";
 
-export function OverviewTab({ booking, onContacts }: { booking: BookingDetail; onContacts: () => void }) {
+export function OverviewTab({ booking, onContacts, onHistory }: { booking: BookingDetail; onContacts: () => void; onHistory: () => void }) {
   return (
     <div className="flex flex-col gap-card-gap">
       <QuickActionsRow booking={booking} />
       <div className="grid gap-card-gap xl:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)]">
         <div className="flex min-w-0 flex-col gap-card-gap">
           <ContactsCard booking={booking} onManage={onContacts} />
+          <HistoryCard booking={booking} onOpen={onHistory} />
           {isTentative(booking.status) ? <HoldCard booking={booking} /> : booking.reminders.length > 0 ? <RemindersCard booking={booking} /> : null}
           <RecordCard booking={booking} />
         </div>
@@ -180,7 +186,8 @@ function QuickActionsRow({ booking }: { booking: BookingDetail }) {
   const whatsapp = WHATSAPP_ACTIONS.filter((id) => !availability(booking, id).hidden);
   const canConfirm = !availability(booking, "confirm").hidden;
   const canCancel = booking.allowed_transitions.includes("cancelled");
-  if (email.length === 0 && whatsapp.length === 0 && !canConfirm && !canCancel) return null;
+  const canRebook = isPastBooking(booking, todayIso());
+  if (email.length === 0 && whatsapp.length === 0 && !canConfirm && !canCancel && !canRebook) return null;
 
   const channelButton = (id: ActionId, channel: keyof typeof CHANNEL) => {
     const av = availability(booking, id);
@@ -214,7 +221,74 @@ function QuickActionsRow({ booking }: { booking: BookingDetail }) {
           Cancel booking
         </Button>
       ) : null}
+      {canRebook ? (
+        <Button variant="default" size="sm" onClick={() => actions.openRebook()}>
+          <RotateCcw data-icon="inline-start" />
+          Rebook
+        </Button>
+      ) : null}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------- history
+
+/** What this group did before, in two or three sentences; the History tab has the rows. */
+function HistoryCard({ booking, onOpen }: { booking: BookingDetail; onOpen: () => void }) {
+  const setGroup = useSetGroup(booking.id);
+  const question = groupQuestion(booking);
+  const lines = summaryLines(booking.history.summary);
+  const upcoming = booking.history.visits.filter((v) => v.relation === "upcoming");
+  async function answer(input: { group_id: number } | { new: true }) {
+    try {
+      await setGroup.mutateAsync(input);
+      toast.success("new" in input ? "Started a new group" : "Linked to the group");
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  }
+  return (
+    <Section
+      title={
+        <span className="inline-flex items-center gap-2">
+          <History aria-hidden="true" className="size-4 text-muted-foreground" />
+          History
+        </span>
+      }
+      actions={
+        <Button variant="ghost" size="sm" onClick={onOpen}>
+          Open
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3 text-body">
+        {question ? (
+          <>
+            <p className="text-foreground">
+              Same group as <span className="font-medium">{suggestionLabel(question)}</span>?
+            </p>
+            <p className="text-sm text-muted-foreground">{whyText(question.why)}.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" className="min-w-24" disabled={setGroup.isPending} onClick={() => answer({ group_id: question.group_id })}>
+                Yes
+              </Button>
+              <Button size="sm" variant="outline-primary" className="min-w-24" disabled={setGroup.isPending} onClick={() => answer({ new: true })}>
+                New group
+              </Button>
+            </div>
+          </>
+        ) : !booking.group ? (
+          <p className="text-muted-foreground">Not linked to a group yet.</p>
+        ) : lines.length > 0 ? (
+          <p className="text-foreground">{lines.slice(0, 4).join(" ")}</p>
+        ) : (
+          <p className="text-muted-foreground">
+            First booking for this group.
+            {upcoming.length > 0 ? ` Also booked: ${upcoming.map((v) => `${v.reference} on ${formatDateShort(v.visit_date ?? "")}`).join(", ")}.` : ""}
+          </p>
+        )}
+      </div>
+    </Section>
   );
 }
 

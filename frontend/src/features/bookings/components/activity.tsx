@@ -164,6 +164,8 @@ function fromEvent(e: BookingEvent): Entry {
         pill: { label, tone: "blue" },
       };
     }
+    case "group_linked":
+      return { ...base, chip: "changes", weight: "line", icon: UserCheck, tone: "blue", title: `${e.summary}${e.data?.method && e.data.method !== "new" ? ` (${String(e.data.method)})` : ""}`, pill: { label: "Group", tone: "blue" } };
     case "ticket_sent":
       return { ...base, chip: "changes", weight: "line", icon: MessageCircle, tone: "green", title: e.summary, pill: { label: "Ticket", tone: "green" } };
     case "arrivals_recorded":

@@ -324,3 +324,39 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
   FY1775 with its R2 090 deposit and the agreed half deposit, Kewtown, Grace
   Chapel, the Bowling Club and Franschhoek allocated, Jenny Lewis's address and
   conversations, the two Oasis mails held for assignment, the two enquiry dates.
+
+## Groups and history (2 Nov 2026)
+
+Owner's brief: a History tab on a booking showing the group's earlier bookings
+and what to expect (how long confirmation took, deposit on time, arrived against
+booked, cancellations), and a way to match a group to itself next year when the
+form is free text and a different person may book.
+
+- **Backend**: migration 028 (`booking_groups`, `booking_group_aliases`,
+  `bookings.group_id`, `bookings.previous_visit_name`), `src/models/booking_group.py`,
+  `src/services/groups.py` (facts, profiles, `score`, `suggestions_for`,
+  `assign_on_create`, `link_booking`, `new_group_for`, `visit_metrics`,
+  `summarise`, `history_for`), `POST /bookings/:id/group`, `GET /groups?q=`,
+  `group_id` on `POST /bookings`, the form's `previous_visit_name`.
+  `scripts/cluster_groups.py` grouped this season (93 groups from 94 bookings).
+- **Record**: `components/record/history-tab.tsx` (BigNumberRow: Visits since
+  year · Turnout avg with last "132 of 150" · Deposit days with on-time pill ·
+  Cancellations; the Group section with aliases, the summary sentences and
+  Change group; the Other bookings table in the Payments table style, rows open
+  the booking; Questions they asked before), `group-picker-dialog.tsx` (search,
+  "A group of its own"), the History card on the Overview (left column under
+  Contacts; carries the Yes / New group question when unlinked), the header's
+  "Visit n" link, Rebook as a filled quick action on a past booking (opens Add
+  booking pre-filled with `group_id` carried; Save / Create booking as always),
+  `group_linked` in Activity. Tab order: Overview · Needs attention ·
+  Conversation · Payments · Documents · History (count = other bookings) ·
+  Activity · Contacts.
+- **Needs attention**: `groupQuestion()` in `attention.ts`; one item "Same group
+  as FY… Name, Month YYYY?" (blue, Yes / New group) with the signals in words
+  (`features/bookings/groups.ts: whyText`) and any other candidates named; the
+  badge counts it.
+- **Public form**: the group step asks "Have you visited us before?" (optional,
+  the name the visit was booked under); the Check page lists it; the prefilled
+  completion link carries it.
+- Words: never "matcher", "score" or "profile" in the UI; "Same group", "New
+  group", "Change group", "Rebook", "Visit 3".

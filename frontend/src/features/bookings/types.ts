@@ -23,6 +23,10 @@ export interface BookingRow {
   group_name: string;
   group_type: string | null;
   area: string | null;
+  /** The group this booking belongs to (migration 028); null while a person has to say which. */
+  group_id: number | null;
+  /** The public form's "visited before, under what name?". */
+  previous_visit_name: string | null;
   contact_name: string;
   contact_email: string | null;
   contact_mobile: string | null;
@@ -311,7 +315,121 @@ export interface PaymentSearchResult {
 }
 
 /** GET /bookings/:id and every mutation/action response. */
+// ------------------------------------------------------- groups and history
+
+/** The group a booking belongs to: the thing that comes back (2 Nov 2026). */
+export interface GroupRef {
+  id: number;
+  name: string;
+  area: string | null;
+  group_type: string | null;
+  /** Every other spelling it has been booked under. */
+  aliases: string[];
+  /** Bookings in the group, this one included. */
+  bookings: number;
+}
+
+export interface GroupSuggestionLast {
+  id: number;
+  reference: string;
+  visit_date: string | null;
+  status: BookingStatus;
+  people_booked: number;
+  group_name: string;
+}
+
+/** A group an unlinked booking may belong to, with the signals behind it. */
+export interface GroupSuggestion {
+  group_id: number;
+  name: string;
+  area: string | null;
+  group_type: string | null;
+  score: number;
+  why: string[];
+  confident: boolean;
+  bookings: number;
+  last: GroupSuggestionLast | null;
+}
+
+export interface HistoryExit {
+  status: BookingStatus;
+  on: string | null;
+  days_before_visit: number | null;
+}
+
+/** One other booking of the group and what it tells us. */
+export interface HistoryVisit {
+  id: number;
+  reference: string;
+  visit_date: string | null;
+  status: BookingStatus;
+  status_label: string;
+  relation: "past" | "upcoming";
+  group_name: string;
+  group_type: string | null;
+  contact_name: string | null;
+  same_contact: boolean;
+  source: BookingSource;
+  booked: number | null;
+  arrived: number | null;
+  turnout_pct: number | null;
+  requested_on: string | null;
+  lead_days: number | null;
+  proforma_days: number | null;
+  deposit_paid_on: string | null;
+  deposit_days: number | null;
+  deposit_on_time: boolean | null;
+  reminders_sent: number;
+  changes_after_proforma: number;
+  price_per_person: number;
+  discount_per_person: number;
+  total: number;
+  paid_total: number;
+  refunded: number;
+  settled: "before" | "on the day" | "after" | "short" | null;
+  exit: HistoryExit | null;
+  questions: string[];
+}
+
+export interface HistorySummary {
+  visits: number;
+  cancellations: number;
+  exits: Partial<Record<BookingStatus, number>>;
+  first_year: number | null;
+  last: Pick<HistoryVisit, "id" | "reference" | "visit_date" | "booked" | "arrived" | "turnout_pct" | "deposit_days" | "deposit_on_time" | "settled"> | null;
+  turnout_avg_pct: number | null;
+  deposit_days_avg: number | null;
+  deposit_on_time: { on_time: number; of: number } | null;
+  lead_days_median: number | null;
+  typical_month: string | null;
+  sizes: { year: number; booked: number | null; arrived: number | null }[];
+  same_person: boolean;
+  reminders_total: number;
+  paid_total: number;
+}
+
+export interface BookingHistory {
+  visits: HistoryVisit[];
+  summary: HistorySummary | null;
+}
+
+/** GET /groups?q= */
+export interface GroupSearchRow {
+  id: number;
+  name: string;
+  group_type: string | null;
+  area: string | null;
+  bookings: number;
+  last_visit_date: string | null;
+  last_reference: string | null;
+}
+
 export interface BookingDetail extends BookingRow {
+  /** The group, or null while Needs attention asks which one. */
+  group: GroupRef | null;
+  history: BookingHistory;
+  /** Only while unlinked: the groups it may belong to, best first. */
+  group_suggestions: GroupSuggestion[];
   status_label: string;
   allowed_transitions: BookingStatus[];
   day_type: DayType;
@@ -460,6 +578,9 @@ export interface BookingInput {
   group_name?: string;
   group_type?: string | null;
   area?: string | null;
+  /** Rebook: the group the earlier booking belongs to. */
+  group_id?: number | null;
+  previous_visit_name?: string | null;
   contact_name?: string;
   contact_email?: string | null;
   contact_mobile?: string | null;

@@ -54,13 +54,14 @@ src/
                  meta_whatsapp, paycloud (RSA sign/verify), gmail (IMAP read-only +
                  SMTP), fnb (transaction-history API)
   services/      business logic, composed from clients
-                 booking (status machine, pricing, actions), pricing, documents
+                 booking (status machine, pricing, actions), groups (the group behind
+                 bookings: suggest/link/history), pricing, documents
                  (WeasyPrint PDFs), email_templates, mail_ingest, mail_send,
                  extraction (Claude), bank (FNB matching), reminders (queue),
                  public_form, settings, users, arrivals (Loyverse count), tickets,
                  loyverse, quicket, inventory, chatwoot, notification, pdf, barcode, token
   models/        plain-SQL persistence over MySQL (base.py has query/execute/transaction)
-                 booking, booking_event, booking_question, payment, document,
+                 booking, booking_group, booking_event, booking_question, payment, document,
                  bank_transaction, email_message, user, group_booking (read adapter),
                  audit (3 models), open_ticket
   repositories/  mysql.py → get_db_connection() (PyMySQL, DictCursor); aronium.py
@@ -155,6 +156,18 @@ from `settings.documents.next_number`.
 
 Outside `ENV=prod`, `src/services/mail_send.py` rewrites every recipient to
 `DEV_MAIL_RECIPIENT` and prefixes the subject. Never bypass this.
+
+### Groups behind bookings (2 Nov 2026)
+
+A group is the thing that comes back; a booking is one visit (`booking_groups`,
+`bookings.group_id`, migration 028). `src/services/groups.py` scores a new booking
+against every group (address, number, quoted reference, the customer's own
+"visited before as", name, area, email domain): confident links and says so,
+weaker is a Needs attention question ("Same group as FY1473 Mondale High?" Yes /
+New group), nothing makes a new group. The record's History tab is the group's
+other bookings with what each tells us; Rebook on a past booking carries the
+group. A shared address under an unrelated name never links (one person, two
+groups). See `docs/booking-system.md` "Groups and history".
 
 ### Group booking ticket delivery
 

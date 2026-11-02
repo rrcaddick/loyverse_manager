@@ -44,8 +44,10 @@ WRITABLE_COLUMNS = frozenset(
         "doc_number",
         "status",
         "group_name",
+        "group_id",
         "group_type",
         "area",
+        "previous_visit_name",
         "billing_address",
         "customer_vat_number",
         "contact_name",
@@ -280,8 +282,15 @@ def counts_by_bucket(by_status: dict[str, int] | None = None) -> dict[str, int]:
 
 
 def delete(booking_id: int) -> int:
-    """Hard delete (cascades to questions, events, payments, documents). Test clean-up only."""
-    return execute("DELETE FROM bookings WHERE id = %s", (booking_id,))
+    """Hard delete (cascades to questions, events, payments, documents). Test clean-up only.
+    A group left with no bookings goes with it."""
+    row = get(booking_id)
+    n = execute("DELETE FROM bookings WHERE id = %s", (booking_id,))
+    if row and row.get("group_id"):
+        from src.models import booking_group
+
+        booking_group.delete_if_empty(int(row["group_id"]))
+    return n
 
 
 def serialize(row: dict | None) -> dict | None:

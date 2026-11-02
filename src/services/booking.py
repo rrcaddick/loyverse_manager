@@ -291,6 +291,7 @@ _TEXT_FIELDS = {
     "group_name": 255,
     "group_type": 32,
     "area": 255,
+    "previous_visit_name": 255,
     "billing_address": 500,
     "customer_vat_number": 32,
     "contact_name": 255,
@@ -648,6 +649,8 @@ def create_booking(
     s = get_settings()
     data = _apply_visitors_alias(data)
     clean = validate_booking_data(data, partial=False, settings=s)
+    # Rebook carries the group of the earlier booking (2 Nov 2026).
+    group_id = _group_id_or_error(data.get("group_id"))
 
     if clean.get("people_booked") is None:
         clean["people_booked"] = int(clean.get("adults") or 0) + int(clean.get("children") or 0)
@@ -724,7 +727,37 @@ def create_booking(
 
     logger.info(f"Created booking {fields['reference']} (id {booking_id}, source {source})")
     _mirror_primary_contact(booking_id)
+    _assign_group(booking_id, group_id, actor)
     return booking_model.get(booking_id)
+
+
+def _group_id_or_error(value: Any) -> int | None:
+    if value in (None, "", 0, "0"):
+        return None
+    try:
+        gid = int(value)
+    except (TypeError, ValueError) as exc:
+        raise BookingError("Unknown group", {"group_id": "Unknown group"}) from exc
+    from src.models import booking_group
+
+    if gid < 1 or booking_group.get(gid) is None:
+        raise BookingError("Unknown group", {"group_id": "Unknown group"})
+    return gid
+
+
+def _assign_group(booking_id: int, group_id: int | None, actor: int | None) -> None:
+    """Link a new booking to its group (Rebook) or let the matcher decide
+    (link on a confident signal, suggest, or make a new group). Never blocks
+    the creation."""
+    from src.services import groups
+
+    try:
+        if group_id:
+            groups.link_booking(booking_id, group_id, actor, method="rebook")
+        else:
+            groups.assign_on_create(booking_id, actor)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Group assignment failed for booking {booking_id}: {exc}", exc_info=True)
 
 
 def _override_summary(fields: Mapping[str, Any]) -> str:
@@ -825,6 +858,13 @@ def update_booking(booking_id: int, data: Mapping[str, Any], actor: int | None) 
             )
     logger.info(f"Updated booking {current['reference']}: {', '.join(diff)}")
     _mirror_primary_contact(booking_id)
+    if "group_name" in (plain_diff or {}):
+        try:
+            from src.services import groups
+
+            groups.note_name_change(booking_id, plain_diff["group_name"].get("to") if isinstance(plain_diff["group_name"], dict) else None)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Group alias not learned for booking {booking_id}: {exc}")
     return booking_model.get(booking_id)
 
 
@@ -1356,7 +1396,21 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
             "pops": _pending_pops(booking_id),
         }
     )
+    detail.update(_group_blocks(booking))
     return detail
+
+
+def _group_blocks(booking: Mapping[str, Any]) -> dict:
+    """The History tab, the group and (while unlinked) the groups it may belong to."""
+    from src.services import groups
+
+    try:
+        history = groups.history_for(booking)
+        suggestions = [] if booking.get("group_id") else groups.suggestions_for(booking)
+    except Exception as exc:  # noqa: BLE001 - history must never break the record
+        logger.error(f"History failed for booking {booking.get('id')}: {exc}", exc_info=True)
+        history, suggestions = {"group": None, "visits": [], "summary": None}, []
+    return {"group": history["group"], "history": {"visits": history["visits"], "summary": history["summary"]}, "group_suggestions": suggestions}
 
 
 # ------------------------------------------------------------ requests ---

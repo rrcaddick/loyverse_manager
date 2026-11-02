@@ -5,7 +5,7 @@
  * a Work item. A request's review (Accept, Decline) is the first item.
  */
 
-import { AtSign, Bell, CheckCircle2, FileCheck, Landmark, Mail, Send, UserCheck } from "lucide-react";
+import { AtSign, Bell, CheckCircle2, FileCheck, Landmark, Mail, Send, UserCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -17,11 +17,12 @@ import { errorMessage } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
 
 import { availability } from "../../actions";
-import { dueReminders, emailMissing, lapseNoticeDue, onSiteMissing, requestGaps, sheetDepositsToCheck } from "../../attention";
+import { dueReminders, emailMissing, groupQuestion, lapseNoticeDue, onSiteMissing, requestGaps, sheetDepositsToCheck } from "../../attention";
+import { suggestionLabel, whyText } from "../../groups";
 import { relativeTo } from "../../lib";
 import { nextStep } from "../../next-step";
 import { REMINDER_KIND_LABELS, type BookingDetail } from "../../types";
-import { useVerifyPayment } from "../../api";
+import { useSetGroup, useVerifyPayment } from "../../api";
 import { useBookingActions } from "../../use-booking-actions";
 import { NextStepCard } from "../record-header";
 import { RequestBanner } from "./request-banner";
@@ -43,6 +44,7 @@ export function AttentionTab({
   const actions = useBookingActions();
   const partyDone = usePartyDone();
   const verifyPayment = useVerifyPayment(booking.id);
+  const setGroup = useSetGroup(booking.id);
   const reminders = booking.status === "requested" ? [] : dueReminders(booking);
   const step = nextStep(booking);
   const items: { key: string; urgency: Urgency; icon: typeof Bell; title: string; detail: string; action: ReactNode; secondary?: ReactNode }[] = [];
@@ -133,6 +135,35 @@ export function AttentionTab({
       action: (
         <Button size="sm" className="min-w-32" onClick={onContacts}>
           Open contacts
+        </Button>
+      ),
+    });
+  }
+  const question = groupQuestion(booking);
+  if (question) {
+    const others = booking.group_suggestions.slice(1);
+    const answer = async (input: { group_id: number } | { new: true }) => {
+      try {
+        await setGroup.mutateAsync(input);
+        toast.success("new" in input ? "Started a new group" : "Linked to the group");
+      } catch (err) {
+        toast.error(errorMessage(err));
+      }
+    };
+    items.push({
+      key: "group",
+      urgency: "blue",
+      icon: Users,
+      title: `Same group as ${suggestionLabel(question)}?`,
+      detail: `${whyText(question.why)}${question.bookings > 1 ? ` · ${question.bookings} bookings` : ""}.${others.length ? ` Also possible: ${others.map((o) => suggestionLabel(o)).join("; ")} (the History tab has them).` : ""} Yes brings that group's history onto this record.`,
+      action: (
+        <Button size="sm" className="min-w-32" disabled={setGroup.isPending} onClick={() => answer({ group_id: question.group_id })}>
+          Yes
+        </Button>
+      ),
+      secondary: (
+        <Button size="sm" variant="outline-primary" className="min-w-32" disabled={setGroup.isPending} onClick={() => answer({ new: true })}>
+          New group
         </Button>
       ),
     });

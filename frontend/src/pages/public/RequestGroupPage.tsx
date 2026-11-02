@@ -1,6 +1,6 @@
 /**
  * /request/group — Step 2 of 3, "Tell us about your group": group name,
- * kind of group, area, questions, anything else.
+ * kind of group, area, visited before (under what name), questions, anything else.
  */
 
 import { Plus, X } from "lucide-react";
@@ -17,7 +17,7 @@ import { StepShell } from "@/features/public/step-shell";
 import { useStepForm } from "@/features/public/use-step-form";
 import type { FormConfig } from "@/features/public/types";
 
-const FIELDS = ["group_name", "group_type", "area", "questions", "customer_notes"] as const;
+const FIELDS = ["group_name", "group_type", "area", "previous_visit_name", "questions", "customer_notes"] as const;
 
 export default function RequestGroupPage() {
   return <ConfigGate>{(config) => <GroupStep config={config} />}</ConfigGate>;
@@ -67,6 +67,10 @@ function GroupStep({ config }: { config: FormConfig }) {
 
       <Field id="area" label="Area or town" optional error={errors.area?.message}>
         {(a11y) => <TextInput {...a11y} autoComplete="address-level2" maxLength={255} {...register("area")} />}
+      </Field>
+
+      <Field id="previous_visit_name" label="Have you visited us before?" optional hint="If so, the name the visit was booked under, so we can find it." error={errors.previous_visit_name?.message}>
+        {(a11y) => <TextInput {...a11y} maxLength={255} {...register("previous_visit_name")} />}
       </Field>
 
       <fieldset className="flex flex-col gap-3">

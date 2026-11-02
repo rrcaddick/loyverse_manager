@@ -28,6 +28,7 @@ export const FIELD_STEP: Record<string, Step> = {
   area: "group",
   questions: "group",
   customer_notes: "group",
+  previous_visit_name: "group",
   contact_name: "contact",
   contact_email: "contact",
   contact_mobile: "contact",
@@ -108,6 +109,7 @@ export function groupSchema(config: FormConfig) {
       .transform((items) => items.filter((q) => q.length > 0))
       .refine((items) => items.length <= config.max_questions, `You can ask up to ${config.max_questions} questions`),
     customer_notes: z.string().trim().max(2000, "Keep this under 2 000 characters"),
+    previous_visit_name: z.string().trim().max(255, "Keep this under 255 characters"),
   });
 }
 
@@ -141,6 +143,7 @@ export function buildPayload(visit: VisitOutput, group: GroupOutput, contact: Co
     area: group.area || undefined,
     questions: group.questions,
     customer_notes: group.customer_notes || undefined,
+    previous_visit_name: group.previous_visit_name || undefined,
     contact_name: contact.contact_name,
     contact_email: contact.contact_email,
     contact_mobile: contact.contact_mobile,

@@ -76,7 +76,7 @@ def test_create_assigns_everything(created):
     assert b["contact_mobile"] == "27821234567"
     detail = bs.get_booking_detail(b["id"])
     assert [q["question"] for q in detail["questions"]] == ["Is there shade?"]
-    assert [e["kind"] for e in detail["events"]] == ["created"]
+    assert [e["kind"] for e in detail["events"]] == ["created", "group_linked"]  # a first booking gets a group of its own
 
 
 def test_update_recalculates_and_logs(created):
@@ -87,7 +87,7 @@ def test_update_recalculates_and_logs(created):
     assert b["price_tier_code"] == "group_weekend"
     assert b["price_per_person"] == Decimal("95.00")
     kinds = [e["kind"] for e in bs.get_booking_detail(b["id"])["events"]]
-    assert kinds == ["created", "updated", "updated"]
+    assert kinds == ["created", "group_linked", "updated", "updated"]
 
 
 def test_payment_auto_confirms(created):

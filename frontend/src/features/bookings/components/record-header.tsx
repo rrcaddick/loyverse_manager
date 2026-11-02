@@ -107,6 +107,14 @@ export function RecordHeader({ booking }: { booking: BookingDetail }) {
                 <span>{groupType(booking.group_type)}</span>
               </>
             ) : null}
+            {booking.history.summary && booking.history.summary.visits > 0 ? (
+              <>
+                <Dot />
+                <Link to="?tab=history" className="text-blue-text underline-offset-3 hover:underline" title="This group's earlier bookings">
+                  Visit {booking.history.summary.visits + 1}
+                </Link>
+              </>
+            ) : null}
             <Dot />
             <span>{booking.contact_name}</span>
             {booking.contact_mobile ? (

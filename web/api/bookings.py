@@ -862,6 +862,27 @@ def verify_payment(booking_id: int, payment_id: int):
     return _detail(booking_id)
 
 
+@bp.post("/<int:booking_id>/group")
+def set_group(booking_id: int):
+    """Needs attention's "Same group as ...?": ``{"group_id": n}`` says yes,
+    ``{"new": true}`` says this is a group of its own (2 Nov 2026)."""
+    from src.services import groups
+
+    data = _json_body()
+    _booking_or_404(booking_id)
+    try:
+        if data.get("new"):
+            groups.new_group_for(booking_id, current_user_id(), method="new")
+        else:
+            gid = data.get("group_id")
+            if not gid:
+                raise ApiError("validation_error", "Choose a group or say it is a new one", 422, {"group_id": "Required"})
+            groups.link_booking(booking_id, int(gid), current_user_id(), method="manual")
+    except LookupError as exc:
+        raise ApiError("not_found", str(exc), 404) from exc
+    return _detail(booking_id)
+
+
 @bp.post("/<int:booking_id>/decline")
 def decline_request(booking_id: int):
     data = _json_body()

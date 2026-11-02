@@ -6,7 +6,7 @@
 import { availability, type ActionId } from "./actions";
 import { daysFromToday, holdState } from "./lib";
 import { nextStep } from "./next-step";
-import type { BookingDetail, Payment } from "./types";
+import type { BookingDetail, GroupSuggestion, Payment } from "./types";
 
 interface DueReminder {
   id: number;
@@ -71,11 +71,18 @@ export function requestGaps(booking: BookingDetail): string[] {
   return gaps;
 }
 
+/** "Same group as ...?": the best group an unlinked booking may belong to, or null. */
+export function groupQuestion(booking: BookingDetail): GroupSuggestion | null {
+  if (booking.group || !booking.group_suggestions?.length) return null;
+  return booking.group_suggestions[0] ?? null;
+}
+
 /** The tab's badge: the request review, the next step, a message waiting on us, due reminders, the lapse notice, proofs waiting, sheet deposits to check, missing details. */
 export function attentionCount(booking: BookingDetail, unanswered = 0): number {
   const waiting = unanswered > 0 ? 1 : 0;
-  if (booking.status === "requested") return 1 + booking.pops.length + waiting + (requestGaps(booking).length > 0 ? 1 : 0);
+  const group = groupQuestion(booking) ? 1 : 0;
+  if (booking.status === "requested") return 1 + booking.pops.length + waiting + (requestGaps(booking).length > 0 ? 1 : 0) + group;
   const step = nextStep(booking);
-  return (step.primary ? 1 : 0) + waiting + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + sheetDepositsToCheck(booking).length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
+  return (step.primary ? 1 : 0) + waiting + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + sheetDepositsToCheck(booking).length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0) + group;
 }
 

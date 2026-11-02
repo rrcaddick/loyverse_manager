@@ -22,6 +22,8 @@ export interface BookingActionsValue {
   /** The Find payment search (bank credits by reference, amount, date). */
   openFindPayment: (prefill?: FindPaymentPrefill) => void;
   openHold: () => void;
+  /** Rebook: a new booking for this group, started from this one (2 Nov 2026). */
+  openRebook: () => void;
   changeStatus: (target: BookingStatus) => void;
   /** Focus the "Add a note…" composer (the N key). */
   focusNote: () => void;

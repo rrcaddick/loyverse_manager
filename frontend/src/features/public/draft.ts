@@ -27,6 +27,7 @@ export function emptyDraft(): Draft {
     area: "",
     questions: [""],
     customer_notes: "",
+    previous_visit_name: "",
     contact_name: "",
     contact_email: "",
     contact_mobile: "",

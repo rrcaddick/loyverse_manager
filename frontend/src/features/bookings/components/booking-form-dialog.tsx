@@ -173,7 +173,8 @@ export interface BookingFormDialogProps {
   /** Edit mode: open on the contact fields or with Pricing expanded. */
   focus?: EditFocus;
   /** Title, description and submit label when the dialog is not plainly "New booking". */
-  copy?: { title: string; description: string; submit: string };
+  /** Create mode: the dialog's words; without `submit` the Save / Create booking pair stays. */
+  copy?: { title: string; description: string; submit?: string };
 }
 
 export function BookingFormDialog({ open, onOpenChange, booking = null, defaultDate, prefill, extraInput, onCreate, onCreated, focus = null, copy }: BookingFormDialogProps) {

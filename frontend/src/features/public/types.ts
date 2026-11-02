@@ -33,6 +33,8 @@ export interface BookingRequestInput {
   area?: string;
   questions: string[];
   customer_notes?: string;
+  /** "Have you visited before, under what name?": helps us find the group's earlier visits. */
+  previous_visit_name?: string;
   contact_name: string;
   contact_email: string;
   contact_mobile: string;

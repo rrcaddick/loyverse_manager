@@ -579,3 +579,61 @@ instead of pulling the whole thread onto the first booking. Also fixed the same
 day: `inbound.attach_to_booking` had lost its `sender` since 30 Oct (every
 matched inbound mail failed to attach), and `documents.kind` had lost `pop`
 and `attachment` (migration 027), so proof-of-payment inspection failed.
+
+## Groups and history (2 Nov 2026)
+
+A **group** is the thing that comes back; a booking is one visit. Migration 028
+adds `booking_groups` (name, group_type, area, notes), `booking_group_aliases`
+(every spelling a group has been booked under) and `bookings.group_id` (NULL
+while a person has to say which group) plus `bookings.previous_visit_name`, the
+public form's optional "Have you visited us before? Under what name?". A
+group's contacts are the contacts of its bookings, so linking a booking teaches
+the group. (`GROUPS` is a reserved word in MySQL 8, hence the table name.)
+
+**Suggest, don't guess** (`src/services/groups.py`). `assign_on_create` runs for
+every new booking (`booking.create_booking`) and again when a saved request is
+completed through the form. It scores the booking against every group's profile
+(`load_profiles`: names and aliases, areas, addresses, numbers, non-generic
+email domains, document numbers): an address 100, a number 90, a quoted
+reference 95, the customer's own previous name 65, the name 60 (35 in part), the
+area +25, a shared email domain +45. Confident at 90, suggested at 40. One
+confident, clearly best group links the booking and says so (`group_linked`
+event with the signals as its method); nothing above 40 makes a new group
+quietly; anything else is left for a person. A known address under an unrelated
+name (one teacher, a school and a church) is capped at 65 ("different name"):
+suggested, never linked. `name_tokens` drops the generic words and numbers, so
+"Sunshine Primary Grade 3" and "Sunshine Primary Grade 4" are the same key.
+
+The detail carries `group` (id, name, area, kind, aliases, bookings), `history`
+(`visits`: the group's other bookings with metrics; `summary`) and, while
+unlinked, `group_suggestions` (best first, each with `why`, `confident`, the
+last booking). `POST /bookings/:id/group` takes `{"group_id": n}` (Yes) or
+`{"new": true}` (New group, also "not that group"); `link_booking` learns the
+booking's spelling as an alias and fills a blank area or kind, and removes a
+group left empty. `GET /groups?q=` searches names, aliases, booking names,
+references and contacts for the Change group picker. `POST /bookings` accepts
+`group_id` (Rebook); a renamed booking adds its new name as an alias.
+
+**History metrics** (`visit_metrics`, per other booking): booked
+(`people_booked`) against arrived (`arrived_count`) and the turnout; the days
+from the request to the proforma and from the proforma to the first payment,
+and whether that was within the hold; lead time; the money in, refunds and
+whether the balance was settled before, on or after the day (or never in
+full); reminders sent; changes to the date or numbers after the proforma; how
+it ended and how many days before the visit; the questions asked. `summarise`
+reads the past: visits, cancellations by kind, first year, the last visit,
+average turnout, average days to the deposit and how many were on time, median
+lead time, the typical month, sizes by year, whether the same person booked.
+Backfilling older seasons (booked from the proforma, arrived from the invoice)
+is a later import; the metrics already read those columns.
+
+**UI.** The record's History tab (four numbers, the group with its other
+spellings and the summary in words, one row per other booking, the questions
+they asked before; Change group), a History card on the Overview, the header's
+"Visit n" link, Needs attention's "Same group as FY1473 Mondale High, October
+2026?" with Yes and New group (counted in the badge), Rebook on a past booking
+(Add booking pre-filled, group carried), the activity line for `group_linked`,
+and the form's question on the group step. `scripts/cluster_groups.py` is the
+pass that grouped this season's bookings (only Oasis FY1735/FY1734 merged; the
+two shared-address pairs stayed apart as different groups); the review is in
+`data/migration/groups-2026-11-02.txt`.

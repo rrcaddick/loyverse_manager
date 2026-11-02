@@ -121,6 +121,12 @@ def booking_request():
 
             for q in questions:
                 booking_question.add(complete_id, str(q))
+        try:
+            from src.services import groups
+
+            groups.assign_on_create(complete_id)  # the answers may name the group's earlier visit
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Group check after completing request {complete_id} failed: {exc}")
         booking = booking_model.get(complete_id)
     else:
         clean["status"] = "requested"  # reviewed and accepted before it is a booking

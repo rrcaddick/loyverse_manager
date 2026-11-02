@@ -162,6 +162,7 @@ function CheckScreen({ config }: { config: FormConfig }) {
     { field: "group_name", label: "Group name", value: draft.group_name || <Missing />, step: "group" },
     { field: "group_type", label: "Kind of group", value: groupLabel ?? <Missing />, step: "group" },
     { field: "area", label: "Area or town", value: draft.area || <None text="Not given" />, step: "group" },
+    { field: "previous_visit_name", label: "Visited before as", value: draft.previous_visit_name || <None text="Not given" />, step: "group" },
     {
       field: "questions-0",
       label: "Questions for us",

@@ -29,6 +29,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [findPayment, setFindPayment] = useState<{ open: boolean; prefill?: FindPaymentPrefill }>({ open: false });
   const [holdOpen, setHoldOpen] = useState(false);
+  const [rebookOpen, setRebookOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<BookingStatus | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
@@ -74,6 +75,7 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
       openPayment: () => setPaymentOpen(true),
       openFindPayment: (prefill) => setFindPayment({ open: true, prefill }),
       openHold: () => setHoldOpen(true),
+      openRebook: () => setRebookOpen(true),
       changeStatus,
       focusNote,
       noteRef,
@@ -89,6 +91,24 @@ export function BookingActionsProvider({ booking, children }: { booking: Booking
       <RecordPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} booking={booking} />
       <FindPaymentDialog booking={booking} open={findPayment.open} prefill={findPayment.prefill} onOpenChange={(open) => setFindPayment((s) => ({ ...s, open }))} />
       <HoldDialog booking={booking} open={holdOpen} onOpenChange={setHoldOpen} />
+      <BookingFormDialog
+        open={rebookOpen}
+        onOpenChange={setRebookOpen}
+        prefill={{
+          group_name: booking.group_name,
+          group_type: booking.group_type ?? "",
+          area: booking.area ?? "",
+          contact_name: booking.contact_name,
+          contact_email: booking.contact_email ?? "",
+          contact_mobile: booking.contact_mobile ?? "",
+          visitors: booking.people_booked,
+        }}
+        extraInput={{ group_id: booking.group_id }}
+        copy={{
+          title: `Rebook ${booking.group_name}`,
+          description: "A new booking for this group, started from this one and linked to its history. Save keeps it as a request; Create booking sends the proforma.",
+        }}
+      />
       <StatusDialog booking={booking} target={statusTarget} open={statusOpen} onOpenChange={setStatusOpen} />
     </BookingActionsContext.Provider>
   );

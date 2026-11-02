@@ -168,6 +168,7 @@ API_MODULES = (
     "web.api.users",
     "web.api.settings",
     "web.api.bookings",
+    "web.api.groups",
     "web.api.calendar",
     "web.api.documents",
     "web.api.inbox",

@@ -1,8 +1,9 @@
 /**
  * /bookings/:id — the booking record (UI round two, owner's plan of 29 Oct
  * 2026). Header (group name, status, facts, one primary button, Edit, ⋯),
- * then seven tabs: Overview · Needs attention (with its count; a request
- * opens on it) · Conversation · Payments · Documents · Activity · Contacts.
+ * then eight tabs: Overview · Needs attention (with its count; a request
+ * opens on it) · Conversation · Payments · Documents · History (the group's
+ * other bookings, 2 Nov 2026) · Activity · Contacts.
  * Keys: E edit, N note (on Activity).
  */
 
@@ -24,6 +25,7 @@ import { attentionCount } from "@/features/bookings/attention";
 import { AttentionTab } from "@/features/bookings/components/record/attention";
 import { ContactsTab } from "@/features/bookings/components/record/contacts-tab";
 import { DocumentsTab } from "@/features/bookings/components/record/documents-tab";
+import { HistoryTab } from "@/features/bookings/components/record/history-tab";
 import { OverviewTab } from "@/features/bookings/components/record/overview-tab";
 import { PaymentsTab } from "@/features/bookings/components/record/payments-tab";
 import { RecordHeader } from "@/features/bookings/components/record-header";
@@ -36,7 +38,7 @@ import { errorMessage, isApiError } from "@/lib/api";
 
 const ConversationView = lazy(() => import("@/features/mail/conversation-view").then((m) => ({ default: m.ConversationView })));
 
-const TABS = ["overview", "attention", "conversation", "payments", "documents", "activity", "contacts"] as const;
+const TABS = ["overview", "attention", "conversation", "payments", "documents", "history", "activity", "contacts"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function BookingDetailPage() {
@@ -152,6 +154,7 @@ function Record({ booking }: { booking: BookingDetail }) {
           { value: "conversation", label: "Conversation", count: unanswered },
           { value: "payments", label: "Payments", count: booking.pops.length },
           { value: "documents", label: "Documents" },
+          { value: "history", label: "History", count: booking.history.visits.length || null },
           { value: "activity", label: "Activity" },
           { value: "contacts", label: "Contacts" },
         ]}
@@ -168,10 +171,11 @@ function Record({ booking }: { booking: BookingDetail }) {
         </div>
       ) : (
         <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-card-gap overflow-y-auto px-1 pb-2 scrollbar-thin">
-          {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} /> : null}
+          {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} onHistory={() => setTab("history")} /> : null}
           {tab === "attention" ? <AttentionTab booking={booking} unanswered={unanswered} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} onConversation={() => setTab("conversation")} /> : null}
           {tab === "payments" ? <PaymentsTab booking={booking} /> : null}
           {tab === "documents" ? <DocumentsTab booking={booking} /> : null}
+          {tab === "history" ? <HistoryTab booking={booking} /> : null}
           {tab === "activity" ? <Activity booking={booking} /> : null}
           {tab === "contacts" ? <ContactsTab booking={booking} /> : null}
         </div>

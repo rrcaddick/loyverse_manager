@@ -25,6 +25,7 @@ import type {
   BookingListParams,
   BookingContact,
   DocumentKind,
+  GroupSearchRow,
   InboxMessage,
   PaymentSearchParams,
   PaymentSearchResult,
@@ -166,6 +167,21 @@ export function useRecordPayment(id: number) {
 /** A deposit recorded from the old booking sheet, checked and kept as it is (2 Nov 2026). */
 export function useVerifyPayment(id: number) {
   return useDetailMutation<number>(id, (paymentId) => api.post<BookingDetail>(`/bookings/${id}/payments/${paymentId}/verify`, {}));
+}
+
+/** Needs attention's "Same group as ...?": Yes links the group, New group starts one (2 Nov 2026). */
+export function useSetGroup(id: number) {
+  return useDetailMutation<{ group_id: number } | { new: true }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/group`, input));
+}
+
+/** The group picker behind Change group: name, alias, a booking's name, reference or contact. */
+export function useGroupSearch(q: string, enabled = true) {
+  return useQuery({
+    queryKey: ["groups", "search", q],
+    queryFn: () => api.get<Paginated<GroupSearchRow>>("/groups", { params: { q, limit: 20 } }),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
 }
 
 export function useDeletePayment(id: number) {

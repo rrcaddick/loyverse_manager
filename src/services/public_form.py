@@ -246,6 +246,7 @@ def validate_request(
     text("area", required=True, max_len=MAX_TEXT)  # the area tells same-named churches apart (2 Nov 2026)
     text("contact_name", required=True, max_len=MAX_TEXT)
     text("customer_notes", required=False, max_len=MAX_NOTES)
+    text("previous_visit_name", required=False, max_len=MAX_TEXT)  # "visited before, under what name?" (2 Nov 2026)
 
     # group type: must be a configured code
     codes = {str(g.get("code")) for g in (form.group_types or []) if isinstance(g, Mapping)}
@@ -522,6 +523,7 @@ def prefill_for_request(booking: dict) -> dict:
         "alternative_date": booking["alternative_date"].isoformat() if booking.get("alternative_date") else "",
         "visitors": int(booking.get("people_booked") or 0) or "",
         "customer_notes": booking.get("customer_notes") or "",
+        "previous_visit_name": booking.get("previous_visit_name") or "",
         "questions": questions,
     }
 
