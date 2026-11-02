@@ -740,12 +740,37 @@ def _in_review_window(sent_at: datetime | None, window_days: int) -> bool:
     return sent_at >= cutoff
 
 
+def _held_for_assignment(gmail_thrid: int) -> bool:
+    from src.models.base import query_one
+
+    return bool(query_one("SELECT 1 AS held FROM email_messages WHERE gmail_thrid = %s AND inbound_outcome = 'allocate' AND booking_id IS NULL LIMIT 1", (int(gmail_thrid),)))
+
+
+def _referenced_bookings(row: dict) -> list[int]:
+    """The distinct bookings a mail names by reference ("FY1735/34" is two)."""
+    from src.services import matching as mt
+
+    out: list[int] = []
+    for n in sorted(mt.references_in(row.get("subject"), row.get("body_text"))):
+        b = em.booking_by_doc_number(int(n))
+        if b and int(b["id"]) not in out:
+            out.append(int(b["id"]))
+    return out
+
+
 def apply_match(message_id: int, row: dict, window_days: int) -> tuple[int | None, str | None, bool]:
     """Run match_message on a stored row and persist the outcome.
 
     Returns (booking_id, method, pending) where pending says whether the row
     was flagged for review.
     """
+    thrid_held = int(row["gmail_thrid"]) if row.get("gmail_thrid") else None
+    if thrid_held and _held_for_assignment(thrid_held):
+        # The conversation is waiting for a person to pick between two bookings
+        # (a mail that names both); nothing links it until then (2 Nov 2026).
+        return None, None, False
+    if len(_referenced_bookings(row)) > 1:
+        return None, None, False
     booking_id, method = match_message(row)
     if booking_id:
         em.update(message_id, booking_id=booking_id, match_method=method, review_status="none")

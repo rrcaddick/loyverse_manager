@@ -568,3 +568,14 @@ group's weight when the group name has no distinctive words, else `SCORE_AREA`
 (30) as corroboration; `area_query` is a Gmail search in the migration planner;
 `inbound.open_bookings` selects `b.area`; `klapmuts`, `farmyard`, `park` are
 generic words.
+
+### A mail that names two bookings (2 Nov 2026)
+`matching.references_in` reads the office's pair shorthand ("FY1735/34" →
+1735 and 1734). `inbound.match_open_booking` attaches on one reference and
+holds a mail that names two bookings for assignment (both as candidates, Work
+› Assign mail). The legacy `mail_ingest.apply_match` (Sent and other folders)
+leaves such a mail, and any conversation already held for assignment, alone
+instead of pulling the whole thread onto the first booking. Also fixed the same
+day: `inbound.attach_to_booking` had lost its `sender` since 30 Oct (every
+matched inbound mail failed to attach), and `documents.kind` had lost `pop`
+and `attachment` (migration 027), so proof-of-payment inspection failed.
