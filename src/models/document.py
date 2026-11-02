@@ -15,7 +15,8 @@ from decimal import Decimal
 
 from src.models.base import dumps, execute, query, query_one
 
-KINDS = ("proforma", "invoice", "final_invoice")
+# pop and attachment: a customer's attachment kept by the proof-of-payment inspection (migration 027).
+KINDS = ("proforma", "invoice", "final_invoice", "pop", "attachment")
 
 
 def insert(
