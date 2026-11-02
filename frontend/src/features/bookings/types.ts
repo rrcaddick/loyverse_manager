@@ -7,7 +7,7 @@
 import type { BookingStatus, DayKind } from "@/types/api";
 
 export type BookingSource = "form" | "email" | "import" | "manual";
-export type PaymentKind = "eft" | "cash" | "card" | "cash_deposit" | "other";
+export type PaymentKind = "eft" | "cash" | "card" | "cash_deposit" | "other" | "refund";
 /** Loyverse is the only count; the customer app joins this when it is ready. */
 export type ArrivalSource = "loyverse";
 export type DocumentKind = "proforma" | "invoice" | "final_invoice";
@@ -146,6 +146,8 @@ export interface Payment {
   recorded_by: number | null;
   recorded_by_name: string | null;
   created_at: string;
+  /** A sheet deposit checked by a person (no bank credit expected). */
+  verified_at?: string | null;
 }
 
 export type BookingEventKind =
@@ -478,6 +480,8 @@ export interface BookingInput {
   hold_expires_on?: string | null;
   customer_notes?: string | null;
   internal_notes?: string | null;
+  /** Create only: send the proforma at once, making the new booking pending (2 Nov 2026). */
+  send_proforma?: boolean;
   billing_address?: string | null;
   customer_vat_number?: string | null;
   enquiry_date?: string | null;
@@ -512,13 +516,15 @@ export type BookingAction =
   | "send-expiry"
   | "send-answers"
   | "confirm"
-  | "send-ticket";
+  | "send-ticket"
+  | "send-form";
 
-export const TENTATIVE_STATUSES: BookingStatus[] = ["enquiry", "proforma_sent"];
+export const TENTATIVE_STATUSES: BookingStatus[] = ["proforma_sent"];
 export const FIRM_STATUSES: BookingStatus[] = ["confirmed", "completed"];
-export const ACTIVE_STATUSES: BookingStatus[] = ["enquiry", "proforma_sent", "confirmed", "completed"];
+export const ACTIVE_STATUSES: BookingStatus[] = ["proforma_sent", "confirmed", "completed"];
 
 export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = {
+  refund: "Refund",
   eft: "EFT",
   cash: "Cash",
   card: "Card",

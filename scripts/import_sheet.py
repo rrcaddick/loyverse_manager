@@ -255,7 +255,7 @@ class SheetBooking:
             return "confirmed"
         if self.doc_number is not None:
             return "proforma_sent"
-        return "enquiry"
+        return "requested"
 
     @property
     def group_type(self) -> str:
@@ -502,7 +502,7 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
             conn=conn,
         )
         legacy_model.set_row(booking_id, b.raw, conn=conn)
-        if final_status != "enquiry":
+        if final_status != "requested":
             execute(
                 """
                 INSERT INTO booking_events (booking_id, kind, summary, data, actor_user_id)
@@ -512,7 +512,7 @@ def _apply_import_state(booking_id: int, b: SheetBooking, today: date) -> None:
                     booking_id,
                     f"Imported as {final_status} from the booking sheet"
                     + (f" (visit on {b.visit_date.isoformat()} is in the past)" if is_past else ""),
-                    dumps({"from": "enquiry", "to": final_status, "sheet_status": status, "sheet_row": b.row_number}),
+                    dumps({"from": "requested", "to": final_status, "sheet_status": status, "sheet_row": b.row_number}),
                 ),
                 conn=conn,
             )

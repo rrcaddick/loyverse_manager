@@ -88,7 +88,7 @@ MIN_RULE_PATTERN = 4
 RULE_STOP_AFTER = frozenset({"FROM", "TO", "REF", "FOR"})
 MAX_RULE_WORDS = 5
 
-ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed", "completed")
+ACTIVE_STATUSES = ("proforma_sent", "confirmed", "completed")
 
 REFERENCE_RE = re.compile(r"(?:FY|INV)[\s-]?(\d{3,5})", re.IGNORECASE)
 BARE_NUMBER_RE = re.compile(r"(?<!\d)(\d{4})(?!\d)")

@@ -85,7 +85,7 @@ export function nextStep(b: BookingDetail): NextStep {
       icon: Ban,
       title: `${b.status_label}${stamp ? ` ${formatDate(stamp)}` : ""}${reason ? ` — ${reason}` : ""}`,
       detail: join(visit, f.paid_total > 0 ? `${money(f.paid_total)} paid` : null, "nothing more is due"),
-      primary: statusVerb(b, "enquiry"),
+      primary: statusVerb(b, "requested"),
       secondary: [],
     };
   }
@@ -188,7 +188,7 @@ export function nextStep(b: BookingDetail): NextStep {
       secondary: [recordPayment],
     };
   }
-  if (b.status === "enquiry" || !b.proforma_sent_at) {
+  if (!b.proforma_sent_at) {
     return {
       urgency: "amber",
       icon: Send,

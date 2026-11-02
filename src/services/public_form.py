@@ -52,6 +52,8 @@ NEXT_OPEN_DAY_HORIZON = 60
 # The signed receipt that lets the confirmation page survive a refresh.
 RECEIPT_PURPOSE = "request_receipt"
 RECEIPT_TTL_DAYS = 7
+COMPLETE_TTL_DAYS = 30  # a saved request waits for the customer to finish the form
+COMPLETE_PURPOSE = "request-complete"
 
 # Keys that never belong in a stored payload.
 _PAYLOAD_DROP = ("turnstile_token", "cf-turnstile-response", "website")
@@ -241,7 +243,7 @@ def validate_request(
         return value
 
     text("group_name", required=True, max_len=MAX_TEXT)
-    text("area", required=False, max_len=MAX_TEXT)
+    text("area", required=True, max_len=MAX_TEXT)  # the area tells same-named churches apart (2 Nov 2026)
     text("contact_name", required=True, max_len=MAX_TEXT)
     text("customer_notes", required=False, max_len=MAX_NOTES)
 
@@ -468,6 +470,60 @@ def request_receipt_token(booking_id: int, ttl_days: int = RECEIPT_TTL_DAYS) -> 
     }
     token = jwt.encode(payload, secret, algorithm="HS256")
     return token.decode() if isinstance(token, bytes) else token
+
+
+def request_complete_token(booking_id: int, ttl_days: int = COMPLETE_TTL_DAYS) -> str | None:
+    """A signed token for the form link on a saved request (2 Nov 2026): the
+    form opens with what we have and the answers complete that request."""
+    secret = _receipt_secret()
+    if not secret:
+        return None
+    now = datetime.now(timezone.utc)
+    payload = {"booking_id": int(booking_id), "purpose": COMPLETE_PURPOSE, "iat": now, "exp": now + timedelta(days=ttl_days)}
+    token = jwt.encode(payload, secret, algorithm="HS256")
+    return token.decode() if isinstance(token, bytes) else token
+
+
+def booking_id_from_complete_token(token: str | None) -> int | None:
+    """The request a completion token belongs to, or None when it is not valid."""
+    secret = _receipt_secret()
+    if not secret or not token:
+        return None
+    try:
+        claims = jwt.decode(token, secret, algorithms=["HS256"])
+    except Exception:  # noqa: BLE001 - expired, tampered, wrong secret
+        return None
+    if claims.get("purpose") != COMPLETE_PURPOSE:
+        return None
+    try:
+        return int(claims["booking_id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def prefill_for_request(booking: dict) -> dict:
+    """What the public form shows already filled for a saved request."""
+    questions = []
+    try:
+        from src.models import booking_question
+
+        questions = [q["question"] for q in booking_question.list_for_booking(int(booking["id"])) if q.get("question")]
+    except Exception:  # noqa: BLE001
+        questions = []
+    return {
+        "reference": booking.get("reference"),
+        "group_name": booking.get("group_name") or "",
+        "group_type": booking.get("group_type") or "",
+        "area": booking.get("area") or "",
+        "contact_name": booking.get("contact_name") or "",
+        "contact_email": booking.get("contact_email") or "",
+        "contact_mobile": booking.get("contact_mobile") or "",
+        "visit_date": booking["visit_date"].isoformat() if booking.get("visit_date") else "",
+        "alternative_date": booking["alternative_date"].isoformat() if booking.get("alternative_date") else "",
+        "visitors": int(booking.get("people_booked") or 0) or "",
+        "customer_notes": booking.get("customer_notes") or "",
+        "questions": questions,
+    }
 
 
 def verify_request_receipt_token(token: str | None, booking_id: int) -> tuple[bool, str]:

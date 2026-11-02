@@ -102,7 +102,7 @@ export function groupSchema(config: FormConfig) {
   return z.object({
     group_name: z.string().trim().min(1, "Enter the name of your group").max(255, "Keep the group name under 255 characters"),
     group_type: z.string().refine((value) => codes.has(value), "Choose the kind of group"),
-    area: z.string().trim().max(255, "Keep the area under 255 characters"),
+    area: z.string().trim().min(1, "Which area is the group from?").max(255, "Keep the area under 255 characters"),
     questions: z
       .array(z.string().trim().max(500, "Keep each question under 500 characters"))
       .transform((items) => items.filter((q) => q.length > 0))

@@ -152,7 +152,7 @@ function Dot() {
 // ---------------------------------------------------------------- overflow
 
 /** Only the status changes nothing else offers (lapsed, no-show, reopen); none → no menu. */
-const MENU_STATUSES: BookingStatus[] = ["lapsed", "no_show", "enquiry"];
+const MENU_STATUSES: BookingStatus[] = ["lapsed", "no_show", "requested"];
 
 function OverflowMenu({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();

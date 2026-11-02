@@ -43,7 +43,7 @@ RUNNABLE: dict[str, tuple[str, str]] = {
 }
 
 BOOKING_STATUSES = (
-    "enquiry",
+    "requested",
     "proforma_sent",
     "confirmed",
     "completed",

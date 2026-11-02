@@ -50,7 +50,7 @@ def rows():
         proforma_sent_at=datetime.combine(today - timedelta(days=10), datetime.min.time()),
         hold_expires_on=today + timedelta(days=1),
     )
-    c = make("TEST Enquiry Church", today + timedelta(days=20), "enquiry")
+    c = make("TEST Enquiry Church", today + timedelta(days=20), "requested")
     execute(
         """
         INSERT INTO email_messages (direction, from_name, from_email, subject, sent_at, booking_id, snippet)

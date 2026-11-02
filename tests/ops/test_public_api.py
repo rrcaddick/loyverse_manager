@@ -15,6 +15,7 @@ PAYLOAD = {
     "group_name": "TEST Public API Primary",
     "group_type": "school",
     "contact_name": "Api Tester",
+    "area": "Klapmuts",
     "contact_email": "api.tester@example.com",
     "contact_mobile": "082 706 9415",
     "visit_date": "2026-11-05",

@@ -6,7 +6,7 @@
 import { availability, type ActionId } from "./actions";
 import { daysFromToday, holdState } from "./lib";
 import { nextStep } from "./next-step";
-import type { BookingDetail } from "./types";
+import type { BookingDetail, Payment } from "./types";
 
 interface DueReminder {
   id: number;
@@ -50,11 +50,32 @@ export function onSiteMissing(booking: BookingDetail): boolean {
   return !ended && !booking.contacts.some((c) => c.on_site);
 }
 
-/** The tab's badge: the request review, the next step, a message waiting on us, due reminders, the lapse notice, proofs waiting, missing details. */
+/** Deposits recorded from the old booking sheet that no bank credit has matched and nobody has checked (2 Nov 2026). */
+export const SHEET_DEPOSIT_REF = "Imported from booking sheet";
+
+export function sheetDepositsToCheck(booking: BookingDetail): Payment[] {
+  if (booking.status !== "proforma_sent" && booking.status !== "confirmed") return [];
+  return booking.payments.filter((p) => p.reference === SHEET_DEPOSIT_REF && !p.bank_transaction_id && !p.verified_at);
+}
+
+/** What a request still lacks before a proforma can go out; empty when it is complete. */
+export function requestGaps(booking: BookingDetail): string[] {
+  if (booking.status !== "requested") return [];
+  const gaps: string[] = [];
+  if (!booking.contact_email) gaps.push("email address");
+  if (!booking.contact_mobile) gaps.push("mobile number");
+  if (!booking.group_type) gaps.push("kind of group");
+  if (!booking.area) gaps.push("area");
+  if (!booking.visit_date) gaps.push("visit date");
+  if (!(booking.people_booked > 0)) gaps.push("number of visitors");
+  return gaps;
+}
+
+/** The tab's badge: the request review, the next step, a message waiting on us, due reminders, the lapse notice, proofs waiting, sheet deposits to check, missing details. */
 export function attentionCount(booking: BookingDetail, unanswered = 0): number {
   const waiting = unanswered > 0 ? 1 : 0;
-  if (booking.status === "requested") return 1 + booking.pops.length + waiting;
+  if (booking.status === "requested") return 1 + booking.pops.length + waiting + (requestGaps(booking).length > 0 ? 1 : 0);
   const step = nextStep(booking);
-  return (step.primary ? 1 : 0) + waiting + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
+  return (step.primary ? 1 : 0) + waiting + dueReminders(booking).length + (lapseNoticeDue(booking) ? 1 : 0) + booking.pops.length + sheetDepositsToCheck(booking).length + (emailMissing(booking) ? 1 : 0) + (onSiteMissing(booking) ? 1 : 0);
 }
 

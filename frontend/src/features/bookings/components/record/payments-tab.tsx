@@ -109,7 +109,7 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
               rows.map((p) => (
                 <TableRow key={p.id} tabIndex={0} onClick={() => setSelected(p)} onKeyDown={(e) => (e.key === "Enter" || e.key === " " ? (e.preventDefault(), setSelected(p)) : undefined)} className="cursor-pointer outline-none even:bg-nested hover:bg-surface-hover even:hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-selection-ring focus-visible:ring-inset">
                   <TableCell className="py-2.5 pl-5 text-body tabular text-foreground">{p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)}</TableCell>
-                  <TableCell className="py-2.5 text-right text-body font-medium tabular text-green-text">{money(p.amount)}</TableCell>
+                  <TableCell className={cn("py-2.5 text-right text-body font-medium tabular", p.amount < 0 ? "text-red-text" : "text-green-text")}>{money(p.amount)}</TableCell>
                   <TableCell className="py-2.5 text-body text-foreground">{PAYMENT_KIND_LABELS[p.kind] ?? p.kind}</TableCell>
                   <TableCell className="max-w-[24rem] truncate py-2.5 text-body text-foreground" title={p.reference ?? undefined}>
                     {p.reference ?? <span className="text-muted-foreground">—</span>}
@@ -117,7 +117,7 @@ function PaymentsList({ booking }: { booking: BookingDetail }) {
                   <TableCell className="max-w-[18rem] truncate py-2.5 text-body text-muted-foreground" title={p.note ?? undefined}>
                     {p.note ?? <span>—</span>}
                   </TableCell>
-                  <TableCell className="py-2.5 pr-5 text-body text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : (p.recorded_by_name ?? "System")}</TableCell>
+                  <TableCell className="py-2.5 pr-5 text-body text-muted-foreground">{p.bank_transaction_id ? "Bank feed" : p.reference === "Imported from booking sheet" ? (p.verified_at ? "Booking sheet · checked" : "Booking sheet") : (p.recorded_by_name ?? "System")}</TableCell>
                 </TableRow>
               ))
             )}

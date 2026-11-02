@@ -45,7 +45,7 @@ def test_billing_fields_are_accepted_and_bounded(s):
 
 def test_buckets_cover_every_status_once():
     assert bm.BUCKETS["requests"] == ("requested",)
-    assert bm.BUCKETS["pending"] == ("enquiry", "proforma_sent")
+    assert bm.BUCKETS["pending"] == ("proforma_sent",)
     assert bm.BUCKETS["confirmed"] == ("confirmed",)
     assert bm.BUCKETS["lapsed"] == ("lapsed", "cancelled", "declined")
     assert bm.BUCKETS["past"] == ("completed", "no_show")
@@ -54,8 +54,8 @@ def test_buckets_cover_every_status_once():
 
 
 def test_counts_by_bucket_sums_statuses():
-    by_status = {"enquiry": 3, "proforma_sent": 4, "confirmed": 5, "completed": 6, "cancelled": 1, "lapsed": 2, "no_show": 1}
-    assert bm.counts_by_bucket(by_status) == {"requests": 0, "pending": 7, "confirmed": 5, "lapsed": 3, "past": 7, "all": 22}
+    by_status = {"requested": 2, "proforma_sent": 4, "confirmed": 5, "completed": 6, "cancelled": 1, "lapsed": 2, "no_show": 1}
+    assert bm.counts_by_bucket(by_status) == {"requests": 2, "pending": 4, "confirmed": 5, "lapsed": 3, "past": 7, "all": 21}
 
 
 # ------------------------------------------------------------------ DB ---
@@ -87,6 +87,7 @@ def test_billing_fields_round_trip_and_counts_endpoint():
         row = bs.create_booking(
             {
                 "group_name": "TEST billing pytest",
+                "status": "proforma_sent",
                 "group_type": "church",
                 "contact_name": "Bill Test",
                 "visit_date": "2026-11-14",
@@ -116,7 +117,7 @@ def test_billing_fields_round_trip_and_counts_endpoint():
             assert r.status_code == 200
             body = r.get_json()
             assert {"counts", "pending", "confirmed", "lapsed", "past", "all"} <= set(body)
-            assert body["pending"] == body["counts"]["enquiry"] + body["counts"]["proforma_sent"] and body["pending"] >= 1
+            assert body["pending"] == body["counts"]["proforma_sent"] and body["pending"] >= 1
             assert body["all"] == sum(body["counts"].values())
             r = c.get("/api/v1/bookings?bucket=pending&q=TEST+billing+pytest")
             assert r.status_code == 200 and r.get_json()["total"] == 1

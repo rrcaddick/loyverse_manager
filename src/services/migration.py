@@ -129,6 +129,7 @@ def load_sheet_bookings(sheet_file: Path, from_visit: date) -> list[dict]:
                 "reference": f"FY{b.doc_number}" if b.doc_number else None,
                 "doc_number": b.doc_number,
                 "group_name": re.sub(r"\s+", " ", b.group_name or "").strip(),
+                "area": re.sub(r"\s+", " ", getattr(b, "area", "") or "").strip() or None,
                 "contact_name": re.sub(r"\s+", " ", (b.contact_name or "")).strip().title(),
                 "contact_email": None,
                 "contact_mobile": b.contact_mobile,
@@ -293,7 +294,7 @@ def plan_booking(
             if when > newest.get(int(thrid), datetime.min):
                 newest[int(thrid)] = when
 
-    # 1. reference, 2. addresses, 3. phone, 4. group name, 5. surname.
+    # 1. reference, 2. addresses, 3. phone, 4. group name, 5. area, 6. surname.
     q = mt.reference_query(bf.doc_number)
     if q:
         _collect("reference", _run_query(imap, "reference", q, plan))
@@ -307,6 +308,9 @@ def plan_booking(
         _collect("group", _run_query(imap, "group", q, plan))
     else:
         plan.notes.append("group name has no distinctive words")
+    q = mt.area_query(bf.area)
+    if q:
+        _collect("area", _run_query(imap, "area", q, plan))
     q = mt.surname_query(bf.contact_name)
     if q:
         _collect("surname", _run_query(imap, "surname", q, plan))

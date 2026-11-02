@@ -282,7 +282,6 @@ export interface OpsLogs {
 /** Booking lifecycle (docs §5). Used by StatusBadge and the pages to come. */
 export type BookingStatus =
   | "requested"
-  | "enquiry"
   | "proforma_sent"
   | "confirmed"
   | "completed"
@@ -293,7 +292,6 @@ export type BookingStatus =
 
 export const BOOKING_STATUSES: BookingStatus[] = [
   "requested",
-  "enquiry",
   "proforma_sent",
   "confirmed",
   "completed",

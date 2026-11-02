@@ -11,7 +11,7 @@ Views, in pipeline order, and what each selects:
     reply          PARTIES waiting on us (src/services/waiting.py): a booking
                    with all its contacts and threads, or an unattached sender
                    address, with at least one unanswered inbound message
-    new_requests   status enquiry with no proforma sent
+    new_requests   status requested (form, converted enquiry, saved by hand)
     send_tickets   confirmed, no ticket by either channel, visit today or later
     reminders      due today or earlier, not stale, kind other than ``lapse``
                    (holds have their own view); contiguous by kind
@@ -46,6 +46,7 @@ from decimal import Decimal
 from typing import Any, Mapping
 
 from src.models.base import loads, query, serialize_row
+from src.services.bank import IMPORT_PLACEHOLDER_REF
 from src.services.reminders import KIND_TITLES, LIVE_DUE_SQL
 from src.services.settings import get_settings
 from src.utils.date import get_today
@@ -84,7 +85,7 @@ SOURCE_LABELS = {
     "manual": "Added by hand",
 }
 
-TENTATIVE = ("enquiry", "proforma_sent")
+TENTATIVE = ("proforma_sent",)
 
 BOOKING_COLS = (
     "b.id AS booking_id, b.reference, b.group_name, b.visit_date, b.status, b.people_booked"
@@ -281,7 +282,7 @@ def _new_request_rows(today: date) -> list[dict]:
                (SELECT COUNT(*) FROM booking_questions q
                  WHERE q.booking_id = b.id AND q.answer IS NULL) AS unanswered
         FROM bookings b
-        WHERE b.status = 'requested' OR (b.status = 'enquiry' AND b.proforma_sent_at IS NULL)
+        WHERE b.status = 'requested'
         ORDER BY COALESCE(b.enquiry_date, DATE(b.created_at)), b.created_at, b.id
         """
     )
@@ -445,6 +446,43 @@ def _pop_rows(today: date) -> list[dict]:
     return out
 
 
+def _sheet_deposit_rows(today: date) -> list[dict]:
+    """Deposits recorded from the old booking sheet that no bank credit has
+    matched: a check, not a fact (owner, 2 Nov 2026). Find payment absorbs the
+    entry; Keep marks it checked."""
+    rows = query(
+        """
+        SELECT p.id, p.booking_id, p.amount, p.paid_on, p.created_at,
+               b.reference AS booking_reference, b.group_name, b.visit_date, b.status, b.people_booked
+        FROM payments p JOIN bookings b ON b.id = p.booking_id
+        WHERE p.reference = %s AND p.bank_transaction_id IS NULL AND p.verified_at IS NULL
+          AND b.status IN ('proforma_sent', 'confirmed')
+        ORDER BY p.paid_on
+        """,
+        (IMPORT_PLACEHOLDER_REF,),
+    )
+    out = []
+    for r in rows:
+        waiting = _days_since(r.get("created_at"), today)
+        context = f"{_rands(r['amount'])} deposit recorded from the booking sheet on {_short_day(r.get('paid_on'))} · no bank credit found"
+        chip = _chip({**r, "reference": r["booking_reference"]})
+        out.append(
+            _row(
+                "pop",
+                f"pop:sheet:{r['id']}",
+                booking=chip,
+                title=r["group_name"],
+                context=context,
+                amount=r.get("amount"),
+                age_days=waiting,
+                primary=_act("Check", "open_booking", booking_id=int(r["booking_id"]), tab="attention"),
+                secondary=[],
+                sort_key=_key(TIER_MONEY, _as_date(r.get("paid_on")) or today, int(r["id"])),
+            )
+        )
+    return out
+
+
 # ------------------------------------------------------------------ money ---
 
 
@@ -587,7 +625,7 @@ def _hold_rows(today: date, lapse_days_before: int) -> list[dict]:
                r.id AS reminder_id
         FROM bookings b
         LEFT JOIN booking_reminders r ON r.booking_id = b.id AND r.kind = 'lapse'
-        WHERE b.status IN ('enquiry', 'proforma_sent')
+        WHERE b.status = 'proforma_sent'
           AND COALESCE(b.hold_expires_on, DATE_SUB(b.visit_date, INTERVAL %s DAY)) <= %s
           AND b.visit_date >= %s
           AND {UNPAID_SQL}
@@ -664,7 +702,7 @@ def snapshot(today: date | None = None) -> dict:
         "new_requests": _new_request_rows(today),
         "enquiries": _enquiry_rows(today),
         "allocate": _allocate_rows(today),
-        "pops": _pop_rows(today),
+        "pops": _pop_rows(today) + _sheet_deposit_rows(today),
         "send_tickets": _ticket_rows(today),
         "reminders": _reminder_rows(today),
         "holds": _hold_rows(today, int(cfg["lapse_days_before"])),

@@ -64,23 +64,22 @@ GROUP_TYPE_FALLBACK = "other"
 # ------------------------------------------------------------ status machine --
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    # A form request waits for review: accept puts it on the calendar (enquiry,
-    # then the proforma goes out) or decline closes it without a word being sent.
-    "requested": frozenset({"enquiry", "proforma_sent", "declined", "cancelled"}),
-    "enquiry": frozenset({"proforma_sent", "confirmed", "cancelled", "lapsed"}),
+    # A request waits for approval (2 Nov 2026): sending the proforma is the
+    # approval and makes it pending; decline closes it without a word sent.
+    "requested": frozenset({"proforma_sent", "declined", "cancelled"}),
     "proforma_sent": frozenset({"confirmed", "cancelled", "lapsed"}),
     # confirmed → proforma_sent is the revert when a matched deposit is removed
     # (bank unmatch) and the deposit is no longer covered.
     "confirmed": frozenset({"completed", "cancelled", "no_show", "proforma_sent"}),
     "completed": frozenset(),
-    "cancelled": frozenset({"enquiry"}),
-    "lapsed": frozenset({"enquiry"}),
+    # Reopening brings a closed booking back as a request.
+    "cancelled": frozenset({"requested"}),
+    "lapsed": frozenset({"requested"}),
     "no_show": frozenset(),
-    "declined": frozenset({"requested", "enquiry"}),
+    "declined": frozenset({"requested"}),
 }
 
 STATUS_STAMPS = {
-    "enquiry": "accepted_at",
     "declined": "declined_at",
     "proforma_sent": "proforma_sent_at",
     "confirmed": "confirmed_at",
@@ -91,8 +90,7 @@ STATUS_STAMPS = {
 
 STATUS_LABELS = {
     "requested": "Request",
-    "enquiry": "Enquiry",
-    "proforma_sent": "Proforma sent",
+    "proforma_sent": "Pending",
     "confirmed": "Confirmed",
     "completed": "Completed",
     "cancelled": "Cancelled",
@@ -657,7 +655,7 @@ def create_booking(
         raise BookingError("At least one person is required", {"people_booked": "Must be at least 1"})
 
     questions = clean.pop("questions", [])
-    status = clean.pop("status", None) or "enquiry"
+    status = clean.pop("status", None) or "requested"
     doc_number = clean.pop("doc_number", None) or doc_number
     if doc_number is not None:
         if booking_model.doc_number_exists(doc_number):
@@ -840,9 +838,12 @@ def set_status(booking_id: int, status: str, actor: int | None, reason: str | No
     reverting = booking["status"] == "confirmed" and status == "proforma_sent"
     if stamp_col and not (reverting and booking.get(stamp_col)):
         fields[stamp_col] = now_local()
-    if status == "enquiry":  # reopen
+    if status == "requested" and booking["status"] in ("cancelled", "lapsed", "declined"):  # reopen
         fields["cancelled_at"] = None
         fields["lapsed_at"] = None
+        fields["declined_at"] = None
+    if booking["status"] == "requested" and status == "proforma_sent":  # the approval
+        fields["accepted_at"] = now_local()
     if reverting:  # the deposit is no longer covered: the confirmation is undone
         fields["confirmed_at"] = None
     with transaction() as conn:
@@ -1362,17 +1363,19 @@ def get_booking_detail(booking_id: int, settings: Settings | None = None) -> dic
 
 
 def accept_request(booking_id: int, data: Mapping[str, Any] | None, actor: int | None) -> dict:
-    """Review done: apply any edits, put the request on the calendar as an
-    enquiry. The proforma is sent by the caller (the API's send-proforma
-    action) so the send stays a visible, logged step."""
+    """Review done: apply any edits. The proforma is sent by the caller (the
+    API's send-proforma action), and that send is what makes the request
+    pending, so the approval stays a visible, logged step."""
     booking = _require(booking_id)
     if booking["status"] != "requested":
         raise InvalidTransition("Only a request can be accepted", {"status": "Not a request"})
     changes = {k: v for k, v in dict(data or {}).items() if k != "status"}
     if changes:
         update_booking(booking_id, changes, actor)
-    set_status(booking_id, "enquiry", actor, reason="Request accepted")
-    return _require(booking_id)
+    booking = _require(booking_id)
+    if not booking.get("contact_email"):
+        raise BookingError("An email address is needed to send the proforma", {"contact_email": "Needed to send the proforma"})
+    return booking
 
 
 def decline_request(booking_id: int, reason: str | None, actor: int | None) -> dict:
@@ -1404,7 +1407,6 @@ EMAIL_ACTION_LABELS = {
 }
 STATUS_ACTION_LABELS = {
     "requested": "Request Received",
-    "enquiry": "Request Accepted",
     "proforma_sent": "Proforma Sent",
     "confirmed": "Confirmed",
     "completed": "Visit Completed",

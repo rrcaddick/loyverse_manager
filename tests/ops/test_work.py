@@ -77,7 +77,7 @@ def rows():
     r["arrival_yesterday"] = make("TEST Arrival Yesterday", today - timedelta(days=1), "confirmed", confirmed_at=now)
     r["arrival_today"] = make("TEST Arrival Today", today, "confirmed", confirmed_at=now)
     r["request"] = make(
-        "TEST New Request", today + timedelta(days=20), "enquiry",
+        "TEST New Request", today + timedelta(days=20), "requested",
         enquiry_date=today - timedelta(days=4), source="form",
     )
     r["ticket"] = make(
@@ -250,7 +250,7 @@ def test_new_requests_tickets_and_reminders(rows):
     views = work.snapshot()["views"]
     req = by_id(views["new_requests"], f"new_request:{rows['request']['id']}")
     assert req["context"] == "Form request · Test Contact · waiting 4 d" and req["age_days"] == 4
-    assert req["primary"] == {"verb": "Send proforma", "action": "open_booking", "booking_id": rows["request"]["id"]}
+    assert req["primary"] == {"verb": "Review request", "action": "open_booking", "booking_id": rows["request"]["id"]}
     assert req["secondary"] == []
 
     ticket = by_id(views["send_tickets"], f"ticket:{rows['ticket']['id']}")

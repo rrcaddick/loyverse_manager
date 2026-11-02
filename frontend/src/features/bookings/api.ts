@@ -163,6 +163,11 @@ export function useRecordPayment(id: number) {
   });
 }
 
+/** A deposit recorded from the old booking sheet, checked and kept as it is (2 Nov 2026). */
+export function useVerifyPayment(id: number) {
+  return useDetailMutation<number>(id, (paymentId) => api.post<BookingDetail>(`/bookings/${id}/payments/${paymentId}/verify`, {}));
+}
+
 export function useDeletePayment(id: number) {
   return useDetailMutation<number>(id, (paymentId) => api.delete<BookingDetail>(`/bookings/${id}/payments/${paymentId}`), {
     successMessage: "Payment removed",

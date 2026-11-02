@@ -10,7 +10,8 @@ from decimal import Decimal
 
 from src.models.base import execute, query, query_one, serialize_row
 
-KINDS = ("eft", "cash", "card", "cash_deposit", "other")
+# ``refund``: money out, stored as a negative amount (2 Nov 2026).
+KINDS = ("eft", "cash", "card", "cash_deposit", "refund", "other")
 
 
 def insert(
@@ -31,6 +32,17 @@ def insert(
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (booking_id, kind, amount, paid_on, reference, bank_transaction_id, note, recorded_by),
+        conn=conn,
+    )
+
+
+def mark_verified(payment_id: int, user_id: int | None, conn=None) -> int:
+    """A deposit recorded from the old booking sheet, checked by a person."""
+    from datetime import datetime
+
+    return execute(
+        "UPDATE payments SET verified_at = %s, verified_by = %s WHERE id = %s AND verified_at IS NULL",
+        (datetime.now().replace(microsecond=0), user_id, int(payment_id)),
         conn=conn,
     )
 

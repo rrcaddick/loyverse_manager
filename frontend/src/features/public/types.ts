@@ -40,6 +40,8 @@ export interface BookingRequestInput {
   /** Honeypot — always empty. */
   website: string;
   turnstile_token?: string;
+  /** The office saved this request and sent the form link: the answers complete it. */
+  complete_token?: string;
 }
 
 /** What the confirmation page may show: no phone, no prices, no notes. */

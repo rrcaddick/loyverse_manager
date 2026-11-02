@@ -14,7 +14,6 @@ from src.models.base import execute, query, query_one, serialize_row
 
 STATUSES = (
     "requested",
-    "enquiry",
     "proforma_sent",
     "confirmed",
     "completed",
@@ -23,14 +22,15 @@ STATUSES = (
     "no_show",
     "declined",
 )
-ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed", "completed")
-TENTATIVE_STATUSES = ("enquiry", "proforma_sent")
+# A request is not on the calendar until its proforma has gone out (2 Nov 2026).
+ACTIVE_STATUSES = ("proforma_sent", "confirmed", "completed")
+TENTATIVE_STATUSES = ("proforma_sent",)
 FIRM_STATUSES = ("confirmed", "completed")
 
 # The bookings list tabs (docs/redesign-spec.md §6). ``all`` is no filter.
 BUCKETS: dict[str, tuple[str, ...]] = {
     "requests": ("requested",),
-    "pending": ("enquiry", "proforma_sent"),
+    "pending": ("proforma_sent",),
     "confirmed": ("confirmed",),
     "lapsed": ("lapsed", "cancelled", "declined"),
     "past": ("completed", "no_show"),
@@ -159,7 +159,7 @@ def another_group_on_day(visit_date: date, exclude_id: int | None = None, conn=N
     row = query_one(
         """
         SELECT id FROM bookings
-        WHERE visit_date = %s AND status IN ('enquiry', 'proforma_sent', 'confirmed', 'completed')
+        WHERE visit_date = %s AND status IN ('proforma_sent', 'confirmed', 'completed')
           AND id <> %s
         ORDER BY people_booked DESC, id LIMIT 1
         """,

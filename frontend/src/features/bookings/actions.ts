@@ -15,6 +15,7 @@ import { ACTIVE_STATUSES, FIRM_STATUSES, TENTATIVE_STATUSES, type BookingDetail,
 
 export type ActionId =
   | "send-proforma"
+  | "send-form"
   | "send-invoice"
   | "send-final-invoice"
   | "send-ticket"
@@ -48,6 +49,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   "send-ticket-whatsapp": "WhatsApp vehicle ticket",
   "send-payment-confirmation": "Send payment confirmation",
   "send-acknowledgement": "Send acknowledgement",
+  "send-form": "Send form",
   "send-answers": "Send answers",
   "send-expiry": "Send expiry notice",
   "reminder:still_interested": "Send “Still interested?”",
@@ -79,9 +81,12 @@ function hiddenUnless(b: BookingDetail, allowed: BookingStatus[]): Availability 
 export function availability(b: BookingDetail, action: ActionId): Availability {
   switch (action) {
     case "send-proforma":
-      return hiddenUnless(b, ACTIVE_STATUSES) ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, ["requested", ...ACTIVE_STATUSES]) ?? requireEmail(b) ?? OK;
     case "send-acknowledgement":
-      return hiddenUnless(b, ["enquiry"]) ?? requireEmail(b) ?? OK;
+      return hiddenUnless(b, ["requested"]) ?? requireEmail(b) ?? OK;
+    case "send-form":
+      // A saved request with gaps: the customer completes it on the form.
+      return hiddenUnless(b, ["requested"]) ?? requireEmail(b) ?? OK;
     case "send-invoice":
       // After the deposit: the invoice on the booked numbers, 80 % of the balance due before the visit.
       if (!(b.finance.deposit_covered && b.finance.paid_total > 0)) return hiddenUnless(b, FIRM_STATUSES) ?? { enabled: false, reason: "The invoice goes out once the deposit has been paid" };
@@ -153,5 +158,5 @@ export const STATUS_CHANGE_COPY: Partial<Record<BookingStatus, { label: string; 
   cancelled: { label: "Cancel booking", description: "The customer is not coming. Nothing is emailed; the day frees up on the calendar.", destructive: true },
   lapsed: { label: "Mark expired", description: "The booking expired without a deposit. To email the customer as well, use “Send expiry notice”.", destructive: true },
   no_show: { label: "Mark no-show", description: "Confirmed but nobody arrived on the day.", destructive: true },
-  enquiry: { label: "Reopen as enquiry", description: "Brings a cancelled or expired booking back as a live enquiry." },
+  requested: { label: "Reopen as request", description: "Brings a cancelled, declined or expired booking back as a request." },
 };

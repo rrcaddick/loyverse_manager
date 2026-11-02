@@ -42,7 +42,7 @@ from src.utils.logging import setup_logger
 
 logger = setup_logger("inbound")
 
-OPEN_STATUSES = ("requested", "enquiry", "proforma_sent", "confirmed")
+OPEN_STATUSES = ("requested", "proforma_sent", "confirmed")
 LABEL_OUTCOMES = {"booking": "label_bookings", "allocate": "label_bookings", "enquiry": "label_enquiries"}
 
 CERTAIN_LOCAL_RE = re.compile(r"^(no-?reply|donotreply|do-?not-?reply|mailer-daemon|postmaster|bounce[s]?|bounces?-)", re.I)
@@ -191,7 +191,7 @@ def open_bookings(today: date | None = None) -> list[dict]:
     days = int(_cfg().get("active_days_after_visit", 14))
     rows = query(
         f"""
-        SELECT b.id, b.reference, b.doc_number, b.group_name, b.contact_name, b.contact_email, b.contact_mobile,
+        SELECT b.id, b.reference, b.doc_number, b.group_name, b.area, b.contact_name, b.contact_email, b.contact_mobile,
                b.visit_date, b.status, b.enquiry_date, b.email_thread_id
         FROM bookings b
         WHERE b.status IN ({','.join(['%s'] * len(OPEN_STATUSES))})

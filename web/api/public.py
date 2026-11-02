@@ -105,8 +105,26 @@ def booking_request():
         )
 
     clean.pop("policy_accepted", None)
-    clean["status"] = "requested"  # reviewed and accepted before it is a booking
-    booking = public_form.create_booking_compat(clean, source="form", actor=None)
+    complete_id = public_form.booking_id_from_complete_token(data.get("complete_token"))
+    if complete_id:
+        # The customer is finishing a request the office saved (2 Nov 2026).
+        from src.models import booking as booking_model
+        from src.services import booking as booking_service
+
+        existing = booking_model.get(complete_id)
+        if existing is None or existing.get("status") != "requested":
+            raise ApiError("invalid_state", "This request has already been dealt with. Send a new one if you need to.", 409)
+        questions = clean.pop("questions", None)
+        booking_service.update_booking(complete_id, clean, None)
+        if questions:
+            from src.models import booking_question
+
+            for q in questions:
+                booking_question.add(complete_id, str(q))
+        booking = booking_model.get(complete_id)
+    else:
+        clean["status"] = "requested"  # reviewed and accepted before it is a booking
+        booking = public_form.create_booking_compat(clean, source="form", actor=None)
     booking_id = int(booking["id"])
     enquiry_token = data.get("enquiry_token") or data.get("enquiry")
     if enquiry_token:
@@ -125,6 +143,21 @@ def booking_request():
         summary["acknowledged"] = True
     summary["token"] = public_form.request_receipt_token(booking_id)
     return ok(summary, 201)
+
+
+@bp.get("/booking-request/prefill")
+@public_endpoint
+def booking_request_prefill():
+    """What a saved request already holds, for the form link the office sent."""
+    booking_id = public_form.booking_id_from_complete_token(request.args.get("token"))
+    if not booking_id:
+        raise ApiError("not_found", "This link is no longer valid", 404)
+    from src.models import booking as booking_model
+
+    booking = booking_model.get(booking_id)
+    if booking is None or booking.get("status") != "requested":
+        raise ApiError("invalid_state", "This request has already been dealt with", 409)
+    return ok(public_form.prefill_for_request(booking))
 
 
 @bp.get("/requests/<int:booking_id>")

@@ -210,7 +210,7 @@ def list_bookings():
 
 BUCKET_STATUSES = {
     "requests": ("requested",),
-    "pending": ("enquiry", "proforma_sent"),
+    "pending": ("proforma_sent",),
     "confirmed": ("confirmed",),
     "lapsed": ("lapsed", "cancelled"),
     "past": ("completed", "no_show"),
@@ -249,10 +249,22 @@ def status_counts():
 
 @bp.post("")
 def create_booking():
+    """Save makes a request and sends nothing; Create booking (``send_proforma``)
+    makes it pending by sending the proforma at once (2 Nov 2026)."""
     data = parse_json()
     source = data.get("source") or "manual"
+    send_proforma = bool(data.pop("send_proforma", False))
+    if send_proforma and not str(data.get("contact_email") or "").strip():
+        raise ApiError("validation_error", "An email address is needed to send the proforma", 422, {"contact_email": "Needed to send the proforma"})
     booking = booking_service.create_booking(data, source, current_user_id())
-    return ok(booking_service.get_booking_detail(booking["id"]), 201)
+    result = None
+    if send_proforma:
+        result = ACTIONS["send-proforma"](_booking_or_404(int(booking["id"])), {}, current_user_id())
+    detail = booking_service.get_booking_detail(booking["id"])
+    if result is not None:
+        detail["action"] = "send-proforma"
+        detail["action_result"] = result
+    return ok(detail, 201)
 
 
 # -------------------------------------------------------------- single -------
@@ -534,13 +546,29 @@ def act_send_acknowledgement(booking: dict, data: dict, actor: int | None) -> di
     return _send("acknowledgement", booking, actor, form_url=BOOKING_FORM_URL)
 
 
+def act_send_form(booking: dict, data: dict, actor: int | None) -> dict:
+    """Send the customer the booking form with what we have filled in; their
+    answers complete this request (a deliberate step on a saved request)."""
+    _require_status(booking, ("requested",), "Sending the form")
+    from src.services import public_form
+
+    token = public_form.request_complete_token(int(booking["id"]))
+    if not token:
+        raise ApiError("not_configured", "The form link cannot be signed on this build", 500)
+    sep = "&" if "?" in BOOKING_FORM_URL else "?"
+    return _send("convert_enquiry", booking, actor, form_url=f"{BOOKING_FORM_URL}{sep}complete={token}")
+
+
 def act_issue_proforma(booking: dict, data: dict, actor: int | None) -> dict:
     doc = _issue(booking, "proforma", actor)
     return {"document": _document_public(doc)}
 
 
+PROFORMA_STATUSES = ("requested", "proforma_sent", "confirmed")
+
+
 def act_send_proforma(booking: dict, data: dict, actor: int | None) -> dict:
-    _require_status(booking, ACTIVE_STATUSES, "Sending a proforma")
+    _require_status(booking, PROFORMA_STATUSES, "Sending a proforma")
     latest = booking_service.latest_document(booking["id"], "proforma")
     if latest is None or _proforma_is_stale(booking, latest):
         latest = _issue(booking, "proforma", actor)
@@ -554,7 +582,7 @@ def act_send_proforma(booking: dict, data: dict, actor: int | None) -> dict:
         hold_expires_on=booking.get("hold_expires_on"),
     )
     booking_service.stamp(booking["id"], "proforma_sent_at")
-    if booking["status"] == "enquiry":
+    if booking["status"] == "requested":
         booking_service.set_status(booking["id"], "proforma_sent", actor, reason="Proforma emailed")
     return {**result, "document": _document_public(latest)}
 
@@ -740,6 +768,7 @@ ACTIONS: dict[str, Callable[[dict, dict, int | None], dict]] = {
     "send-payment-confirmation": act_send_payment_confirmation,
     "send-reminder": act_send_reminder,
     "send-expiry": act_send_expiry,
+    "send-form": act_send_form,
     "send-answers": act_send_answers,
     "confirm": act_confirm,
 }
@@ -815,6 +844,22 @@ def accept_request(booking_id: int):
     detail["action"] = "accept"
     detail["action_result"] = result
     return ok(detail)
+
+
+@bp.post("/<int:booking_id>/payments/<int:payment_id>/verify")
+def verify_payment(booking_id: int, payment_id: int):
+    """Keep a deposit recorded from the old booking sheet as it is: checked by a
+    person, no bank credit expected (2 Nov 2026)."""
+    from src.models import payment as payment_model
+    from src.models.booking_event import add as add_event
+
+    booking = _booking_or_404(booking_id)
+    payment = payment_model.get(payment_id)
+    if payment is None or int(payment["booking_id"]) != int(booking["id"]):
+        raise ApiError("not_found", "Payment not found on this booking", 404)
+    if payment_model.mark_verified(payment_id, current_user_id()):
+        add_event(booking_id, "payment_verified", f"Sheet deposit of {payment['amount']} kept as recorded", {"payment_id": int(payment_id)}, current_user_id())
+    return _detail(booking_id)
 
 
 @bp.post("/<int:booking_id>/decline")

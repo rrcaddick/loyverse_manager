@@ -24,18 +24,18 @@ def test_every_status_has_a_transition_entry():
 @pytest.mark.parametrize(
     "current, new",
     [
-        ("enquiry", "proforma_sent"),
-        ("enquiry", "confirmed"),
-        ("enquiry", "cancelled"),
-        ("enquiry", "lapsed"),
+        ("requested", "proforma_sent"),  # the approval: the proforma goes out
+        ("requested", "declined"),
+        ("requested", "cancelled"),
         ("proforma_sent", "confirmed"),
         ("proforma_sent", "cancelled"),
         ("proforma_sent", "lapsed"),
         ("confirmed", "completed"),
         ("confirmed", "cancelled"),
         ("confirmed", "proforma_sent"),  # bank unmatch: the deposit is no longer covered
-        ("cancelled", "enquiry"),
-        ("lapsed", "enquiry"),
+        ("cancelled", "requested"),
+        ("lapsed", "requested"),
+        ("declined", "requested"),
     ],
 )
 def test_allowed(current, new):
@@ -45,15 +45,15 @@ def test_allowed(current, new):
 @pytest.mark.parametrize(
     "current, new",
     [
-        ("enquiry", "completed"),
-        ("enquiry", "no_show"),
-        ("proforma_sent", "enquiry"),
+        ("requested", "confirmed"),
+        ("requested", "completed"),
+        ("proforma_sent", "requested"),
         ("proforma_sent", "completed"),
-        ("confirmed", "enquiry"),
+        ("confirmed", "requested"),
         ("confirmed", "lapsed"),
         ("completed", "cancelled"),
-        ("completed", "enquiry"),
-        ("no_show", "enquiry"),
+        ("completed", "requested"),
+        ("no_show", "requested"),
         ("cancelled", "confirmed"),
         ("lapsed", "proforma_sent"),
     ],
@@ -65,12 +65,12 @@ def test_disallowed(current, new):
 
 def test_same_status_is_rejected():
     with pytest.raises(InvalidTransition):
-        check_transition("enquiry", "enquiry", FUTURE, TODAY)
+        check_transition("proforma_sent", "proforma_sent", FUTURE, TODAY)
 
 
 def test_unknown_status_is_rejected():
     with pytest.raises(InvalidTransition):
-        check_transition("enquiry", "wibble", FUTURE, TODAY)
+        check_transition("proforma_sent", "wibble", FUTURE, TODAY)
 
 
 def test_no_show_only_after_visit_date():
@@ -85,4 +85,4 @@ def test_allowed_transitions_lists_only_valid_moves():
     assert allowed_transitions("confirmed", FUTURE, TODAY) == ["proforma_sent", "completed", "cancelled"]
     assert allowed_transitions("confirmed", PAST, TODAY) == ["proforma_sent", "completed", "cancelled", "no_show"]
     assert allowed_transitions("completed", PAST, TODAY) == []
-    assert allowed_transitions("cancelled", FUTURE, TODAY) == ["enquiry"]
+    assert allowed_transitions("cancelled", FUTURE, TODAY) == ["requested"]

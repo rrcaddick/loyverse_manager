@@ -5,7 +5,7 @@
  * a Work item. A request's review (Accept, Decline) is the first item.
  */
 
-import { AtSign, Bell, CheckCircle2, FileCheck, Mail, UserCheck } from "lucide-react";
+import { AtSign, Bell, CheckCircle2, FileCheck, Landmark, Mail, Send, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -14,13 +14,14 @@ import { NextStepStrip, type Urgency } from "@/components/next-step-strip";
 import { Button } from "@/components/ui/button";
 import { usePartyDone } from "@/features/mail/api";
 import { errorMessage } from "@/lib/api";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 
 import { availability } from "../../actions";
-import { dueReminders, emailMissing, lapseNoticeDue, onSiteMissing } from "../../attention";
+import { dueReminders, emailMissing, lapseNoticeDue, onSiteMissing, requestGaps, sheetDepositsToCheck } from "../../attention";
 import { relativeTo } from "../../lib";
 import { nextStep } from "../../next-step";
 import { REMINDER_KIND_LABELS, type BookingDetail } from "../../types";
+import { useVerifyPayment } from "../../api";
 import { useBookingActions } from "../../use-booking-actions";
 import { NextStepCard } from "../record-header";
 import { RequestBanner } from "./request-banner";
@@ -41,6 +42,7 @@ export function AttentionTab({
 }) {
   const actions = useBookingActions();
   const partyDone = usePartyDone();
+  const verifyPayment = useVerifyPayment(booking.id);
   const reminders = booking.status === "requested" ? [] : dueReminders(booking);
   const step = nextStep(booking);
   const items: { key: string; urgency: Urgency; icon: typeof Bell; title: string; detail: string; action: ReactNode; secondary?: ReactNode }[] = [];
@@ -131,6 +133,59 @@ export function AttentionTab({
       action: (
         <Button size="sm" className="min-w-32" onClick={onContacts}>
           Open contacts
+        </Button>
+      ),
+    });
+  }
+  const gaps = requestGaps(booking);
+  if (gaps.length > 0) {
+    const av = availability(booking, "send-form");
+    items.push({
+      key: "gaps",
+      urgency: "amber",
+      icon: Send,
+      title: `Still missing: ${gaps.join(", ")}`,
+      detail: "Send the customer the booking form with what we have filled in; their answers complete this request. Or fill it in here.",
+      action: (
+        <Button size="sm" className="min-w-32" disabled={!av.enabled} title={av.enabled ? undefined : av.reason} onClick={() => actions.send("send-form")}>
+          Send form
+        </Button>
+      ),
+      secondary: (
+        <Button size="sm" variant="outline-primary" className="min-w-32" onClick={() => actions.openEdit()}>
+          Edit request
+        </Button>
+      ),
+    });
+  }
+  for (const p of sheetDepositsToCheck(booking)) {
+    items.push({
+      key: `sheet-${p.id}`,
+      urgency: "amber",
+      icon: Landmark,
+      title: `${formatMoney(p.amount, { compact: true })} deposit recorded from the booking sheet`,
+      detail: `Entered ${p.paid_on ? formatDate(p.paid_on) : formatDate(p.created_at)} · no bank credit found. Find the credit, or keep it as recorded if it was paid another way.`,
+      action: (
+        <Button size="sm" className="min-w-32" onClick={() => actions.openFindPayment({ amount: p.amount })}>
+          Find payment
+        </Button>
+      ),
+      secondary: (
+        <Button
+          size="sm"
+          variant="outline-primary"
+          className="min-w-32"
+          disabled={verifyPayment.isPending}
+          onClick={async () => {
+            try {
+              await verifyPayment.mutateAsync(p.id);
+              toast.success("Kept as recorded");
+            } catch (err) {
+              toast.error(errorMessage(err));
+            }
+          }}
+        >
+          Keep
         </Button>
       ),
     });

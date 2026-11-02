@@ -28,7 +28,7 @@ from src.models.base import (
 )
 from src.utils.date import get_today
 
-ACTIVE_BOOKING_STATUSES = ("enquiry", "proforma_sent", "confirmed")
+ACTIVE_BOOKING_STATUSES = ("requested", "proforma_sent", "confirmed")
 INACTIVE_BOOKING_STATUSES = ("cancelled", "lapsed")
 VIEWS = ("review", "all", "unmatched", "booking")
 REVIEW_STATUSES = ("none", "pending", "resolved", "not_booking")

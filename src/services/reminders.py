@@ -32,8 +32,8 @@ from src.utils.logging import setup_logger
 
 logger = setup_logger("reminders")
 
-ACTIVE_STATUSES = ("enquiry", "proforma_sent", "confirmed")
-UNPAID_STATUSES = ("enquiry", "proforma_sent")
+ACTIVE_STATUSES = ("requested", "proforma_sent", "confirmed")
+UNPAID_STATUSES = ("proforma_sent",)
 REMINDER_KINDS = ("still_interested", "deposit_reminder", "final_details", "lapse")
 
 # Stale rule thresholds (days).
@@ -363,7 +363,7 @@ def _needs_reply(today: date) -> list[dict]:
         FROM ranked r
         JOIN bookings b ON b.id = r.booking_id
         WHERE r.rn = 1 AND r.direction = 'inbound'
-          AND (b.status IN ('enquiry', 'proforma_sent', 'confirmed') OR b.visit_date >= %s)
+          AND (b.status IN ('requested', 'proforma_sent', 'confirmed') OR b.visit_date >= %s)
         ORDER BY r.sent_at
         """,
         (today - timedelta(days=14),),
@@ -413,7 +413,7 @@ def _new_requests() -> list[dict]:
                (SELECT COUNT(*) FROM booking_questions q
                  WHERE q.booking_id = b.id AND q.answer IS NULL) AS unanswered_count
         FROM bookings b
-        WHERE b.status = 'enquiry' AND b.proforma_sent_at IS NULL
+        WHERE b.status = 'requested'
         ORDER BY b.created_at
         """
     )
@@ -543,7 +543,7 @@ def _visits_this_week(today: date) -> list[dict]:
                b.arrived_count, b.ticket_sent_at, b.ticket_emailed_at,
                {PAID_TOTAL_SQL} AS paid_total
         FROM bookings b
-        WHERE b.status IN ('confirmed', 'proforma_sent', 'enquiry')
+        WHERE b.status IN ('confirmed', 'proforma_sent')
           AND b.visit_date BETWEEN %s AND %s
         ORDER BY b.visit_date, b.group_name
         """,
@@ -596,7 +596,7 @@ def _lapsing(today: date, lapse_days_before: int) -> list[dict]:
                COALESCE(b.hold_expires_on, DATE_SUB(b.visit_date, INTERVAL %s DAY)) AS hold_on,
                {PAID_TOTAL_SQL} AS paid_total
         FROM bookings b
-        WHERE b.status IN ('enquiry', 'proforma_sent')
+        WHERE b.status = 'proforma_sent'
           AND COALESCE(b.hold_expires_on, DATE_SUB(b.visit_date, INTERVAL %s DAY)) <= %s
           AND b.visit_date >= %s
           AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id AND p.amount > 0)

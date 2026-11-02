@@ -46,7 +46,7 @@ function spec(booking: BookingDetail, action: ActionId): SendSpec {
         confirmLabel: "Send proforma",
         to: email,
         attachment: proformaAttachment,
-        effect: booking.status === "enquiry" ? "Status becomes Proforma sent and the hold clock starts." : "Records when the proforma was sent.",
+        effect: booking.status === "requested" ? "The request becomes a pending booking and the expiry clock starts." : "Records when the proforma was sent.",
         successVerb: "Proforma sent",
         variables: () => ({ action: "send-proforma" }),
       };
@@ -124,6 +124,16 @@ function spec(booking: BookingDetail, action: ActionId): SendSpec {
         effect: `Replies with the ${pluralQuestions(booking.questions.filter((q) => q.answer).length)}.`,
         successVerb: "Answers sent",
         variables: () => ({ action: "send-answers" }),
+      };
+    case "send-form":
+      return {
+        title: "Send the booking form?",
+        confirmLabel: "Send form",
+        to: email,
+        attachment: "None",
+        effect: "They get a link to the form with what we have already filled in. Their answers complete this request.",
+        successVerb: "Form sent",
+        variables: () => ({ action: "send-form" }),
       };
     case "send-acknowledgement":
       return {

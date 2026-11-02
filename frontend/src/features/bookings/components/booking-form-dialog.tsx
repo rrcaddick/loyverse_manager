@@ -44,12 +44,13 @@ import type { BookingDetail, BookingInput, RateQuote } from "../types";
 export type EditFocus = "contact" | "pricing" | null;
 
 const optionalText = z.string().trim().optional();
+const requiredText = (message: string) => z.string().trim().min(1, message);
 
 const schema = z
   .object({
     group_name: z.string().trim().min(2, "Enter the group's name"),
     group_type: z.string().min(1, "Choose the kind of group"),
-    area: optionalText,
+    area: requiredText("Which area is the group from?"),
     contact_name: z.string().trim().min(2, "Enter the contact's name"),
     contact_email: z.union([z.literal(""), z.string().trim().email("Enter a valid email address")]),
     contact_mobile: optionalText,
@@ -320,9 +321,14 @@ function BookingForm({
         toast.success("Booking updated");
         onClose();
       } else {
-        const payload = { ...input, ...stripUndefined(extraInput) } as BookingInput;
+        const sendProforma = twoButtons && mode === "create";
+        if (sendProforma && !input.contact_email) {
+          form.setError("contact_email", { message: "Needed to send the proforma. Save it as a request instead." });
+          return;
+        }
+        const payload = { ...input, ...stripUndefined(extraInput), ...(sendProforma ? { send_proforma: true } : {}) } as BookingInput;
         const created = onCreate ? await onCreate(payload) : await create.mutateAsync(payload);
-        if (!onCreate) toast.success(`${created.reference} created for ${created.group_name}`);
+        if (!onCreate) toast.success(sendProforma ? `${created.reference} created and the proforma sent to ${created.contact_email}` : `${created.reference} saved as a request`);
         onClose();
         if (onCreated) onCreated(created);
         else navigate(`/bookings/${created.id}`);
@@ -333,6 +339,10 @@ function BookingForm({
   }
 
   const busy = form.formState.isSubmitting;
+  // Save keeps a new booking as a request and sends nothing; Create booking
+  // sends the proforma at once and the booking is pending (owner, 2 Nov 2026).
+  const [mode, setMode] = useState<"save" | "create">("create");
+  const twoButtons = !booking && !onCreate && !submitLabel;
 
   return (
     <Form {...form}>
@@ -352,7 +362,7 @@ function BookingForm({
             <TextField control={form.control} name="group_name" label="Group name" required autoFocus={!booking && focus === null} placeholder="Hillside Community Church" />
             <SelectField control={form.control} name="group_type" label="Kind of group" required options={options} placeholder={settings.isPending ? "Loading…" : "Choose a kind"} disabled={settings.isPending} />
           </FieldRow>
-          <TextField control={form.control} name="area" label="Area" placeholder="Mitchells Plain" className="sm:max-w-sm" />
+          <TextField control={form.control} name="area" label="Area" required placeholder="Mitchells Plain" className="sm:max-w-sm" />
         </Group>
 
         <Group label="Contact">
@@ -437,8 +447,14 @@ function BookingForm({
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="submit" disabled={busy || (!!booking && !form.formState.isDirty)}>
-            {busy ? <Spinner data-icon="inline-start" /> : null}
+          {twoButtons ? (
+            <Button type="submit" variant="outline-primary" disabled={busy} onClick={() => setMode("save")}>
+              {busy && mode === "save" ? <Spinner data-icon="inline-start" /> : null}
+              Save
+            </Button>
+          ) : null}
+          <Button type="submit" disabled={busy || (!!booking && !form.formState.isDirty)} onClick={() => setMode("create")}>
+            {busy && (!twoButtons || mode === "create") ? <Spinner data-icon="inline-start" /> : null}
             {booking ? "Save changes" : (submitLabel ?? "Create booking")}
           </Button>
         </DialogFooter>

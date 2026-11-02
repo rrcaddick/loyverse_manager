@@ -278,7 +278,7 @@ function RemindersCard({ data }: { data: OpsStatus }) {
   );
 }
 
-const COUNT_ORDER: BookingStatus[] = ["enquiry", "proforma_sent", "confirmed", "completed", "cancelled", "lapsed", "no_show"];
+const COUNT_ORDER: BookingStatus[] = ["requested", "proforma_sent", "confirmed", "completed", "cancelled", "lapsed", "no_show"];
 
 function BookingsCard({ data }: { data: OpsStatus }) {
   const { counts, total } = data.bookings;

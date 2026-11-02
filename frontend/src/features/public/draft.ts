@@ -13,6 +13,7 @@ import type { ContactInput, GroupInput, VisitInput } from "./schema";
 
 const DRAFT_KEY = "fy.request.draft";
 const ERRORS_KEY = "fy.request.server-errors";
+const COMPLETE_KEY = "fy.request.complete-token";
 
 export type Draft = VisitInput & GroupInput & ContactInput;
 
@@ -61,6 +62,24 @@ export function loadDraft(): Draft {
 
 export function saveDraft(patch: Partial<Draft>): void {
   write(DRAFT_KEY, { ...loadDraft(), ...patch });
+}
+
+/** The completion token from the office's form link, kept with the draft. */
+export function loadCompleteToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(COMPLETE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveCompleteToken(token: string | null): void {
+  try {
+    if (token) window.sessionStorage.setItem(COMPLETE_KEY, token);
+    else window.sessionStorage.removeItem(COMPLETE_KEY);
+  } catch {
+    // storage unavailable: the token is still in the URL the customer opened
+  }
 }
 
 export function clearDraft(): void {

@@ -152,3 +152,25 @@ def test_a_contact_name_that_is_the_group_name_does_not_count_twice():
     t2 = mt.ThreadFacts(thrid=6, participants={"raees.safodien@westerncape.gov.za"}, from_names={"Raees Safodien"},
                         subjects={"Booking 20 Nov 2026"}, text="Western Cape Rehab Centre outing, 60 people.")
     assert mt.score(t2, named)[1] == ["group", "surname", "first"]
+
+
+def test_the_area_tells_same_named_churches_apart():
+    # Eight New Apostolic Church bookings differ only by area: the area carries
+    # the group's weight when the group name is all common words.
+    booking = mt.BookingFacts.from_row(
+        {"id": 7, "reference": "FY1692", "doc_number": 1692, "group_name": "New Apostolic Church", "area": "Retreat-East.",
+         "contact_name": "Jenny Lewis", "contact_mobile": None}
+    )
+    t = mt.ThreadFacts(thrid=8, participants={"jen.joan1986@gmail.com"}, from_names={"Jenny Lewis"},
+                       subjects={"Church outing - New Apostolic Retreat East"}, text="We would like to visit in December.")
+    pts, why = mt.score(t, booking)
+    assert why == ["area", "surname", "first"] and mt.verdict(pts) == "attach"
+    # Beside a distinctive group name the area is corroboration, like a surname.
+    named = mt.BookingFacts.from_row(
+        {"id": 8, "reference": "FY1473", "doc_number": 1473, "group_name": "Mondale High", "area": "Mitchells Plain",
+         "contact_name": "Deidre Scholtz", "contact_mobile": None}
+    )
+    t2 = mt.ThreadFacts(thrid=9, participants={"x@example.com"}, subjects={"Mondale High outing"}, text="Mitchells Plain school, 300 learners.")
+    assert mt.score(t2, named)[1] == ["group", "area"]
+    # The park's own place is never a match on its own.
+    assert mt.area_query("Klapmuts") is None and mt.area_query("Retreat-East.") is not None

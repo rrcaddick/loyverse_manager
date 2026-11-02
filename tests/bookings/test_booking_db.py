@@ -46,6 +46,9 @@ def make(created, **overrides):
         "adults": 5,
         "children": 50,
         "questions": ["Is there shade?"],
+        # A pending booking (the proforma has gone out); a test that wants a
+        # request passes status="requested".
+        "status": "proforma_sent",
     }
     data.update(overrides)
     row = bs.create_booking(data, source="manual", actor=None)
@@ -57,8 +60,13 @@ def test_create_assigns_everything(created):
     b = make(created)
     assert b["reference"].startswith("FY") and b["reference"] == f"FY{b['doc_number']}"
     assert len(b["barcode"]) == 13
-    assert b["status"] == "enquiry"
+    assert b["status"] == "proforma_sent"
     assert b["people_booked"] == 55
+    # Without a status a new booking is a request awaiting its proforma (2 Nov 2026).
+    plain = {k: v for k, v in dict(group_name="TEST pytest request", group_type="school", contact_name="Jane Test", contact_email="jane.req@example.com", contact_mobile="082 123 4567", visit_date=VISIT.isoformat(), adults=5, children=50).items()}
+    req = bs.create_booking(plain, source="manual", actor=None)
+    created.append(req["id"])
+    assert req["status"] == "requested"
     assert b["price_tier_code"] == "children_weekday"
     assert b["tier_price"] == Decimal("70.00") and b["discount_per_person"] == Decimal("0.00")
     assert b["price_per_person"] == Decimal("70.00")
@@ -83,7 +91,7 @@ def test_update_recalculates_and_logs(created):
 
 
 def test_payment_auto_confirms(created):
-    b = make(created)
+    b = make(created, status="requested")
     bs.set_status(b["id"], "proforma_sent", None)
     bs.record_payment(b["id"], "eft", "1000", None, "FY-x", None, None)
     assert bm.get(b["id"])["status"] == "proforma_sent"

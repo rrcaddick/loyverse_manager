@@ -14,7 +14,7 @@ import { Link, useNavigate } from "react-router";
 import { publicKeys, useSubmitBookingRequest } from "@/features/public/api";
 import { ConfigGate } from "@/features/public/config-gate";
 import { readBack } from "@/features/public/dates";
-import { clearDraft, loadDraft, saveServerErrors } from "@/features/public/draft";
+import { clearDraft, loadCompleteToken, loadDraft, saveCompleteToken, saveServerErrors } from "@/features/public/draft";
 import { focusField } from "@/features/public/a11y";
 import type { SummaryError } from "@/features/public/fields";
 import { FIELD_STEP, buildPayload, contactSchema, groupSchema, issuesByField, visitSchema } from "@/features/public/schema";
@@ -117,10 +117,12 @@ function CheckScreen({ config }: { config: FormConfig }) {
       ...buildPayload(parsed.visit.data, parsed.group.data, parsed.contact.data),
       website: honeypot.current?.value ?? "",
       turnstile_token: turnstileToken ?? undefined,
+      complete_token: loadCompleteToken() ?? undefined,
     };
     try {
       const result = await submit.mutateAsync(payload);
       clearDraft();
+      saveCompleteToken(null);
       queryClient.setQueryData(publicKeys.request(result.id), result);
       const token = result.token ? `?token=${encodeURIComponent(result.token)}` : "";
       navigate(`/request/sent/${result.id}${token}`, { replace: true, state: { summary: result } });

@@ -172,7 +172,7 @@ def test_parse_sheet_walks_days_and_continuations():
     assert daniels.raw["_row"] == "3"
 
     assert fiona.visit_date == date(2026, 9, 24)  # continuation row inherits the day
-    assert fiona.status == "enquiry"
+    assert fiona.status == "requested"
     assert fiona.contact_name is None and "No contact name" in fiona.warnings[0]
     assert fiona.doc_number is None
 
@@ -198,7 +198,7 @@ def test_status_precedence():
     base = dict(row_number=1, visit_date=date(2026, 11, 7), group_name="X", area=None, contact_name="Y",
                 contact_mobile=None, people_booked=10, price_per_person=None, enquiry_date=None,
                 invoice_updated=None, comment=None, raw={})
-    assert SheetBooking(doc_number=None, deposit=None, **base).status == "enquiry"
+    assert SheetBooking(doc_number=None, deposit=None, **base).status == "requested"
     assert SheetBooking(doc_number=1700, deposit=None, **base).status == "proforma_sent"
     assert SheetBooking(doc_number=1700, deposit=Decimal("500"), **base).status == "confirmed"
     assert SheetBooking(doc_number=None, deposit=Decimal("500"), **base).status == "confirmed"

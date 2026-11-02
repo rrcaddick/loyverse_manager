@@ -35,6 +35,7 @@ SCORE_MOBILE = 80
 SCORE_GROUP = 60
 SCORE_GROUP_PARTIAL = 35
 SCORE_SURNAME = 30
+SCORE_AREA = 30  # the area beside a distinctive group name; it stands in for a generic one
 SCORE_FIRST = 10
 AUTO_THRESHOLD = 65
 REVIEW_THRESHOLD = 40
@@ -55,6 +56,7 @@ GENERIC_WORDS = frozenset(
     family familie friends team staff outing trip visit tour
     grade gr grd graad class klas year yr foundation phase intermediate intersen
     new old st saint ngk vgk afm
+    klapmuts farmyard park
     """.split()
 )
 PARTICLES = frozenset({"van", "der", "de", "du", "le", "da", "von", "den", "la", "di"})
@@ -243,6 +245,11 @@ def group_query(group_name: str | None, max_tokens: int = 3) -> str | None:
     return " ".join(_q(t) for t in toks) if toks else None
 
 
+def area_query(area: str | None) -> str | None:
+    """The sheet's area as a Gmail search, when it has distinctive words."""
+    return group_query(area)
+
+
 def surname_query(contact_name: str | None) -> str | None:
     _first, surname = name_parts(contact_name)
     return _q(surname) if surname and len(surname) >= 4 else None
@@ -269,6 +276,9 @@ class BookingFacts:
     doc_number: int | None
     group_name: str
     contact_name: str
+    # The sheet's Area column (2 Nov 2026): the many New Apostolic Church
+    # congregations differ only by their area, so it is a signal of its own.
+    area: str = ""
     emails: set[str] = field(default_factory=set)
     cc_emails: set[str] = field(default_factory=set)  # learned by expansion; weaker evidence
     mobile: str | None = None
@@ -286,6 +296,7 @@ class BookingFacts:
             doc_number=row.get("doc_number"),
             group_name=row.get("group_name") or "",
             contact_name=row.get("contact_name") or "",
+            area=row.get("area") or "",
             emails=emails,
             mobile=normalise_za_mobile(row.get("contact_mobile")),
             visit_date=row.get("visit_date"),
@@ -350,13 +361,27 @@ def score(thread: ThreadFacts, booking: BookingFacts) -> tuple[int, list[str]]:
         why.append("mobile")
     hay = thread.word_set()
     cover, hits = group_coverage(booking.group_name, hay)
-    if cover >= 0.999 and any(len(h) >= 5 for h in hits):
-        pts += SCORE_GROUP
-        why.append("group")
-    elif cover >= 0.5 and hits:
-        # Short words (Mark, Hope, Life) are weak on their own.
-        pts += SCORE_GROUP_PARTIAL
-        why.append("group~" + "+".join(hits))
+    a_cover, a_hits = group_coverage(booking.area, hay)
+    if not distinctive_tokens(booking.group_name):
+        # "New Apostolic Church", "Methodist Church": only the area tells them
+        # apart, so the area carries the group's weight.
+        if a_cover >= 0.999 and a_hits:
+            pts += SCORE_GROUP
+            why.append("area")
+        elif a_cover >= 0.5 and a_hits:
+            pts += SCORE_GROUP_PARTIAL
+            why.append("area~" + "+".join(a_hits))
+    else:
+        if cover >= 0.999 and any(len(h) >= 5 for h in hits):
+            pts += SCORE_GROUP
+            why.append("group")
+        elif cover >= 0.5 and hits:
+            # Short words (Mark, Hope, Life) are weak on their own.
+            pts += SCORE_GROUP_PARTIAL
+            why.append("group~" + "+".join(hits))
+        if a_cover >= 0.999 and a_hits:
+            pts += SCORE_AREA
+            why.append("area")
     first, surname = name_parts(booking.contact_name)
     if booking.contact_name and booking.group_name and set(words(booking.contact_name)) <= set(words(booking.group_name)):
         # The sheet had no contact name and the group name stands in for it:

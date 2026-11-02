@@ -44,9 +44,10 @@ def test_deposit_covered_but_not_yet_confirmed_has_nothing_unpaid():
     assert due == {}
 
 
-def test_enquiry_without_proforma_has_no_still_interested():
-    due = compute_due_dates(booking(status="enquiry", proforma_sent_at=None), 0, CFG)
-    assert set(due) == {"deposit_reminder", "lapse"}
+def test_a_request_has_no_reminders_yet():
+    # Nothing is due on a request: no proforma, no deposit, no expiry (2 Nov 2026).
+    due = compute_due_dates(booking(status="requested", proforma_sent_at=None), 0, CFG)
+    assert due == {}
 
 
 def test_confirmed_gets_final_details_only():
@@ -55,7 +56,7 @@ def test_confirmed_gets_final_details_only():
 
 
 def test_waived_deposit_skips_deposit_reminder():
-    due = compute_due_dates(booking(status="enquiry", proforma_sent_at=None, deposit_waived=1), 0, CFG)
+    due = compute_due_dates(booking(status="proforma_sent", deposit_waived=1), 0, CFG)
     assert "deposit_reminder" not in due and "lapse" in due
 
 
