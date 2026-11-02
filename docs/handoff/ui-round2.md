@@ -302,3 +302,25 @@ carries `season`, `month`, `money`, `next_visit_days` and `work_counts`; `up_nex
   empty bar. Settings rows that need width (closed days, day kinds) stack
   below `xl`. The Work accordion's rows are shorter and the main nav rows a
   step shorter under 900 px, so the sidebar fits a laptop screen.
+
+## Requests, Add booking and the data pass (2 Nov 2026)
+
+- **Statuses in the UI**: Request, Pending, Confirmed, Completed, Declined,
+  Cancelled, Expired, No show. The Requests tab and Work › Requests agree
+  (status Request only). Reopen as request.
+- **Add booking** (`booking-form-dialog.tsx`): Save (a request, nothing sent)
+  beside Create booking (pending, proforma sent at once; needs an email). The
+  area is required. Create request from an enquiry keeps its single button.
+- **Needs attention** on a request with gaps: "Still missing: …" with Send
+  form (the deliberate step; `send-form` action, confirmation dialog) and Edit
+  request. The public form opens on the saved request from the link
+  (`/request?complete=<token>`, `RequestPage.tsx`) and the answers complete it.
+- **Needs attention** on a booking with a sheet deposit no bank credit matched:
+  Find payment and Keep; the same rows sit in Work › Verify payments.
+  Payments received shows refunds in red and "Booking sheet · checked".
+- Data pass as agreed in `data/migration/review-20261031.txt` §E: six requests,
+  Chloe's family deleted, four cancellations with their numbers (AM Church
+  with its R1 500 refund linked to the bank debit), FY1748 on 5 Dec in place of
+  FY1775 with its R2 090 deposit and the agreed half deposit, Kewtown, Grace
+  Chapel, the Bowling Club and Franschhoek allocated, Jenny Lewis's address and
+  conversations, the two Oasis mails held for assignment, the two enquiry dates.

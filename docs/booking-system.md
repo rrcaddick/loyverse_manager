@@ -525,3 +525,46 @@ closed by rule and the public form refuses only explicit closures
 (`season.closed_weekdays` / `avoid_weekdays` are no longer read; the public
 form config returns them empty). `closed` is not a day kind: stored entries are
 dropped on read. The calendar hatches a closed day and says CLOSED.
+
+
+### Request and Pending (2 Nov 2026)
+
+Statuses: `requested` (Request) → `proforma_sent` (**Pending**: the proforma has
+gone out, the deposit is awaited) → `confirmed` → `completed`; exits `declined`
+(from a request), `cancelled`, `lapsed` (Expired), `no_show`. The `enquiry`
+status is gone (still in the DB enum, never written). `TRANSITIONS`:
+requested → proforma_sent | declined | cancelled; cancelled, lapsed and declined
+reopen to requested. `set_status` stamps `accepted_at` on requested →
+proforma_sent and clears the exit stamps on a reopen. `accept_request` applies
+edits and requires an email address; the API's send-proforma action is the
+approval (it moves a request to pending). `ACTIVE_STATUSES` and the calendar
+exclude requests; the Bookings buckets are requests / pending (proforma_sent) /
+confirmed / lapsed / past / all (all includes requests). Work › Requests is
+`status = 'requested'` only.
+
+`POST /bookings` takes `send_proforma: true` (Create booking: needs
+`contact_email`, sends the proforma at once) or not (Save: a request, nothing
+sent). The public form requires `area`; so does Add booking.
+
+**Send form** (`POST /bookings/:id/actions/send-form`, requests only): emails
+the `convert_enquiry` template with `form_url = BOOKING_FORM_URL?complete=<token>`
+(`public_form.request_complete_token`, HS256, 30 days, purpose
+`request-complete`). `GET /public/booking-request/prefill?token=` returns the
+saved fields (`prefill_for_request`); `POST /public/booking-request` with
+`complete_token` updates that request instead of creating one (409 when it is
+no longer a request). The front end keeps the token in sessionStorage with the
+draft (`fy.request.complete-token`).
+
+**Refunds and checked sheet deposits** (migration 026): `payments.kind` gains
+`refund` (a negative amount, optional `bank_transaction_id` of the debit);
+`paid_total` is still Σ amount. `payments.verified_at/verified_by`: a deposit
+recorded from the old sheet (`reference = 'Imported from booking sheet'`, no bank
+link) is a Needs attention item (Find payment absorbs it; Keep marks it checked
+via `POST /bookings/:id/payments/:pid/verify`, event `payment_verified`) and a
+Work › Verify payments row (`work._sheet_deposit_rows`, id `pop:sheet:<id>`).
+
+**Area in matching**: `BookingFacts.area`; `matching.score` gives the area the
+group's weight when the group name has no distinctive words, else `SCORE_AREA`
+(30) as corroboration; `area_query` is a Gmail search in the migration planner;
+`inbound.open_bookings` selects `b.area`; `klapmuts`, `farmyard`, `park` are
+generic words.
