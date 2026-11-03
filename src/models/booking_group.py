@@ -152,7 +152,9 @@ def linked_contacts(conn=None) -> list[dict]:
 
 
 def search(q: str | None, limit: int = 20) -> list[dict]:
-    """Groups by name, alias, a booking's name, reference or contact; newest visit first."""
+    """Groups by name, alias, a booking's name, reference, contact name,
+    address or number; newest visit first, with the last booking's contact
+    (the office's pick prefills it)."""
     text = (q or "").strip()
     like = f"%{text}%"
     return query(
@@ -160,15 +162,21 @@ def search(q: str | None, limit: int = 20) -> list[dict]:
         SELECT g.id, g.name, g.group_type, g.area,
                COUNT(b.id) AS bookings,
                MAX(b.visit_date) AS last_visit_date,
-               SUBSTRING_INDEX(GROUP_CONCAT(b.reference ORDER BY b.visit_date DESC, b.id DESC SEPARATOR ','), ',', 1) AS last_reference
+               SUBSTRING_INDEX(GROUP_CONCAT(b.reference ORDER BY b.visit_date DESC, b.id DESC SEPARATOR ','), ',', 1) AS last_reference,
+               SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(b.contact_name, '') ORDER BY b.visit_date DESC, b.id DESC SEPARATOR '\n'), '\n', 1) AS last_contact_name,
+               SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(b.contact_email, '') ORDER BY b.visit_date DESC, b.id DESC SEPARATOR '\n'), '\n', 1) AS last_contact_email,
+               SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(b.contact_mobile, '') ORDER BY b.visit_date DESC, b.id DESC SEPARATOR '\n'), '\n', 1) AS last_contact_mobile
         FROM booking_groups g
         LEFT JOIN bookings b ON b.group_id = g.id
         WHERE %s = 1 OR g.name LIKE %s
            OR EXISTS (SELECT 1 FROM booking_group_aliases a WHERE a.group_id = g.id AND a.name LIKE %s)
-           OR EXISTS (SELECT 1 FROM bookings x WHERE x.group_id = g.id AND (x.group_name LIKE %s OR x.reference LIKE %s OR x.contact_name LIKE %s))
+           OR EXISTS (SELECT 1 FROM bookings x WHERE x.group_id = g.id
+                      AND (x.group_name LIKE %s OR x.reference LIKE %s OR x.contact_name LIKE %s OR x.contact_email LIKE %s OR x.contact_mobile LIKE %s))
+           OR EXISTS (SELECT 1 FROM bookings y JOIN booking_contacts c ON c.booking_id = y.id
+                      WHERE y.group_id = g.id AND (c.email LIKE %s OR c.mobile LIKE %s OR c.name LIKE %s))
         GROUP BY g.id
         ORDER BY last_visit_date DESC, g.name
         LIMIT %s
         """,
-        (0 if text else 1, like, like, like, like, like, int(limit)),
+        (0 if text else 1, like, like, like, like, like, like, like, like, like, like, int(limit)),
     )

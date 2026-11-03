@@ -132,6 +132,12 @@ def booking_request():
         clean["status"] = "requested"  # reviewed and accepted before it is a booking
         booking = public_form.create_booking_compat(clean, source="form", actor=None)
     booking_id = int(booking["id"])
+    try:
+        from src.services import groups
+
+        groups.apply_customer_answer(booking_id, clean.get("group_id"), clean.get("group_choice"))
+    except Exception as exc:  # noqa: BLE001 - the request stands on its own
+        logger.warning(f"Group answer on request {booking_id} not applied: {exc}")
     enquiry_token = data.get("enquiry_token") or data.get("enquiry")
     if enquiry_token:
         try:
@@ -149,6 +155,19 @@ def booking_request():
         summary["acknowledged"] = True
     summary["token"] = public_form.request_receipt_token(booking_id)
     return ok(summary, 201)
+
+
+@bp.get("/groups/suggest")
+@public_endpoint
+def group_suggest():
+    """"Did you mean": the groups this address or number booked for, and
+    organisations whose name starts with what was typed (3 Nov 2026)."""
+    if public_form.suggest_rate_limited(_client_ip()):
+        raise ApiError("rate_limited", "Too many lookups from this connection. Try again in a minute.", 429)
+    body = public_form.suggest_groups(request.args.get("q"), request.args.get("email"), request.args.get("mobile"))
+    response, status = ok(body)
+    response.headers["Cache-Control"] = "no-store"
+    return response, status
 
 
 @bp.get("/booking-request/prefill")

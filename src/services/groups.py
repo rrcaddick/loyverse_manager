@@ -507,6 +507,36 @@ def remove_spelling(group_id: int, alias_id: int, actor: int | None) -> dict:
     return group_detail(group_id) or {}
 
 
+def apply_customer_answer(booking_id: int, group_id: int | None, choice: str | None, actor: int | None = None) -> dict:
+    """The form's own answer. A pick links the booking to that group unless a
+    contact signal argues for a different one (then it stays a question);
+    "none of these" makes a new group and asks nobody."""
+    if group_id:
+        b = booking_model.get(booking_id)
+        if b is None:
+            raise LookupError(f"Booking {booking_id} not found")
+        facts = facts_for(b)
+        for p in load_profiles(exclude_booking_id=booking_id):
+            if p.id == int(group_id):
+                continue
+            if (facts.emails & p.emails or facts.mobiles & p.mobiles) and not names_contradict(facts, p):
+                # Their details sit on another group that could also be this one: leave it for a person.
+                group_model.set_booking_group(booking_id, None)
+                return {"outcome": "suggested", "conflict_group_id": p.id}
+        link_booking(booking_id, int(group_id), actor, method="customer")
+        return {"outcome": "linked", "group_id": int(group_id)}
+    if choice == "none":
+        b = booking_model.get(booking_id)
+        if b and b.get("group_id") and len(group_model.bookings(int(b["group_id"]))) > 1:
+            g = new_group_for(booking_id, actor, method="customer-new")  # the matcher had linked it; the customer says no
+            return {"outcome": "new", "group_id": int(g["id"])}
+        if b and not b.get("group_id"):
+            g = new_group_for(booking_id, actor, method="customer-new")
+            return {"outcome": "new", "group_id": int(g["id"])}
+        return {"outcome": "kept"}
+    return {"outcome": "unanswered"}
+
+
 def note_name_change(booking_id: int, new_name: str | None) -> None:
     """A renamed booking teaches its group the new spelling."""
     b = booking_model.get(booking_id)

@@ -255,3 +255,39 @@ def test_short_forms_misspellings_and_old_versus_new():
     assert points == 0  # a different church in the same suburb
     points, why = groups.score(_facts(group_name="NAC Elsies River", area="Elsies River"), p)
     assert "name" in why and points >= groups.SCORE_NAME
+
+
+@db
+def test_the_form_accepts_a_group_pick_and_none_of_these():
+    from src.services import public_form
+    from src.services.settings import get_settings
+
+    base = {
+        "visit_date": (date.today() + timedelta(days=30)).isoformat(),
+        "visitors": 40,
+        "group_name": "TEST Grade 9 outing",
+        "group_type": "school",
+        "area": "Paarl",
+        "contact_name": "Jane Test",
+        "contact_email": "jane@example.com",
+        "contact_mobile": "082 123 4567",
+        "questions": [],
+        "policy_accepted": True,
+    }
+    clean, errors = public_form.validate_request({**base, "group_id": "999999999"}, get_settings(), closed_days=set())
+    assert errors.get("group_name") == "Choose the group from the list again"
+    clean, errors = public_form.validate_request({**base, "group_choice": "none"}, get_settings(), closed_days=set())
+    assert not errors and clean["group_id"] is None and clean["group_choice"] == "none"
+
+
+def test_public_suggestions_hide_families_and_need_three_letters():
+    from src.services import public_form
+
+    assert public_form._public_group({"name": "Daniels Family", "group_type": "nonprofit"}) is False
+    assert public_form._public_group({"name": "Kiana's Angels Aftercare", "group_type": "family"}) is False
+    assert public_form._public_group({"name": "Mondale High", "group_type": "school"}) is True
+    assert public_form.suggest_groups("ne", None, None)["matches"] == []
+    assert public_form.suggest_rate_limited("203.0.113.9", now=1.0) is False
+    for i in range(public_form.SUGGEST_PER_MINUTE):
+        public_form.suggest_rate_limited("203.0.113.9", now=1.0 + i * 0.1)
+    assert public_form.suggest_rate_limited("203.0.113.9", now=10.0) is True

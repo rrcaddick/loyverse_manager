@@ -1,5 +1,5 @@
 /**
- * /request/visit — Step 1 of 3, "When would you like to come?": preferred
+ * /request/visit — Step 2 of 3, "When would you like to come?": preferred
  * date, alternative date, how many visitors
  * (docs/redesign-spec.md §11, docs/research/06).
  */
@@ -13,7 +13,7 @@ import { DateField } from "@/features/public/date-field";
 import { openingSentence } from "@/features/public/dates";
 import { Field, TextInput } from "@/features/public/fields";
 import { visitSchema } from "@/features/public/schema";
-import { INTRO_LINE, StepShell } from "@/features/public/step-shell";
+import { StepShell } from "@/features/public/step-shell";
 import { useStepForm } from "@/features/public/use-step-form";
 import type { FormConfig } from "@/features/public/types";
 
@@ -35,7 +35,7 @@ function VisitStep({ config }: { config: FormConfig }) {
   const onSubmit = form.handleSubmit(() => navigate("/request/group"), focusSummary);
 
   return (
-    <StepShell step={1} title="When would you like to come?" intro={INTRO_LINE} errors={summaryErrors} summaryRef={summaryRef} headingRef={headingRef} onSubmit={onSubmit}>
+    <StepShell step={2} title="When would you like to come?" backTo="/request/contact" errors={summaryErrors} summaryRef={summaryRef} headingRef={headingRef} onSubmit={onSubmit}>
       <Controller
         name="visit_date"
         control={control}

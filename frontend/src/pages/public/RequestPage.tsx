@@ -23,7 +23,6 @@ interface Prefill {
   alternative_date: string;
   visitors: number | "";
   customer_notes: string;
-  previous_visit_name?: string;
   questions: string[];
 }
 
@@ -49,7 +48,6 @@ export default function RequestPage() {
           area: p.area ?? "",
           questions: p.questions.length ? p.questions : [""],
           customer_notes: p.customer_notes ?? "",
-          previous_visit_name: p.previous_visit_name ?? "",
           contact_name: p.contact_name ?? "",
           contact_email: p.contact_email ?? "",
           contact_mobile: p.contact_mobile ?? "",
@@ -71,5 +69,5 @@ export default function RequestPage() {
   if (!ready) return <PageSkeleton />;
   params.delete("complete");
   const rest = params.toString();
-  return <Navigate to={`/request/visit${rest ? `?${rest}` : ""}${hash}`} replace />;
+  return <Navigate to={`/request/contact${rest ? `?${rest}` : ""}${hash}`} replace />;
 }

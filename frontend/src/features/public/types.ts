@@ -33,8 +33,10 @@ export interface BookingRequestInput {
   area?: string;
   questions: string[];
   customer_notes?: string;
-  /** "Have you visited before, under what name?": helps us find the group's earlier visits. */
-  previous_visit_name?: string;
+  /** The customer's own answer to "which group are you?": a pick from the suggestions... */
+  group_id?: number;
+  /** ...or "none of these" (a new group, nobody asked again). */
+  group_choice?: "picked" | "none";
   contact_name: string;
   contact_email: string;
   contact_mobile: string;
@@ -44,6 +46,21 @@ export interface BookingRequestInput {
   turnstile_token?: string;
   /** The office saved this request and sent the form link: the answers complete it. */
   complete_token?: string;
+}
+
+export interface GroupSuggestion {
+  id: number;
+  name: string;
+  area: string | null;
+  group_type: string | null;
+}
+
+/** GET /public/groups/suggest */
+export interface GroupSuggestions {
+  /** Groups this address or number booked for before. */
+  mine: GroupSuggestion[];
+  /** Organisations whose name starts with the typed word. */
+  matches: GroupSuggestion[];
 }
 
 /** What the confirmation page may show: no phone, no prices, no notes. */

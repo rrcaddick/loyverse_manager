@@ -246,7 +246,20 @@ def validate_request(
     text("area", required=True, max_len=MAX_TEXT)  # the area tells same-named churches apart (2 Nov 2026)
     text("contact_name", required=True, max_len=MAX_TEXT)
     text("customer_notes", required=False, max_len=MAX_NOTES)
-    text("previous_visit_name", required=False, max_len=MAX_TEXT)  # "visited before, under what name?" (2 Nov 2026)
+    text("previous_visit_name", required=False, max_len=MAX_TEXT)  # older clients; the did-you-mean pick replaced it (3 Nov 2026)
+
+    # The customer's own answer to "which group are you?": a pick from the
+    # suggestions (group_id) or "none of these" (group_choice = none).
+    gid_raw = data.get("group_id")
+    clean["group_id"] = None
+    if gid_raw not in (None, "", 0, "0"):
+        gid = _as_int(gid_raw)
+        if gid is None or gid < 1 or query_one("SELECT 1 AS x FROM booking_groups WHERE id = %s", (gid,)) is None:
+            errors["group_name"] = "Choose the group from the list again"
+        else:
+            clean["group_id"] = gid
+    choice = str(data.get("group_choice") or "").strip().lower()
+    clean["group_choice"] = choice if choice in ("picked", "none") else None
 
     # group type: must be a configured code
     codes = {str(g.get("code")) for g in (form.group_types or []) if isinstance(g, Mapping)}
@@ -662,3 +675,99 @@ def booking_row(booking_id: int) -> dict | None:
     return query_one("SELECT * FROM bookings WHERE id = %s", (booking_id,))
 
 
+
+
+# ------------------------------------------------------------ did you mean ---
+
+SUGGEST_MIN_CHARS = 3
+SUGGEST_LIMIT = 6
+# Groups booked under a person's name never appear on the public list.
+PRIVATE_GROUP_TYPES = ("family",)
+PRIVATE_NAME_RE = re.compile(r"\b(family|familie|birthday|party|friends|vriende)\b", re.I)
+
+
+def _public_group(row: Mapping[str, Any]) -> bool:
+    if (row.get("group_type") or "") in PRIVATE_GROUP_TYPES:
+        return False
+    return not PRIVATE_NAME_RE.search(str(row.get("name") or ""))
+
+
+def _group_item(row: Mapping[str, Any]) -> dict:
+    return {"id": int(row["id"]), "name": row["name"], "area": row.get("area"), "group_type": row.get("group_type")}
+
+
+def suggest_groups(q: str | None, email: str | None, mobile: str | None) -> dict:
+    """``mine``: the groups this address or number has booked for ("Did you
+    mean"); ``matches``: organisations whose spelling starts with the typed
+    word (three letters on). Names and areas only, never a contact."""
+    from src.services import matching as mt
+
+    mine: list[dict] = []
+    seen: set[int] = set()
+    e = normalise_email(email or "") if email else None
+    m = mt.normalise_za_mobile(mobile) if mobile else None
+    if e or m:
+        rows = query(
+            """
+            SELECT DISTINCT g.id, g.name, g.area, g.group_type, MAX(b.visit_date) AS last_visit
+            FROM booking_groups g
+            JOIN bookings b ON b.group_id = g.id
+            LEFT JOIN booking_contacts c ON c.booking_id = b.id
+            WHERE (%s IS NOT NULL AND (LOWER(b.contact_email) = %s OR c.email = %s))
+               OR (%s IS NOT NULL AND (b.contact_mobile = %s OR c.mobile = %s))
+            GROUP BY g.id, g.name, g.area, g.group_type
+            ORDER BY last_visit DESC
+            LIMIT %s
+            """,
+            (e, e, e, m, m, m, SUGGEST_LIMIT),
+        )
+        for r in rows:
+            if _public_group(r) and int(r["id"]) not in seen:
+                mine.append(_group_item(r))
+                seen.add(int(r["id"]))
+    matches: list[dict] = []
+    text = (q or "").strip()
+    if len(text) >= SUGGEST_MIN_CHARS:
+        like_start = f"{text}%"
+        like_word = f"% {text}%"
+        rows = query(
+            """
+            SELECT g.id, g.name, g.area, g.group_type, MAX(b.visit_date) AS last_visit
+            FROM booking_groups g
+            LEFT JOIN bookings b ON b.group_id = g.id
+            WHERE g.name LIKE %s OR g.name LIKE %s
+               OR EXISTS (SELECT 1 FROM booking_group_aliases a WHERE a.group_id = g.id AND (a.name LIKE %s OR a.name LIKE %s))
+            GROUP BY g.id, g.name, g.area, g.group_type
+            ORDER BY last_visit DESC, g.name
+            LIMIT %s
+            """,
+            (like_start, like_word, like_start, like_word, SUGGEST_LIMIT * 3),
+        )
+        for r in rows:
+            if _public_group(r) and int(r["id"]) not in seen:
+                matches.append(_group_item(r))
+                seen.add(int(r["id"]))
+            if len(matches) >= SUGGEST_LIMIT:
+                break
+    return {"mine": mine, "matches": matches}
+
+
+_SUGGEST_HITS: dict[str, list[float]] = {}
+SUGGEST_PER_MINUTE = 60
+
+
+def suggest_rate_limited(ip: str | None, now: float | None = None) -> bool:
+    """A small per-process limiter for the suggestion lookups (the form's
+    submit limit does not see them): sixty a minute per address."""
+    import time as _time
+
+    if not ip:
+        return False
+    t = now if now is not None else _time.monotonic()
+    hits = [h for h in _SUGGEST_HITS.get(ip, []) if t - h < 60]
+    hits.append(t)
+    _SUGGEST_HITS[ip] = hits
+    if len(_SUGGEST_HITS) > 5000:  # never grow without bound
+        _SUGGEST_HITS.clear()
+        _SUGGEST_HITS[ip] = hits
+    return len(hits) > SUGGEST_PER_MINUTE

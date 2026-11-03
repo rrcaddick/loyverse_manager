@@ -13,7 +13,7 @@ import { z } from "zod";
 import { dateProblem, parseDmy } from "./dates";
 import type { BookingRequestInput, FormConfig } from "./types";
 
-export const STEPS = ["visit", "group", "contact"] as const;
+export const STEPS = ["contact", "visit", "group"] as const;
 export type Step = (typeof STEPS)[number];
 
 /** Which screen each field lives on (server 422 keys included). */
@@ -28,7 +28,8 @@ export const FIELD_STEP: Record<string, Step> = {
   area: "group",
   questions: "group",
   customer_notes: "group",
-  previous_visit_name: "group",
+  group_id: "group",
+  group_choice: "group",
   contact_name: "contact",
   contact_email: "contact",
   contact_mobile: "contact",
@@ -109,7 +110,9 @@ export function groupSchema(config: FormConfig) {
       .transform((items) => items.filter((q) => q.length > 0))
       .refine((items) => items.length <= config.max_questions, `You can ask up to ${config.max_questions} questions`),
     customer_notes: z.string().trim().max(2000, "Keep this under 2 000 characters"),
-    previous_visit_name: z.string().trim().max(255, "Keep this under 255 characters"),
+    /** A pick from the suggestions (the group's id as text) and whether they picked or said "none of these". */
+    group_id: z.string().trim(),
+    group_choice: z.string().trim(),
   });
 }
 
@@ -143,7 +146,8 @@ export function buildPayload(visit: VisitOutput, group: GroupOutput, contact: Co
     area: group.area || undefined,
     questions: group.questions,
     customer_notes: group.customer_notes || undefined,
-    previous_visit_name: group.previous_visit_name || undefined,
+    group_id: group.group_id ? Number(group.group_id) : undefined,
+    group_choice: group.group_choice === "picked" || group.group_choice === "none" ? group.group_choice : undefined,
     contact_name: contact.contact_name,
     contact_email: contact.contact_email,
     contact_mobile: contact.contact_mobile,

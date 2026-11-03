@@ -39,7 +39,8 @@ import { formatMoney, formatNumber, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { useCreateBooking, useQuote, useUpdateBooking } from "../api";
-import type { BookingDetail, BookingInput, RateQuote } from "../types";
+import type { BookingDetail, BookingInput, GroupSearchRow, RateQuote } from "../types";
+import { GroupNameField } from "./group-name-field";
 
 export type EditFocus = "contact" | "pricing" | null;
 
@@ -243,6 +244,28 @@ function BookingForm({
   const create = useCreateBooking();
   const update = useUpdateBooking(booking?.id ?? 0);
   const [error, setError] = useState<string | null>(null);
+  // A pick from our records (or Rebook's group): the new booking is created in that group.
+  const [pickedGroupId, setPickedGroupId] = useState<number | null>(extraInput?.group_id ?? null);
+  function pickGroup(g: GroupSearchRow) {
+    setPickedGroupId(g.id);
+    form.setValue("group_name", g.name, { shouldDirty: true, shouldValidate: true });
+    if (!form.getValues("group_type") && g.group_type) form.setValue("group_type", g.group_type, { shouldDirty: true });
+    if (!form.getValues("area") && g.area) form.setValue("area", g.area, { shouldDirty: true });
+    const filled: string[] = [];
+    if (!form.getValues("contact_name") && g.last_contact_name) {
+      form.setValue("contact_name", g.last_contact_name, { shouldDirty: true });
+      filled.push("name");
+    }
+    if (!form.getValues("contact_email") && g.last_contact_email) {
+      form.setValue("contact_email", g.last_contact_email, { shouldDirty: true });
+      filled.push("email");
+    }
+    if (!form.getValues("contact_mobile") && g.last_contact_mobile) {
+      form.setValue("contact_mobile", g.last_contact_mobile, { shouldDirty: true });
+      filled.push("mobile");
+    }
+    if (filled.length) toast.message(`Last time's contact ${filled.join(", ")} filled in`, { description: "Change it if someone else is booking this time." });
+  }
   const form = useZodForm({ schema, defaultValues: { ...defaultsFor(booking, defaultDate), ...(booking ? {} : stripUndefined(prefill)) } });
   const [invoiceOpen, setInvoiceOpen] = useState(!!(booking?.billing_address || booking?.customer_vat_number));
   const [pricingOpen, setPricingOpen] = useState(focus === "pricing" || !!booking && (booking.discount_per_person > 0 || booking.deposit_overridden || booking.deposit_waived));
@@ -327,7 +350,7 @@ function BookingForm({
           form.setError("contact_email", { message: "Needed to send the proforma. Save it as a request instead." });
           return;
         }
-        const payload = { ...input, ...stripUndefined(extraInput), ...(sendProforma ? { send_proforma: true } : {}) } as BookingInput;
+        const payload = { ...input, ...stripUndefined(extraInput), ...(pickedGroupId !== null ? { group_id: pickedGroupId } : {}), ...(sendProforma ? { send_proforma: true } : {}) } as BookingInput;
         const created = onCreate ? await onCreate(payload) : await create.mutateAsync(payload);
         if (!onCreate) toast.success(sendProforma ? `${created.reference} created and the proforma sent to ${created.contact_email}` : `${created.reference} saved as a request`);
         onClose();
@@ -360,7 +383,11 @@ function BookingForm({
 
         <Group label="Group">
           <FieldRow>
-            <TextField control={form.control} name="group_name" label="Group name" required autoFocus={!booking && focus === null} placeholder="Hillside Community Church" />
+            {booking ? (
+              <TextField control={form.control} name="group_name" label="Group name" required placeholder="Hillside Community Church" />
+            ) : (
+              <GroupNameField control={form.control} name="group_name" pickedId={pickedGroupId} onPick={pickGroup} onClear={() => setPickedGroupId(null)} autoFocus={focus === null} placeholder="Hillside Community Church" />
+            )}
             <SelectField control={form.control} name="group_type" label="Kind of group" required options={options} placeholder={settings.isPending ? "Loading…" : "Choose a kind"} disabled={settings.isPending} />
           </FieldRow>
           <TextField control={form.control} name="area" label="Area" required placeholder="Mitchells Plain" className="sm:max-w-sm" />

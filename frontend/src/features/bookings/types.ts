@@ -448,6 +448,10 @@ export interface GroupSearchRow {
   bookings: number;
   last_visit_date: string | null;
   last_reference: string | null;
+  /** The most recent booking's contact: offered when the office picks the group. */
+  last_contact_name: string | null;
+  last_contact_email: string | null;
+  last_contact_mobile: string | null;
 }
 
 export interface BookingDetail extends BookingRow {

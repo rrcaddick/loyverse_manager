@@ -5,16 +5,36 @@
  * discards on an anonymous 401 (docs/handoff/frontend-foundation-v2.md §7).
  */
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 
-import type { BookingRequestInput, BookingRequestResult, FormConfig, RequestSummary } from "./types";
+import type { BookingRequestInput, BookingRequestResult, FormConfig, GroupSuggestions, RequestSummary } from "./types";
 
 export const publicKeys = {
   formConfig: ["public", "form-config"] as const,
   request: (id: string | number) => ["public", "request", String(id)] as const,
+  groups: (q: string, email: string, mobile: string) => ["public", "groups", q, email, mobile] as const,
 };
+
+/**
+ * "Did you mean": the groups this address or number booked for before, and
+ * organisations whose name starts with what was typed (three letters on).
+ * Names and areas only; the server hides families and limits lookups.
+ */
+export function useGroupSuggestions(q: string, email: string, mobile: string, enabled = true) {
+  const text = q.trim();
+  const e = email.trim().toLowerCase();
+  const m = mobile.trim();
+  return useQuery({
+    queryKey: publicKeys.groups(text.length >= 3 ? text : "", e, m),
+    queryFn: () => api.get<GroupSuggestions>("/public/groups/suggest", { params: { q: text.length >= 3 ? text : undefined, email: e || undefined, mobile: m || undefined } }),
+    enabled: enabled && (text.length >= 3 || !!e || !!m),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
 
 export function useFormConfig() {
   return useQuery({
