@@ -92,9 +92,10 @@ def list_for_booking(booking_id: int) -> list[dict]:
         WHERE t.booking_id = %s
            OR t.gmail_thrid IN (SELECT DISTINCT m.gmail_thrid FROM email_messages m
                                 WHERE m.booking_id = %s AND m.gmail_thrid IS NOT NULL)
+           OR t.gmail_thrid IN (SELECT l.gmail_thrid FROM email_thread_bookings l WHERE l.booking_id = %s)
         ORDER BY t.last_message_at, t.gmail_thrid
         """,
-        (int(booking_id), int(booking_id)),
+        (int(booking_id), int(booking_id), int(booking_id)),
     )
 
 

@@ -79,9 +79,10 @@ export function useWorkActions(): WorkActions {
         navigate(action.tab ? `/enquiries/${action.enquiry_id}?tab=${action.tab}` : `/enquiries/${action.enquiry_id}`);
         return;
       case "assign_message":
-        void guarded(row, () => api.post(`/inbound/messages/${action.message_id}/assign`, { booking_id: action.booking_id })).then(() => {
+        void guarded(row, () => api.post(`/inbound/messages/${action.message_id}/assign`, action.booking_ids ? { booking_ids: action.booking_ids } : { booking_id: action.booking_id })).then(() => {
           void qc.invalidateQueries({ queryKey: ["bookings"] });
-          done(row, "Mail assigned", row.title);
+          void qc.invalidateQueries({ queryKey: ["mail"] });
+          done(row, action.booking_ids ? `Mail assigned to all ${action.booking_ids.length}` : "Mail assigned", row.title);
         });
         return;
       case "booking_action":

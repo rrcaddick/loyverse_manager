@@ -167,7 +167,14 @@ weaker is a Needs attention question ("Same group as FY1473 Mondale High?" Yes /
 New group), nothing makes a new group. The record's History tab is the group's
 other bookings with what each tells us; Rebook on a past booking carries the
 group. A shared address under an unrelated name never links (one person, two
-groups). See `docs/booking-system.md` "Groups and history".
+groups). The group's name is its selected spelling (aliases with origin,
+migration 029); no organisation level exists above groups. The public form
+asks for the contact first and offers "Did you mean" and an autocomplete of
+our groups (organisations only, never families); the office's Add booking
+does the same. A conversation can belong to several bookings
+(`email_thread_bookings`, migration 030): one contact on several bookings
+sharing a day is one party. See `docs/booking-system.md` "Groups and history"
+and the 3 Nov 2026 section.
 
 ### Group booking ticket delivery
 

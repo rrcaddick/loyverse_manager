@@ -501,9 +501,10 @@ def messages_for_booking_threads(booking_id: int) -> list[dict]:
            OR m.gmail_thrid IN (SELECT t.gmail_thrid FROM email_threads t WHERE t.booking_id = %s)
            OR m.gmail_thrid IN (SELECT DISTINCT x.gmail_thrid FROM email_messages x
                                 WHERE x.booking_id = %s AND x.gmail_thrid IS NOT NULL)
+           OR m.gmail_thrid IN (SELECT l.gmail_thrid FROM email_thread_bookings l WHERE l.booking_id = %s)
         ORDER BY m.sent_at, m.id
         """,
-        (int(booking_id), int(booking_id), int(booking_id)),
+        (int(booking_id), int(booking_id), int(booking_id), int(booking_id)),
     )
     return [_decode(r) or {} for r in rows]
 

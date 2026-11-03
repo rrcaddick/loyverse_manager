@@ -91,7 +91,10 @@ export interface OpenEnquiryAction extends ActionBase {
 export interface AssignMessageAction extends ActionBase {
   action: "assign_message";
   message_id: number;
-  booking_id: number;
+  /** One booking... */
+  booking_id?: number;
+  /** ...or several at once ("All 9": one contact, one day, nine congregations). */
+  booking_ids?: number[];
 }
 
 export type WorkAction =

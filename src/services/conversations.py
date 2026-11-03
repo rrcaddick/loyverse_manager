@@ -254,6 +254,21 @@ def refresh_threads(thrids: Iterable[int | None]) -> int:
 # ---------------------------------------------------------------- shaping ---
 
 
+def with_shared_bookings(threads: list[dict]) -> list[dict]:
+    """Add ``bookings`` (every booking a conversation belongs to) to thread
+    payloads, one query for the lot (3 Nov 2026)."""
+    from src.models import email_thread_booking as links
+
+    by_thrid = links.bookings_for_threads([t.get("thrid") for t in threads if t.get("thrid")])
+    for t in threads:
+        rows = by_thrid.get(int(t["thrid"]), []) if t.get("thrid") else []
+        t["bookings"] = [
+            {"id": int(r["id"]), "reference": r.get("reference"), "group_name": r.get("group_name"), "status": r.get("status"), "visit_date": _iso(r.get("visit_date")), "contact_name": r.get("contact_name")}
+            for r in rows
+        ]
+    return threads
+
+
 def booking_summary(row: dict | None, prefix: str = "booking_") -> dict | None:
     if not row or not row.get("booking_id"):
         return None
@@ -545,10 +560,15 @@ def booking_conversation(booking_id: int, snap=None) -> dict:
     events = _booking_events(int(booking_id))
     snap = snap if snap is not None else waiting.build_snapshot()
     party_key = f"b:{int(booking_id)}"
-    threads = waiting.annotate_threads(
-        [thread_to_api(t) or {} for t in sorted(thread_rows, key=lambda t: (t.get("last_message_at") or datetime.min))],
-        snap,
+    threads = with_shared_bookings(
+        waiting.annotate_threads(
+            [thread_to_api(t) or {} for t in sorted(thread_rows, key=lambda t: (t.get("last_message_at") or datetime.min))],
+            snap,
+        )
     )
+    # A conversation shared from another booking counts here too: one reply clears all.
+    own_thrids = {int(t["gmail_thrid"]) for t in waiting.party_threads(party_key, snap)}
+    shared_unanswered = sum(waiting.unanswered_count_for_thread(int(t["thrid"]), snap) for t in threads if int(t["thrid"]) not in own_thrids)
     return {
         "booking": {
             "id": int(booking["id"]),
@@ -561,7 +581,7 @@ def booking_conversation(booking_id: int, snap=None) -> dict:
             "email_thread_id": str(booking["email_thread_id"]) if booking.get("email_thread_id") else None,
         },
         "party_key": party_key,
-        "unanswered_count": len(waiting.unanswered_messages(party_key, snap)),
+        "unanswered_count": len(waiting.unanswered_messages(party_key, snap)) + shared_unanswered,
         "threads": threads,
         "items": waiting.mark_unanswered(build_stream(messages, notes, events), party_key, snap),
     }
@@ -699,9 +719,12 @@ def attach(gmail_thrid: int, booking_id: int, actor: int | None, method: str = "
     booking = em.booking_by_id(int(booking_id))
     if booking is None:
         raise ConversationNotFound(f"Booking {booking_id} not found")
+    from src.models import email_thread_booking as links
+
     linked = em.link_thread(thrid, int(booking_id), method)
     et.set_booking(thrid, int(booking_id))
     et.set_not_booking(thrid, False)
+    links.link(thrid, int(booking_id), method)
     em.set_booking_thread_if_null(int(booking_id), thrid)
     latest_inbound = em.latest_for_thread(thrid, inbound_only=True)
     if latest_inbound:
@@ -728,8 +751,13 @@ def detach(gmail_thrid: int, actor: int | None) -> dict:
     booking_id = row.get("booking_id")
     if not booking_id:
         raise ConversationError("Conversation is not attached to a booking")
+    from src.models import email_thread_booking as links
+
     em.detach_thread(thrid)
     et.set_booking(thrid, None)
+    for bid in links.booking_ids_for_thread(thrid):
+        em.clear_booking_thread_if(int(bid), thrid)
+    links.unlink_all(thrid)
     em.clear_booking_thread_if(int(booking_id), thrid)
     refresh_thread(thrid)
     return thread_to_api(et.get(thrid)) or {}

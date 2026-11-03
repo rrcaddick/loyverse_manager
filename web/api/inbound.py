@@ -47,12 +47,34 @@ def sweep():
 
 @bp.post("/messages/<int:message_id>/assign")
 def assign(message_id: int):
-    data = parse_json(("booking_id",))
+    """``{"booking_id": n}``, ``{"booking_ids": [...]}`` or ``{"all": true}``
+    (every candidate): the mail, and its conversation, go on each (3 Nov 2026)."""
+    import json as _json
+
+    data = parse_json()
     row = em.get(message_id)
     if row is None:
         raise ApiError("not_found", "Message not found", 404)
-    booking = em.booking_by_id(int(data["booking_id"]))
-    if booking is None:
-        raise ApiError("not_found", "Booking not found", 404)
-    inbound.attach_to_booking(message_id, row, booking, "assigned")
-    return ok({"message_id": message_id, "booking_id": int(booking["id"])})
+    ids: list[int] = []
+    if data.get("all"):
+        try:
+            ids = [int(x) for x in _json.loads(row.get("candidate_booking_ids") or "[]")]
+        except (TypeError, ValueError):
+            ids = []
+    elif data.get("booking_ids"):
+        try:
+            ids = [int(x) for x in data["booking_ids"]]
+        except (TypeError, ValueError) as exc:
+            raise ApiError("validation_error", "booking_ids must be integers", 422) from exc
+    elif data.get("booking_id") is not None:
+        ids = [int(data["booking_id"])]
+    if not ids:
+        raise ApiError("validation_error", "Say which booking, or all of them", 422, {"booking_id": "Required"})
+    bookings = []
+    for bid in ids:
+        b = em.booking_by_id(bid)
+        if b is None:
+            raise ApiError("not_found", f"Booking {bid} not found", 404)
+        bookings.append(b)
+    inbound.attach_to_bookings(message_id, row, bookings, "assigned")
+    return ok({"message_id": message_id, "booking_id": int(bookings[0]["id"]), "booking_ids": [int(b["id"]) for b in bookings]})

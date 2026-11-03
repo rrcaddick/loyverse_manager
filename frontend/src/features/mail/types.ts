@@ -49,6 +49,8 @@ export interface Thread {
   unanswered_count?: number;
   /** v3: `b:<booking_id>` or `e:<address>` — the person this thread belongs to. */
   party_key?: string;
+  /** Every booking this conversation belongs to (a booking's conversation lists it; 3 Nov 2026). */
+  bookings?: ThreadBooking[];
 }
 
 /**

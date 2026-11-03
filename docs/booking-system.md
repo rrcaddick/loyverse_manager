@@ -637,3 +637,54 @@ and the form's question on the group step. `scripts/cluster_groups.py` is the
 pass that grouped this season's bookings (only Oasis FY1735/FY1734 merged; the
 two shared-address pairs stayed apart as different groups); the review is in
 `data/migration/groups-2026-11-02.txt`.
+
+## The name is the selected spelling, the form knows our groups, a conversation on several bookings (3 Nov 2026)
+
+**Spellings.** Migration 029: `booking_group_aliases` carries `is_selected`,
+`source` (booked, typed, import) and the `booking_id` that used the spelling;
+`booking_groups.name` is a cache of the selected alias. Linking a booking
+records its name as an alias credited to it. `GET /groups/:id`,
+`POST /groups/:id/aliases` (add a spelling), `POST .../aliases/:aid/use`
+(make it the name), `DELETE .../aliases/:aid` (never the selected one). The
+History tab's Group section lists them with origin and booking counts. A
+booking keeps its own `group_name` whatever the group is called: aliases only
+drive display and matching, so a wrong one is simply deleted. There is no
+organisation level above groups: NAC Bellville and NAC Paarl are separate
+groups, and so is each Potters House congregation.
+
+**Matching.** `groups.name_tokens` expands NAC, OAC and SS, keeps "Old" and
+"New" when they qualify "Apostolic" (the two churches in one suburb never
+match each other), and `_overlap` reads a misspelling as its word (Apostilic).
+
+**The form.** Steps are contact → visit → group. `GET /public/groups/suggest`
+(`public_form.suggest_groups`, sixty lookups a minute per address) returns
+`mine` (groups this address or number booked for) and `matches`
+(organisations whose selected or other spelling starts with the typed word,
+three letters on, six at most); families and person-named groups never appear
+and nothing but names and areas comes back. The group step opens with "Did
+you mean" and offers matches as they type. A pick fills the name and area and
+travels as `group_id`; "None of these" as `group_choice: none`. On creation
+`groups.apply_customer_answer` links the pick (method `customer`) unless the
+customer's address or number sits on another group that could also be this one
+(then it stays a question), and makes a new group on "none" (`customer-new`).
+The visited-before question is gone from the form (the column stays). The
+office's Add booking lists the groups we know as the name is typed (`GET
+/groups?q=` now also matches contact addresses and numbers and carries the
+last booking's contact); a pick fills the kind, the area and last time's
+contact where empty and creates the booking in that group.
+
+**Shared conversations.** Migration 030: `email_thread_bookings(gmail_thrid,
+booking_id, method)`; `email_threads.booking_id` and
+`email_messages.booking_id` stay the conversation's home. A booking's
+conversation, thread list and unanswered count include linked threads
+(`messages_for_booking_threads`, `email_thread.list_for_booking`,
+`booking._unanswered_count`, `booking_conversation`); thread payloads from the
+booking conversation carry `bookings`. `inbound.attach_to_bookings` links the
+thread to every booking, learns contacts and writes `email_received` on each,
+inspects proofs of payment once on the home booking. Rules: a mail that names
+several references attaches to all of them when the sender is a contact on
+each (`reference+contact`), one person on several open bookings that share the
+visit date is one party and attaches to all (`email+same day`); different
+days stay a question. `POST /inbound/messages/:id/assign` takes `booking_id`,
+`booking_ids` or `all`; Work › Assign mail offers "All n". Attaching from a
+conversation, a sent reply and detaching keep the link table in step.

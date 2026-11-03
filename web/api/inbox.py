@@ -195,8 +195,10 @@ def detach(message_id: int):
         # The thread keeps the booking only while another message still carries it.
         if not any(m.get("booking_id") for m in em.thread(thrid)):
             from src.models import email_thread as et
+            from src.models import email_thread_booking as links
 
             et.set_booking(thrid, None)
+            links.unlink(thrid, int(msg["booking_id"]))
             em.clear_booking_thread_if(int(msg["booking_id"]), thrid)
         conversations.refresh_thread(thrid)
     return ok({"message": _full(_message_or_404(message_id))})

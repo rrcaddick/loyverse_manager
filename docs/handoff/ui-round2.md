@@ -360,3 +360,26 @@ form is free text and a different person may book.
   completion link carries it.
 - Words: never "matcher", "score" or "profile" in the UI; "Same group", "New
   group", "Change group", "Rebook", "Visit 3".
+
+## Spellings, the form's Did you mean, the office pick, shared mail (3 Nov 2026)
+
+- **History › Group › Spellings**: the selected spelling is the name (a tick,
+  "Name"); a click on another makes it the name; the origin reads "FY1530, Sat
+  13 Dec 2025 · 1 booking" or "Added by hand"; a non-selected spelling has a
+  delete; "Add a spelling" is an inline input. Hooks `useAddGroupAlias`,
+  `useUseGroupAlias`, `useDeleteGroupAlias` refetch the booking.
+- **Public form**: `/request` → contact (step 1, carries the intro) → visit →
+  group → check. `RequestGroupPage`: the "Did you mean" box (the groups this
+  address or number booked for, "None of these, it is a different group") and
+  the name field as a combobox listing organisations from three letters
+  (`useGroupSuggestions`); a pick notes "Matched to our records. You can still
+  change the wording." and editing the name lets the pick go. `group_id` and
+  `group_choice` are hidden draft fields; the Check page marks a picked name
+  "From our records". `previous_visit_name` is gone from the form.
+- **Add booking**: `GroupNameField` (create mode only) lists our groups as the
+  name is typed with area, kind, bookings, last contact and last visit; a pick
+  fills empty kind, area and contact fields (toast says which) and the booking
+  is created with `group_id`. Rebook already carried the group.
+- **Work › Assign mail**: an extra "All n" verb; `AssignMessageAction` carries
+  `booking_id` or `booking_ids`. The thread payload on a booking's conversation
+  carries `bookings`, shown as "Also on FY…" under the thread header.

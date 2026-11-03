@@ -30,6 +30,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { Check, Inbox } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -525,6 +526,23 @@ function ConversationInner({
             Mark handled
           </Button>
         </div>
+      ) : null}
+
+      {/* One conversation, several bookings (3 Nov 2026): say where else it lives. */}
+      {mode === "booking" && thread?.bookings && thread.bookings.filter((b) => b.id !== resolvedBookingId).length > 0 ? (
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
+          <span>Also on</span>
+          {thread.bookings
+            .filter((b) => b.id !== resolvedBookingId)
+            .map((b, i, all) => (
+              <span key={b.id}>
+                <Link to={`/bookings/${b.id}?tab=conversation`} className="text-foreground underline-offset-3 hover:underline">
+                  <span className="font-mono">{b.reference}</span> {b.group_name}
+                </Link>
+                {i < all.length - 1 ? "," : ""}
+              </span>
+            ))}
+        </p>
       ) : null}
 
       <div

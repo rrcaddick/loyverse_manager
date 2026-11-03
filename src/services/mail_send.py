@@ -249,6 +249,13 @@ def send_email(
             or None,
         }
     )
+    if booking_id and thrid:
+        try:
+            from src.models import email_thread_booking as links
+
+            links.link(int(thrid), int(booking_id), "sent")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Thread link for sent mail {row_id} not recorded: {exc}")
     if booking_id:
         add_booking_event(
             booking_id,

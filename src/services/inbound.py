@@ -287,12 +287,22 @@ def disambiguate(row: dict, candidates: list[dict]) -> tuple[dict | None, str]:
     return None, "ambiguous"
 
 
-def match_open_booking(row: dict, bookings: list[dict] | None = None) -> tuple[dict | None, list[dict], str]:
-    """(booking, candidates, method). Reference first (any status), then
-    people (address, mobile), then a corroborated group name."""
+def _same_party(bookings: list[dict]) -> bool:
+    """Several bookings on the same day for the same person are one party
+    (Potters House: nine congregations, one contact, one Saturday)."""
+    days = {str(b.get("visit_date")) for b in bookings}
+    return len(bookings) > 1 and len(days) == 1
+
+
+def match_open_booking(row: dict, bookings: list[dict] | None = None) -> tuple[dict | list[dict] | None, list[dict], str]:
+    """(booking or bookings, candidates, method). Reference first (any
+    status), then people (address, mobile), then a corroborated group name.
+    A list means the mail belongs to all of them (3 Nov 2026)."""
     facts = _facts_for_message(row)
-    # One reference settles it; a mail that names two bookings (the Oasis
-    # accounts office writes "FY1735/34") is held for a click between them.
+    senders = {a for a in facts.participants}
+    # One reference settles it; a mail that names several bookings goes to all
+    # of them when the sender is a contact on each, otherwise it is held for a
+    # click between them (the Oasis accounts office writes "FY1735/34").
     referenced: list[dict] = []
     for n in sorted(facts.references()):
         b = em.booking_by_doc_number(int(n))
@@ -304,9 +314,10 @@ def match_open_booking(row: dict, bookings: list[dict] | None = None) -> tuple[d
         # Candidates carry the open-booking shape (learned addresses and numbers).
         known = {int(b["id"]): b for b in (bookings if bookings is not None else open_bookings())}
         candidates = [known.get(int(b["id"])) or {**b, "emails": {str(b["contact_email"]).lower()} if b.get("contact_email") else set(), "mobiles": set()} for b in referenced]
+        if senders and all(c["emails"] & senders for c in candidates):
+            return candidates, [], "reference+contact"
         return None, candidates, "reference"
     bookings = bookings if bookings is not None else open_bookings()
-    senders = {a for a in facts.participants}
     by_people = [b for b in bookings if (b["emails"] & senders)]
     if not by_people:
         mobs = facts.mobiles()
@@ -315,6 +326,8 @@ def match_open_booking(row: dict, bookings: list[dict] | None = None) -> tuple[d
     else:
         method = "email"
     if by_people:
+        if _same_party(by_people):
+            return by_people, [], f"{method}+same day"
         chosen, how = disambiguate(row, by_people)
         if chosen:
             return chosen, by_people, f"{method}" if how == "only one open booking" else f"{method}+{how}"
@@ -365,25 +378,44 @@ def _record(message_id: int, outcome: str, *, booking_id: int | None = None, enq
 
 
 def attach_to_booking(message_id: int, row: dict, booking: dict, method: str) -> None:
+    attach_to_bookings(message_id, row, [booking], method)
+
+
+def attach_to_bookings(message_id: int, row: dict, bookings: list[dict], method: str) -> None:
+    """Put the message, and its conversation, on every booking it concerns
+    (3 Nov 2026). The first booking is the conversation's home: the message
+    row points at it and proofs of payment are inspected there once; every
+    booking gets the thread link, the learned contacts and the activity line."""
+    from src.models import email_thread_booking as links
     from src.services import conversations, pop
 
-    bid = int(booking["id"])
+    bookings = [b for b in bookings if b]
+    if not bookings:
+        return
+    home = int(bookings[0]["id"])
+    ids = []
+    for b in bookings:
+        if int(b["id"]) not in ids:
+            ids.append(int(b["id"]))
     sender = (row.get("from_email") or "").lower()
-    em.link_to_booking(int(message_id), bid, method[:30], whole_thread=False)
+    em.link_to_booking(int(message_id), home, method[:30], whole_thread=False)
     thrid = row.get("gmail_thrid")
     if thrid:
-        em.set_booking_thread_if_null(bid, int(thrid))
-        em.link_unlinked_in_thread(int(thrid), bid, "thread")
+        for bid in ids:
+            links.link(int(thrid), bid, method)
+            em.set_booking_thread_if_null(bid, int(thrid))
+        em.link_unlinked_in_thread(int(thrid), home, "thread")
         conversations.refresh_thread(int(thrid))
-    _learn_contacts(bid, row)
-    if not row.get("is_auto_generated"):
-        em.insert_booking_event(
-            bid, "email_received", (row.get("subject") or "(no subject)")[:255],
-            {"email_message_id": int(message_id), "from": sender, "match_method": method}, None,
-        )
-    _record(int(message_id), "booking", booking_id=bid, method=method)
+    for bid in ids:
+        _learn_contacts(bid, row)
+        if not row.get("is_auto_generated"):
+            em.insert_booking_event(
+                bid, "email_received", (row.get("subject") or "(no subject)")[:255],
+                {"email_message_id": int(message_id), "from": sender, "match_method": method, "shared_with": [i for i in ids if i != bid] or None}, None,
+            )
+    _record(int(message_id), "booking", booking_id=home, method=method)
     try:
-        pop.inspect_message(int(message_id), bid)
+        pop.inspect_message(int(message_id), home)
     except Exception as exc:  # noqa: BLE001
         logger.error(f"POP inspection failed for message {message_id}: {exc}", exc_info=True)
 
@@ -424,14 +456,21 @@ def process_message(
     now = now or _now()
     thrid = int(row["gmail_thrid"]) if row.get("gmail_thrid") else None
 
-    # 1. The conversation already knows where it belongs.
+    # 1. The conversation already knows where it belongs (to one booking or several).
     if thrid:
+        from src.models import email_thread_booking as links
+
         t = et.get(thrid)
-        if t and t.get("booking_id"):
+        linked = [em.booking_by_id(i) for i in links.booking_ids_for_thread(thrid)]
+        linked = [b for b in linked if b]
+        if not linked and t and t.get("booking_id"):
             b = em.booking_by_id(int(t["booking_id"]))
-            if b:
-                attach_to_booking(int(message_id), row, b, "thread")
-                return {"outcome": "booking", "booking_id": int(b["id"]), "method": "thread"}
+            linked = [b] if b else []
+        if linked:
+            if t and t.get("booking_id") and any(int(b["id"]) == int(t["booking_id"]) for b in linked):
+                linked.sort(key=lambda b: 0 if int(b["id"]) == int(t["booking_id"]) else 1)  # the home booking first
+            attach_to_bookings(int(message_id), row, linked, "thread")
+            return {"outcome": "booking", "booking_id": int(linked[0]["id"]), "booking_ids": [int(b["id"]) for b in linked], "method": "thread"}
         if t and t.get("not_booking"):
             _record(int(message_id), "not_booking")
             return {"outcome": "not_booking"}
@@ -447,6 +486,9 @@ def process_message(
 
     # 2. Reference, people, group name.
     booking, candidates, method = match_open_booking(row, bookings)
+    if isinstance(booking, list):
+        attach_to_bookings(int(message_id), row, booking, method)
+        return {"outcome": "booking", "booking_id": int(booking[0]["id"]), "booking_ids": [int(b["id"]) for b in booking], "method": method}
     if booking:
         attach_to_booking(int(message_id), row, booking, method)
         return {"outcome": "booking", "booking_id": int(booking["id"]), "method": method}

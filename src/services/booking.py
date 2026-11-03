@@ -1352,9 +1352,16 @@ def _pending_pops(booking_id: int) -> list[dict]:
 
 def _unanswered_count(booking_id: int) -> int:
     try:
+        from src.models import email_thread_booking as links
         from src.services import waiting
 
-        return len(waiting.unanswered_messages(f"b:{int(booking_id)}"))
+        key = f"b:{int(booking_id)}"
+        snap = waiting.build_snapshot()
+        n = len(waiting.unanswered_messages(key, snap))
+        own = {int(t["gmail_thrid"]) for t in waiting.party_threads(key, snap)}
+        # Conversations shared from another booking (one contact, several bookings).
+        n += sum(waiting.unanswered_count_for_thread(t, snap) for t in links.thrids_for_booking(int(booking_id)) if t not in own)
+        return n
     except Exception:  # noqa: BLE001 - the mail side must never break the record
         return 0
 

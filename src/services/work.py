@@ -402,7 +402,8 @@ def _allocate_rows(today: date) -> list[dict]:
                 secondary=[
                     _act(f"{c['reference']} · {_short_day(c['visit_date'])}", "assign_message", message_id=int(r["id"]), booking_id=int(c["booking_id"]))
                     for c in cands
-                ],
+                ]
+                + [_act(f"All {len(cands)}", "assign_message", message_id=int(r["id"]), booking_ids=[int(c["booking_id"]) for c in cands])],
                 sort_key=_key(TIER_REPLY, _as_date(r.get("sent_at")) or today, int(r["id"])),
             )
         )
