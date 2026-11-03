@@ -317,14 +317,40 @@ export interface PaymentSearchResult {
 /** GET /bookings/:id and every mutation/action response. */
 // ------------------------------------------------------- groups and history
 
+export type GroupAliasSource = "booked" | "typed" | "import";
+
+/** One spelling of a group's name, with where it came from. */
+export interface GroupAlias {
+  id: number;
+  name: string;
+  selected: boolean;
+  source: GroupAliasSource;
+  booking_id: number | null;
+  booking_reference: string | null;
+  booking_visit_date: string | null;
+  /** Bookings in the group booked under exactly this spelling. */
+  bookings: number;
+  created_at: string;
+}
+
+/** GET /groups/:id and the alias endpoints. */
+export interface GroupDetail {
+  id: number;
+  name: string;
+  area: string | null;
+  group_type: string | null;
+  aliases: GroupAlias[];
+  bookings: number;
+}
+
 /** The group a booking belongs to: the thing that comes back (2 Nov 2026). */
 export interface GroupRef {
   id: number;
   name: string;
   area: string | null;
   group_type: string | null;
-  /** Every other spelling it has been booked under. */
-  aliases: string[];
+  /** Every spelling it has been booked under; the selected one is the name (3 Nov 2026). */
+  aliases: GroupAlias[];
   /** Bookings in the group, this one included. */
   bookings: number;
 }

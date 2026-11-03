@@ -79,10 +79,53 @@ def _plain(text: str | None) -> str:
     return (text or "").replace("'", "").replace("\u2019", "")
 
 
+# Short forms the office and the churches use for the same thing.
+EXPANSIONS = {"nac": ("new", "apostolic"), "oac": ("old", "apostolic"), "ngk": ("ng",), "vgk": ("vgk",), "ss": ("sunday", "school")}
+# Generic words that still tell two groups apart when they qualify another word
+# ("Old Apostolic" and "New Apostolic" in the same suburb are different churches).
+QUALIFIERS = {"old", "new"}
+QUALIFIED = {"apostolic"}
+
+
 def name_tokens(name: str | None) -> set[str]:
     """The words of a group name that tell it apart: no generic words, no numbers
-    (a grade changes every year, the school does not)."""
-    return {w for w in mt.words(_plain(name)) if w not in mt.GENERIC_WORDS and len(w) > 1 and not w.isdigit()}
+    (a grade changes every year, the school does not). NAC and OAC read as the
+    full names; Old and New stay when they qualify Apostolic."""
+    raw: list[str] = []
+    for w in mt.words(_plain(name)):
+        raw.extend(EXPANSIONS.get(w, (w,)))
+    out: set[str] = set()
+    for i, w in enumerate(raw):
+        if w.isdigit() or len(w) < 2:
+            continue
+        if w in QUALIFIERS and i + 1 < len(raw) and raw[i + 1] in QUALIFIED:
+            out.add(f"{w}-{raw[i + 1]}")
+            continue
+        if w in mt.GENERIC_WORDS and w not in QUALIFIED:
+            continue
+        out.add(w)
+    return out
+
+
+def _same_token(a: str, b: str) -> bool:
+    return a == b or (len(a) >= 5 and len(b) >= 5 and mt.fuzzy_word_in(a, [b]))
+
+
+def _overlap(a: set[str], b: set[str]) -> int:
+    """Shared words, allowing a misspelling (Apostilic is Apostolic). Two
+    names that qualify the same word differently (Old Apostolic, New
+    Apostolic) share nothing: they are different churches."""
+    if _qualifier_clash(a, b):
+        return 0
+    return sum(1 for x in a if any(_same_token(x, y) for y in b))
+
+
+def _qualifier_clash(a: set[str], b: set[str]) -> bool:
+    qa = {t for t in a if "-" in t}
+    qb = {t for t in b if "-" in t}
+    if not qa or not qb:
+        return False
+    return any(x.split("-", 1)[1] == y.split("-", 1)[1] and x != y for x in qa for y in qb)
 
 
 def name_key(name: str | None) -> str:
@@ -104,7 +147,7 @@ def domain_of(email: str | None) -> str | None:
 def _coverage(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
-    return len(a & b) / min(len(a), len(b))
+    return _overlap(a, b) / min(len(a), len(b))
 
 
 # ------------------------------------------------------------- facts -----
@@ -243,9 +286,9 @@ def names_contradict(facts: Facts, profile: Profile) -> bool:
     address alone must not merge the two."""
     if not facts.name_tokens or not profile.token_sets:
         return False
-    if any(facts.name_tokens & ts for ts in profile.token_sets):
+    if any(_overlap(facts.name_tokens, ts) for ts in profile.token_sets):
         return False
-    if facts.previous_tokens and any(facts.previous_tokens & ts for ts in profile.token_sets):
+    if facts.previous_tokens and any(_overlap(facts.previous_tokens, ts) for ts in profile.token_sets):
         return False
     return True
 
@@ -269,16 +312,22 @@ def score(facts: Facts, profile: Profile) -> tuple[int, list[str]]:
         why.append("different name")
 
     base = 0
-    if facts.previous_key and facts.previous_key in profile.name_keys:
+    def full_match(tokens: set[str]) -> bool:
+        return bool(tokens) and any(len(ts) == len(tokens) and _overlap(tokens, ts) == len(tokens) for ts in profile.token_sets)
+
+    def part_match(tokens: set[str]) -> bool:
+        return bool(tokens) and any(_coverage(tokens, ts) >= 0.5 for ts in profile.token_sets)
+
+    if full_match(facts.previous_tokens):
         base = SCORE_PREVIOUS_NAME
         why.append("previous name")
-    elif facts.previous_tokens and any(_coverage(facts.previous_tokens, ts) >= 0.5 for ts in profile.token_sets):
+    elif part_match(facts.previous_tokens):
         base = SCORE_NAME_PARTIAL
         why.append("previous name (part)")
-    if facts.name_key and facts.name_key in profile.name_keys:
+    if full_match(facts.name_tokens):
         base = max(base, SCORE_NAME)
         why.append("name")
-    elif facts.name_tokens and any(_coverage(facts.name_tokens, ts) >= 0.5 for ts in profile.token_sets):
+    elif part_match(facts.name_tokens):
         base = max(base, SCORE_NAME_PARTIAL)
         why.append("name (part)")
     domain_hit = bool(facts.domains & profile.domains)
@@ -364,9 +413,9 @@ def link_booking(booking_id: int, group_id: int, actor: int | None, method: str 
 def _learn(group: Mapping[str, Any], booking: Mapping[str, Any]) -> None:
     gid = int(group["id"])
     name = (booking.get("group_name") or "").strip()
-    if name and name_key(name) and name.lower() != str(group["name"]).lower():
-        if name.lower() not in {a.lower() for a in group_model.aliases(gid)}:
-            group_model.add_alias(gid, name)
+    if name and name_key(name):
+        # Every spelling a group is booked under is an alias, credited to the booking.
+        group_model.add_alias(gid, name, source="booked", booking_id=int(booking["id"]) if booking.get("id") else None)
     fields: dict[str, Any] = {}
     if not group.get("area") and booking.get("area"):
         fields["area"] = booking["area"]
@@ -382,6 +431,7 @@ def new_group_for(booking_id: int, actor: int | None, method: str = "new") -> di
     if b is None:
         raise LookupError(f"Booking {booking_id} not found")
     gid = group_model.insert(b["group_name"], b.get("group_type"), b.get("area"))
+    group_model.add_alias(gid, b["group_name"], source="booked", booking_id=int(b["id"]), selected=True)
     return link_booking(booking_id, gid, actor, method=method)
 
 
@@ -403,6 +453,58 @@ def assign_on_create(booking_id: int, actor: int | None = None) -> dict:
         g = new_group_for(booking_id, actor)
         return {"outcome": "new", "group_id": int(g["id"])}
     return {"outcome": "suggested", "suggestions": suggestions}
+
+
+def group_detail(group_id: int) -> dict | None:
+    """The group with its spellings: the History tab's Group section and the alias endpoints."""
+    g = group_model.get(int(group_id))
+    if g is None:
+        return None
+    return {
+        "id": int(g["id"]),
+        "name": g["name"],
+        "area": g.get("area"),
+        "group_type": g.get("group_type"),
+        "aliases": [serialize_alias(a) for a in group_model.aliases(int(group_id))],
+        "bookings": len(group_model.bookings(int(group_id))),
+    }
+
+
+def serialize_alias(a: Mapping[str, Any]) -> dict:
+    out = serialize_row(dict(a)) or {}
+    out["selected"] = bool(a.get("is_selected"))
+    out["bookings"] = int(a.get("bookings") or 0)
+    out.pop("is_selected", None)
+    return out
+
+
+def add_spelling(group_id: int, name: str, actor: int | None) -> dict:
+    """A spelling typed by the office: it starts matching at once."""
+    n = (name or "").strip()
+    if not n or not name_key(n):
+        raise ValueError("Enter a name with at least one distinctive word")
+    aid = group_model.add_alias(int(group_id), n, source="typed")
+    if aid is None:
+        raise LookupError(f"Group {group_id} not found")
+    return group_detail(group_id) or {}
+
+
+def use_spelling(group_id: int, alias_id: int, actor: int | None) -> dict:
+    """Make an alias the group's name."""
+    if not group_model.select_alias(int(group_id), int(alias_id)):
+        raise LookupError("That spelling is not on this group")
+    return group_detail(group_id) or {}
+
+
+def remove_spelling(group_id: int, alias_id: int, actor: int | None) -> dict:
+    """Drop a spelling. The selected one stays until another is chosen."""
+    a = group_model.get_alias(int(alias_id))
+    if a is None or int(a["group_id"]) != int(group_id):
+        raise LookupError("That spelling is not on this group")
+    if a.get("is_selected"):
+        raise ValueError("Choose another spelling as the name first")
+    group_model.delete_alias(int(group_id), int(alias_id))
+    return group_detail(group_id) or {}
 
 
 def note_name_change(booking_id: int, new_name: str | None) -> None:
@@ -585,7 +687,7 @@ def history_for(booking: Mapping[str, Any], today: date | None = None) -> dict:
             "name": g["name"],
             "area": g.get("area"),
             "group_type": g.get("group_type"),
-            "aliases": group_model.aliases(int(g["id"])),
+            "aliases": [serialize_alias(a) for a in group_model.aliases(int(g["id"]))],
             "bookings": len(rows) + 1,
         },
         "visits": visits,

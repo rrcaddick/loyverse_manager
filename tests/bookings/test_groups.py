@@ -165,7 +165,7 @@ def test_the_same_address_links_the_next_booking_and_learns_the_spelling(created
     first = make(created)
     second = make(created, group_name="TEST Groups Pytest School Grade 4", visit_date=(VISIT + timedelta(days=7)).isoformat(), contact_name="Another Teacher")
     assert second["group_id"] == first["group_id"]
-    assert "TEST Groups Pytest School Grade 4" in gm.aliases(first["group_id"])
+    assert "TEST Groups Pytest School Grade 4" in gm.alias_names(first["group_id"])
     history = groups.history_for(second)
     assert history["group"]["bookings"] == 2
     assert [v["reference"] for v in history["visits"]] == [first["reference"]]
@@ -197,7 +197,7 @@ def test_rebook_carries_the_group(created):
     first = make(created)
     again = make(created, group_id=first["group_id"], contact_email="new.booker@example.com", contact_mobile="082 555 0303", group_name="TEST Entirely different words", visit_date=(VISIT + timedelta(days=21)).isoformat())
     assert again["group_id"] == first["group_id"]
-    assert "TEST Entirely different words" in gm.aliases(first["group_id"])
+    assert "TEST Entirely different words" in gm.alias_names(first["group_id"])
 
 
 @db
@@ -243,3 +243,15 @@ def test_the_form_keeps_the_previous_visit_name():
     clean, errors = public_form.validate_request(payload, get_settings(), closed_days=set())
     assert "previous_visit_name" not in errors
     assert clean["previous_visit_name"] == "Mondale High School"
+
+
+def test_short_forms_misspellings_and_old_versus_new():
+    assert groups.name_tokens("NAC Blue Downs") == groups.name_tokens("New Apostolic Church, Blue Downs")
+    assert groups.name_tokens("OAC Choir") == groups.name_tokens("Old Apostolic Choir")
+    p = _profile(name="New Apostolic Church", area="Elsies River", aliases=["New Apostolic, Elsies River"])
+    points, why = groups.score(_facts(group_name="New Apostilic", area="Elsies River"), p)
+    assert points == groups.SCORE_NAME_PARTIAL + groups.SCORE_AREA and "name (part)" in why  # the misspelling still reads
+    points, _ = groups.score(_facts(group_name="Old Apostolic Church", area="Elsies River"), p)
+    assert points == 0  # a different church in the same suburb
+    points, why = groups.score(_facts(group_name="NAC Elsies River", area="Elsies River"), p)
+    assert "name" in why and points >= groups.SCORE_NAME

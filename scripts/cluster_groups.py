@@ -124,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     for c in found:
         head = c[-1]  # the most recent booking names the group
         gid = group_model.insert(head["group_name"], head.get("group_type"), head.get("area"))
+        group_model.add_alias(gid, head["group_name"], source="booked", booking_id=int(head["id"]), selected=True)
         made += 1
         for b in c:
             groups.link_booking(int(b["id"]), gid, None, method="cluster" if len(c) > 1 else "new")

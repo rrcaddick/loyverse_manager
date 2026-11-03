@@ -25,6 +25,7 @@ import type {
   BookingListParams,
   BookingContact,
   DocumentKind,
+  GroupDetail,
   GroupSearchRow,
   InboxMessage,
   PaymentSearchParams,
@@ -172,6 +173,35 @@ export function useVerifyPayment(id: number) {
 /** Needs attention's "Same group as ...?": Yes links the group, New group starts one (2 Nov 2026). */
 export function useSetGroup(id: number) {
   return useDetailMutation<{ group_id: number } | { new: true }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/group`, input));
+}
+
+/**
+ * The group's spellings (3 Nov 2026): add one, make one the name, drop one.
+ * Each returns the group; the booking detail is refetched so History follows.
+ */
+function useGroupAliasMutation<TVariables>(bookingId: number, fn: (v: TVariables) => Promise<GroupDetail>, successMessage?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    meta: successMessage ? { successMessage } : { silent: true },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+      void qc.invalidateQueries({ queryKey: ["bookings", "list"] });
+      void qc.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
+export function useAddGroupAlias(bookingId: number, groupId: number) {
+  return useGroupAliasMutation<string>(bookingId, (name) => api.post<GroupDetail>(`/groups/${groupId}/aliases`, { name }));
+}
+
+export function useUseGroupAlias(bookingId: number, groupId: number) {
+  return useGroupAliasMutation<number>(bookingId, (aliasId) => api.post<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}/use`, {}));
+}
+
+export function useDeleteGroupAlias(bookingId: number, groupId: number) {
+  return useGroupAliasMutation<number>(bookingId, (aliasId) => api.delete<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}`));
 }
 
 /** The group picker behind Change group: name, alias, a booking's name, reference or contact. */

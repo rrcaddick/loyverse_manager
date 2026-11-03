@@ -8,7 +8,7 @@
  * Change group and the Same group / New group answers are the only verbs.
  */
 
-import { History, MessageCircleQuestion, Users } from "lucide-react";
+import { Check, History, MessageCircleQuestion, Plus, Users, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -18,15 +18,16 @@ import { EmptyState } from "@/components/empty-state";
 import { Section } from "@/components/section";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage } from "@/lib/api";
 import { formatDateShort, formatMoney, formatNumber, pluralise } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-import { useSetGroup } from "../../api";
+import { useAddGroupAlias, useDeleteGroupAlias, useSetGroup, useUseGroupAlias } from "../../api";
 import { suggestionLabel, summaryLines, whyText } from "../../groups";
 import { useGroupTypeLabel } from "../../lib";
-import type { BookingDetail, HistoryVisit } from "../../types";
+import type { BookingDetail, GroupAlias, HistoryVisit } from "../../types";
 import { GroupPickerDialog } from "./group-picker-dialog";
 
 export function HistoryTab({ booking }: { booking: BookingDetail }) {
@@ -92,6 +93,12 @@ function SummaryNumbers({ booking }: { booking: BookingDetail }) {
 
 // ------------------------------------------------------------------ group
 
+/**
+ * The group's name is its selected spelling: every spelling it has been
+ * booked under is listed with where it came from; a click on another makes
+ * that the name, a spelling the office expects can be typed in, and a wrong
+ * one is deleted (never the selected one). Bookings keep their own names.
+ */
 function GroupSection({ booking, onChange }: { booking: BookingDetail; onChange: () => void }) {
   const g = booking.group!;
   const groupType = useGroupTypeLabel();
@@ -111,12 +118,11 @@ function GroupSection({ booking, onChange }: { booking: BookingDetail; onChange:
         </Button>
       }
     >
-      <div className="flex flex-col gap-2 text-body">
+      <div className="flex flex-col gap-4 text-body">
         <p className="text-foreground">
           <span className="font-medium">{g.name}</span>
           <span className="text-muted-foreground">{[g.area, g.group_type ? groupType(g.group_type) : null, pluralise(g.bookings, "booking")].filter(Boolean).map((part) => ` · ${part}`)}</span>
         </p>
-        {g.aliases.length > 0 ? <p className="text-sm text-muted-foreground">Also booked as {g.aliases.join(", ")}.</p> : null}
         {lines.length > 0 ? (
           <p className="text-foreground">{lines.join(" ")}</p>
         ) : (
@@ -125,8 +131,89 @@ function GroupSection({ booking, onChange }: { booking: BookingDetail; onChange:
             {upcoming.length > 0 ? ` Also booked: ${upcoming.map((v) => `${v.reference} on ${formatDateShort(v.visit_date ?? "")}`).join(", ")}.` : ""}
           </p>
         )}
+        <Spellings booking={booking} />
       </div>
     </Section>
+  );
+}
+
+function aliasOrigin(a: GroupAlias): string {
+  if (a.source === "typed") return "Added by hand";
+  if (a.source === "import") return "From the booking sheet";
+  if (a.booking_reference) return `${a.booking_reference}${a.booking_visit_date ? `, ${formatDateShort(a.booking_visit_date)} ${a.booking_visit_date.slice(0, 4)}` : ""}`;
+  return "Booked under";
+}
+
+function Spellings({ booking }: { booking: BookingDetail }) {
+  const g = booking.group!;
+  const add = useAddGroupAlias(booking.id, g.id);
+  const use = useUseGroupAlias(booking.id, g.id);
+  const remove = useDeleteGroupAlias(booking.id, g.id);
+  const [draft, setDraft] = useState("");
+  const busy = add.isPending || use.isPending || remove.isPending;
+
+  async function run(work: () => Promise<unknown>, done: string) {
+    try {
+      await work();
+      toast.success(done);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-label text-muted-foreground uppercase">Spellings</h3>
+      <ul className="flex flex-col divide-y divide-border rounded-lg ring-1 ring-border">
+        {g.aliases.map((a) => (
+          <li key={a.id} className="flex items-center gap-3 px-3 py-2">
+            <button
+              type="button"
+              disabled={busy || a.selected}
+              title={a.selected ? "The group's name" : "Use this spelling as the group's name"}
+              onClick={() => void run(() => use.mutateAsync(a.id), `Now called ${a.name}`)}
+              className={cn("flex min-w-0 flex-1 items-center gap-2 text-left", !a.selected && "hover:text-primary")}
+            >
+              <span className={cn("inline-flex size-5 shrink-0 items-center justify-center rounded-full ring-1", a.selected ? "bg-primary text-primary-foreground ring-primary" : "ring-border")} aria-hidden="true">
+                {a.selected ? <Check className="size-3.5" /> : null}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cn("block truncate", a.selected ? "font-medium text-foreground" : "text-foreground")}>{a.name}</span>
+                <span className="block truncate text-sm text-muted-foreground">
+                  {aliasOrigin(a)} · {pluralise(a.bookings, "booking")}
+                </span>
+              </span>
+              <span className="sr-only">{a.selected ? "Selected as the name" : "Make this the name"}</span>
+            </button>
+            {a.selected ? (
+              <span className="shrink-0 text-xs text-muted-foreground uppercase">Name</span>
+            ) : (
+              <Button variant="ghost" size="icon-xs" aria-label={`Delete the spelling ${a.name}`} disabled={busy} onClick={() => void run(() => remove.mutateAsync(a.id), "Spelling removed")}>
+                <X />
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const name = draft.trim();
+          if (!name) return;
+          void run(async () => {
+            await add.mutateAsync(name);
+            setDraft("");
+          }, `Added ${name}`);
+        }}
+      >
+        <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a spelling, for example NAC Blue Downs" aria-label="Add a spelling" maxLength={255} className="sm:max-w-sm" />
+        <Button type="submit" variant="outline" size="sm" disabled={busy || !draft.trim()}>
+          <Plus data-icon="inline-start" />
+          Add
+        </Button>
+      </form>
+    </div>
   );
 }
 

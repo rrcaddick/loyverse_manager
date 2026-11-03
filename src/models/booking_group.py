@@ -50,15 +50,64 @@ def delete_empty(prefix: str | None = None, conn=None) -> int:
     )
 
 
-def add_alias(group_id: int, name: str, conn=None) -> bool:
+def add_alias(group_id: int, name: str, *, source: str = "booked", booking_id: int | None = None, selected: bool = False, conn=None) -> int | None:
+    """Record a spelling (idempotent on the name). Returns the alias id."""
     n = (name or "").strip()
     if not n:
+        return None
+    execute(
+        "INSERT IGNORE INTO booking_group_aliases (group_id, name, is_selected, source, booking_id) VALUES (%s, %s, %s, %s, %s)",
+        (int(group_id), n[:255], 1 if selected else 0, source, booking_id),
+        conn=conn,
+    )
+    row = query_one("SELECT id FROM booking_group_aliases WHERE group_id = %s AND name = %s", (int(group_id), n[:255]), conn=conn)
+    if row and booking_id and source == "booked":
+        execute("UPDATE booking_group_aliases SET booking_id = COALESCE(booking_id, %s) WHERE id = %s", (int(booking_id), int(row["id"])), conn=conn)
+    return int(row["id"]) if row else None
+
+
+def aliases(group_id: int, conn=None) -> list[dict]:
+    """Every spelling with where it came from and how many bookings used it; the selected one first."""
+    return query(
+        """
+        SELECT a.id, a.name, a.is_selected, a.source, a.booking_id, a.created_at,
+               b.reference AS booking_reference, b.visit_date AS booking_visit_date,
+               (SELECT COUNT(*) FROM bookings x WHERE x.group_id = a.group_id AND x.group_name = a.name) AS bookings
+        FROM booking_group_aliases a
+        LEFT JOIN bookings b ON b.id = a.booking_id
+        WHERE a.group_id = %s
+        ORDER BY a.is_selected DESC, a.created_at, a.id
+        """,
+        (int(group_id),),
+        conn=conn,
+    )
+
+
+def alias_names(group_id: int, conn=None) -> list[str]:
+    return [r["name"] for r in aliases(group_id, conn=conn)]
+
+
+def get_alias(alias_id: int, conn=None) -> dict | None:
+    return query_one("SELECT * FROM booking_group_aliases WHERE id = %s", (int(alias_id),), conn=conn)
+
+
+def select_alias(group_id: int, alias_id: int, conn=None) -> bool:
+    """Make this spelling the group's name."""
+    a = get_alias(alias_id, conn=conn)
+    if a is None or int(a["group_id"]) != int(group_id):
         return False
-    return execute("INSERT IGNORE INTO booking_group_aliases (group_id, name) VALUES (%s, %s)", (int(group_id), n[:255]), conn=conn) > 0
+    execute("UPDATE booking_group_aliases SET is_selected = 0 WHERE group_id = %s", (int(group_id),), conn=conn)
+    execute("UPDATE booking_group_aliases SET is_selected = 1 WHERE id = %s", (int(alias_id),), conn=conn)
+    execute("UPDATE booking_groups SET name = %s WHERE id = %s", (a["name"], int(group_id)), conn=conn)
+    return True
 
 
-def aliases(group_id: int, conn=None) -> list[str]:
-    return [r["name"] for r in query("SELECT name FROM booking_group_aliases WHERE group_id = %s ORDER BY id", (int(group_id),), conn=conn)]
+def delete_alias(group_id: int, alias_id: int, conn=None) -> bool:
+    """Remove a spelling. The selected one cannot go: pick another first."""
+    a = get_alias(alias_id, conn=conn)
+    if a is None or int(a["group_id"]) != int(group_id) or a.get("is_selected"):
+        return False
+    return execute("DELETE FROM booking_group_aliases WHERE id = %s", (int(alias_id),), conn=conn) > 0
 
 
 def bookings(group_id: int, conn=None) -> list[dict]:
