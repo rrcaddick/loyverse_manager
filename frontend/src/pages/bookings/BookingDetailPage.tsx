@@ -2,8 +2,8 @@
  * /bookings/:id — the booking record (UI round two, owner's plan of 29 Oct
  * 2026). Header (group name, status, facts, one primary button, Edit, ⋯),
  * then eight tabs: Overview · Needs attention (with its count; a request
- * opens on it) · Conversation · Payments · Documents · History (the group's
- * other bookings, 2 Nov 2026) · Activity · Contacts.
+ * opens on it) · Conversation · Payments · Documents · Activity · Contacts ·
+ * History (the group's other bookings, last on the right, 2 Nov 2026).
  * Keys: E edit, N note (on Activity).
  */
 
@@ -38,7 +38,7 @@ import { errorMessage, isApiError } from "@/lib/api";
 
 const ConversationView = lazy(() => import("@/features/mail/conversation-view").then((m) => ({ default: m.ConversationView })));
 
-const TABS = ["overview", "attention", "conversation", "payments", "documents", "history", "activity", "contacts"] as const;
+const TABS = ["overview", "attention", "conversation", "payments", "documents", "activity", "contacts", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function BookingDetailPage() {
@@ -154,9 +154,9 @@ function Record({ booking }: { booking: BookingDetail }) {
           { value: "conversation", label: "Conversation", count: unanswered },
           { value: "payments", label: "Payments", count: booking.pops.length },
           { value: "documents", label: "Documents" },
-          { value: "history", label: "History", count: booking.history.visits.length || null },
           { value: "activity", label: "Activity" },
           { value: "contacts", label: "Contacts" },
+          { value: "history", label: "History", count: booking.history.visits.length || null },
         ]}
       />
 
@@ -175,9 +175,9 @@ function Record({ booking }: { booking: BookingDetail }) {
           {tab === "attention" ? <AttentionTab booking={booking} unanswered={unanswered} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} onConversation={() => setTab("conversation")} /> : null}
           {tab === "payments" ? <PaymentsTab booking={booking} /> : null}
           {tab === "documents" ? <DocumentsTab booking={booking} /> : null}
-          {tab === "history" ? <HistoryTab booking={booking} /> : null}
           {tab === "activity" ? <Activity booking={booking} /> : null}
           {tab === "contacts" ? <ContactsTab booking={booking} /> : null}
+          {tab === "history" ? <HistoryTab booking={booking} /> : null}
         </div>
       )}
     </>
