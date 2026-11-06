@@ -96,26 +96,26 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
       <div className="flex flex-wrap items-center gap-2">
         {open ? (
           <>
-            <Button size="sm" className="border-transparent bg-[#f59e0b] text-[#1f1a0a] hover:bg-[#d97706]" disabled={busy} onClick={() => setConfirm("convert")}>
+            <Button size="sm" className="border-transparent bg-[#16a34a] text-white hover:bg-[#15803d]" disabled={busy} onClick={() => setConfirm("convert")}>
               <Send data-icon="inline-start" />
-              {enquiry.convert_sent_at ? "Send the form again" : "Send the form"}
+              {enquiry.convert_sent_at ? "Send request form again" : "Send request form"}
             </Button>
-            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setRequestOpen(true)}>
-              <FileInput data-icon="inline-start" />
-              Create request
-            </Button>
-            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setAttachOpen(true)}>
+            <Button size="sm" disabled={busy} onClick={() => setAttachOpen(true)}>
               <Link2 data-icon="inline-start" />
               Attach to booking
             </Button>
+            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setRequestOpen(true)}>
+              <FileInput data-icon="inline-start" />
+              Create booking
+            </Button>
             <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
-            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => void run("resolve", "Enquiry resolved")}>
+            <Button size="sm" disabled={busy} onClick={() => void run("resolve", "Enquiry resolved")}>
               <Check data-icon="inline-start" />
               Resolve
             </Button>
-            <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={busy} onClick={() => setConfirm("not_booking")}>
+            <Button size="sm" variant="outline-primary" disabled={busy} onClick={() => setConfirm("not_booking")}>
               <XCircle data-icon="inline-start" />
-              Not an enquiry
+              Dismiss
             </Button>
           </>
         ) : enquiry.booking_id ? (
@@ -136,7 +136,7 @@ export function EnquiryPane({ enquiry, onDone, backTo, className }: EnquiryPaneP
   );
 
   return (
-    <section className={cn("flex min-h-0 flex-1 flex-col gap-3", className)} aria-label={`Enquiry from ${senderLabel(enquiry)}`}>
+    <section className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-3", className)} aria-label={`Enquiry from ${senderLabel(enquiry)}`}>
       {header}
       {enquiry.gmail_thrid ? (
         <Suspense fallback={<PageSkeleton rows={6} />}>

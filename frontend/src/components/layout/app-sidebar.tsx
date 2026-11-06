@@ -8,10 +8,10 @@
  */
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router";
 
-import { Logo, LogoEmblem } from "@/components/brand/Logo";
+import { Logo, LogoFY } from "@/components/brand/Logo";
 import { CountBadge } from "@/components/count-badge";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -47,6 +47,18 @@ export function AppSidebar() {
   const [params] = useSearchParams();
   const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
+  // The lock-up shrinks to three quarters first, then the FY mark takes over (owner, 6 Nov 2026).
+  const [logoPhase, setLogoPhase] = useState<"full" | "shrunk" | "mark">(collapsed ? "mark" : "full");
+  useEffect(() => {
+    if (collapsed) {
+      setLogoPhase("shrunk");
+      const timer = window.setTimeout(() => setLogoPhase("mark"), 170);
+      return () => window.clearTimeout(timer);
+    }
+    setLogoPhase("shrunk");
+    const timer = window.setTimeout(() => setLogoPhase("full"), 30);
+    return () => window.clearTimeout(timer);
+  }, [collapsed]);
   const counts = useNavCounts();
   const location = useLocation();
   const onWork = pathname === "/work" || pathname.startsWith("/work/");
@@ -166,16 +178,16 @@ export function AppSidebar() {
           gate cut from the logo) fills the rail and is itself the button that
           opens the drawer (owner's notes, 29 Oct 2026). */}
       <SidebarHeader className="relative border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:px-0.5 group-data-[collapsible=icon]:py-2">
-        {collapsed ? (
+        {logoPhase === "mark" ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 aria-label="Open navigation"
                 onClick={toggleSidebar}
-                className="block w-full rounded-md text-sidebar-foreground outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="flex w-full justify-center rounded-md py-1 text-sidebar-foreground outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
-                <LogoEmblem className="w-full" />
+                <LogoFY />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">Open navigation</TooltipContent>
@@ -186,7 +198,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild size="lg" className="h-auto flex-col items-stretch gap-2 px-2 py-2">
                   <NavLink to={homeFor(user.role)} aria-label={`${APP_NAME} home`}>
-                    <Logo className="w-full text-sidebar-foreground" />
+                    <Logo className={cn("w-full origin-center text-sidebar-foreground transition-transform duration-150", logoPhase === "shrunk" && "scale-75")} />
                     <span className="text-center text-sm font-semibold tracking-wide text-sidebar-foreground uppercase">{APP_NAME}</span>
                   </NavLink>
                 </SidebarMenuButton>

@@ -20,7 +20,7 @@ export function SplitBar({ confirmed, pending, height = 5, className }: SplitBar
   const pct = total > 0 ? (Math.max(0, confirmed) / total) * 100 : 0;
   return (
     <div className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <div className="flex items-center justify-between gap-2 text-xs leading-4 font-medium whitespace-nowrap tabular" aria-hidden="true">
+      <div className="flex items-center justify-between gap-2 text-sm leading-5 font-medium whitespace-nowrap tabular" aria-hidden="true">
         <span>{formatNumber(confirmed)}</span>
         <span>{formatNumber(pending)}</span>
       </div>

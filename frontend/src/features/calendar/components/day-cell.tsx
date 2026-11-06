@@ -79,7 +79,7 @@ export function DayCell({ ref, date, day, isToday, capacity, isFocused, isSelect
       onClick={onOpen}
       style={kind && !isSelected ? { borderColor: kind.colour } : undefined}
       className={cn(
-        "fy-cell @container relative flex min-h-0 cursor-pointer flex-col overflow-hidden rounded-lg border-[3px] border-border bg-card px-2 pt-1 pb-1.5 text-left text-heat-text outline-hidden select-none",
+        "fy-cell @container relative flex min-h-0 cursor-pointer flex-col overflow-hidden rounded-lg border border-border bg-card px-2 pt-1 pb-1.5 text-left text-heat-text outline-hidden select-none",
         "hover:brightness-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ring",
         HEAT_CLASS[level],
         closed && "fy-closed",

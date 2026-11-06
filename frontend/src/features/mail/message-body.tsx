@@ -57,7 +57,12 @@ const BASE_CSS = (v: ThemeVars) => `
   a { color: ${v.link}; }
   blockquote { margin: 0.5em 0; padding-left: 12px; border-left: 2px solid ${v.border}; color: ${v.muted}; }
   pre { white-space: pre-wrap; }
-  * { max-width: 100%; }
+  * { max-width: 100%; box-sizing: border-box; }
+  html, body { overflow-x: hidden; min-width: 0; }
+  table { width: auto !important; max-width: 100% !important; table-layout: auto; }
+  td, th { max-width: 100%; word-break: break-word; }
+  pre { white-space: pre-wrap; }
+  img { max-width: 100% !important; height: auto !important; }
   font[size], [style*="font-size"] { font-size: inherit !important; }
 `;
 

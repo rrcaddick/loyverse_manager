@@ -55,3 +55,13 @@ export function LogoMark({ className, ...props }: Omit<MaskedProps, "url" | "rat
 export function LogoEmblem({ className, ...props }: Omit<MaskedProps, "url" | "ratio">) {
   return <Masked url={emblemUrl} ratio="792 / 563" className={className} {...props} />;
 }
+
+
+/** The collapsed rail's mark (owner, 6 Nov 2026): "FY" in a rounded box, in the lock-up's heavy serif. */
+export function LogoFY({ className, label = PARK_NAME, ...props }: React.HTMLAttributes<HTMLSpanElement> & { label?: string }) {
+  return (
+    <span role="img" aria-label={label} className={cn("inline-flex size-9 items-center justify-center rounded-lg border-2 border-current font-serif text-[15px] leading-none font-black tracking-tight select-none", className)} {...props}>
+      FY
+    </span>
+  );
+}
