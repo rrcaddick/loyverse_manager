@@ -50,14 +50,13 @@ export function AppSidebar() {
   // The lock-up shrinks to three quarters first, then the FY mark takes over (owner, 6 Nov 2026).
   const [logoPhase, setLogoPhase] = useState<"full" | "shrunk" | "mark">(collapsed ? "mark" : "full");
   useEffect(() => {
-    if (collapsed) {
-      setLogoPhase("shrunk");
-      const timer = window.setTimeout(() => setLogoPhase("mark"), 170);
-      return () => window.clearTimeout(timer);
-    }
-    setLogoPhase("shrunk");
-    const timer = window.setTimeout(() => setLogoPhase("full"), 30);
-    return () => window.clearTimeout(timer);
+    // Two beats: shrink, then swap (both after the paint, never inside the effect itself).
+    const first = window.setTimeout(() => setLogoPhase("shrunk"), 0);
+    const second = window.setTimeout(() => setLogoPhase(collapsed ? "mark" : "full"), collapsed ? 170 : 40);
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+    };
   }, [collapsed]);
   const counts = useNavCounts();
   const location = useLocation();
