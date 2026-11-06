@@ -65,6 +65,7 @@ export interface BookingRow {
   confirmed_at: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
+  declined_at: string | null;
   lapsed_at: string | null;
   billing_address: string | null;
   customer_vat_number: string | null;

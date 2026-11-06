@@ -160,7 +160,8 @@ function Dot() {
 // ---------------------------------------------------------------- overflow
 
 /** Only the status changes nothing else offers (lapsed, no-show, reopen); none → no menu. */
-const MENU_STATUSES: BookingStatus[] = ["lapsed", "no_show", "requested"];
+// Expiry is automatic (6 Nov 2026); the menu keeps the two hand decisions.
+const MENU_STATUSES: BookingStatus[] = ["no_show", "requested"];
 
 function OverflowMenu({ booking }: { booking: BookingDetail }) {
   const actions = useBookingActions();
