@@ -18,12 +18,25 @@ PAYLOAD = {
     "area": "Klapmuts",
     "contact_email": "api.tester@example.com",
     "contact_mobile": "082 706 9415",
-    "visit_date": "2026-11-05",
+    "visit_date": None,  # filled below: a date is only good until it has passed
     "visitors": 42,
     "questions": ["Is there shade?"],
     "policy_accepted": True,
     "website": "",
 }
+
+
+def _future_visit() -> str:
+    """Thirty days out, stepping over the closed days, so the test outlives the calendar."""
+    from datetime import date, timedelta
+
+    d = date.today() + timedelta(days=30)
+    while d.month == 12 and d.day in (24, 25, 26, 31):
+        d += timedelta(days=1)
+    return d.isoformat()
+
+
+PAYLOAD["visit_date"] = _future_visit()
 
 
 @pytest.fixture
@@ -59,7 +72,7 @@ def test_submit_then_fetch_receipt(client):
     assert r.status_code == 201, r.get_json()
     body = r.get_json()
     assert set(body) >= {"id", "token", "reference", "group_name", "visit_date", "contact_email", "visitors", "acknowledged"}
-    assert body["visitors"] == 42 and body["acknowledged"] is False and body["visit_date"] == "2026-11-05"
+    assert body["visitors"] == 42 and body["acknowledged"] is False and body["visit_date"] == PAYLOAD["visit_date"]
     row = query_one("SELECT people_booked, status, source FROM bookings WHERE id = %s", (body["id"],))
     assert (row["people_booked"], row["status"], row["source"]) == (42, "requested", "form")
     # Nothing was emailed: the toggle is off by default.
