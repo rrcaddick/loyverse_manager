@@ -94,7 +94,7 @@ export function BigNumber({ label, value, detail, badge, tone = "neutral", icon:
 }
 
 /** Four tiles across at ≥ 1280, two at tablet, one on phones. */
-export function BigNumberRow({ className, children, columns = 4 }: { className?: string; children: ReactNode; columns?: 2 | 3 | 4 }) {
+export function BigNumberRow({ className, children, columns = 4 }: { className?: string; children: ReactNode; columns?: 2 | 3 | 4 | 6 }) {
   return (
     <div
       className={cn(
@@ -102,6 +102,7 @@ export function BigNumberRow({ className, children, columns = 4 }: { className?:
         columns === 2 && "sm:grid-cols-2",
         columns === 3 && "sm:grid-cols-3",
         columns === 4 && "sm:grid-cols-2 xl:grid-cols-4",
+        columns === 6 && "sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6",
         className,
       )}
     >

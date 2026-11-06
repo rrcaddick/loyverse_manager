@@ -406,3 +406,24 @@ form is free text and a different person may book.
   (`useSendingPreview`).
 - **Work › Deposit extensions** (view `extensions`, kind `extension`): Extend
   deposit date (the hold popover), Keep expired (`party_done`).
+
+## Owner's pass of 6 Nov 2026 (parts 5–8)
+
+- **Work and nav**: Requests and Enquiries are children of Work that open their
+  own pages (`NavChild.to`); their counts still come from Work; the top-level
+  Enquiries entry is gone; a Work view with nothing in it hides from the
+  accordion ("All clear" when every one is empty); Work itself never hides.
+- **Enquiries**: Send request form (green solid) · Attach to booking (primary)
+  · Create booking (primary outline) · Resolve (primary) · Dismiss (primary
+  outline); the pane has `min-w-0` and the mail iframe's document hides
+  horizontal overflow and lets tables and images shrink.
+- **Calendar**: cell border one pixel in the kind's colour; the split bar's
+  counts at 14 px; the collapsed rail shows `LogoFY` after the lock-up shrinks
+  to three quarters.
+- **Today** (`pages/today/TodayPage.tsx`): `LiveStrip` (six numbers, two
+  columns on a phone, three on a laptop, six at 1536 px), then two columns
+  always: the day table (plus the seven-day strip) or a quiet card on the
+  left; Cars in the queue, Re-entry passes and Next visit day on the right.
+  The day table's row menu gained Vehicle report (`vehicle-report-dialog.tsx`,
+  with Print), Final invoice (the Documents tab) and No show (confirmed group,
+  nothing counted, day reached).

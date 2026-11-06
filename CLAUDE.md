@@ -311,6 +311,15 @@ the bridge makes its own secret and `POST /api/pos/devices/register` records it 
 name (a revoked device stays revoked); `pos-staff devices enrol` remains for a fixed secret placed in
 `staff.deviceSecret`.
 
+### Today (6 Nov 2026)
+
+Today is the snapshot of one day for the office and the gate: the terminals'
+live numbers (`today.live_day`: public in, online admitted against sold, groups
+arrived against booked, cars in the queue, re-entry passes, gazebos on site),
+the day's groups with Vehicle report, Final invoice and No show, and the next
+visit day. Nothing season-wide and no money beyond the gate balance; a Reports
+page will take the season and money blocks.
+
 ## Commands
 
 Normal operation is through Docker — see `DEPLOYMENT.md` for the full story.

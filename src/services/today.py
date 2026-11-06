@@ -23,7 +23,6 @@ from src.models import bank_transaction as bank_model
 from src.models.base import query, query_one
 from src.models.booking import ACTIVE_STATUSES, FIRM_STATUSES
 from src.services import booking as booking_service
-from src.services import work
 from src.utils.date import get_today
 
 SAST = ZoneInfo("Africa/Johannesburg")
@@ -388,6 +387,198 @@ def next_visit_days(today: date, limit: int = 5) -> list[dict]:
     return out
 
 
+# ------------------------------------------------------------- the live day ---
+
+
+def _day_bounds(d: date) -> tuple[datetime, datetime]:
+    return datetime.combine(d, datetime.min.time()), datetime.combine(d, datetime.max.time())
+
+
+def _kinds():
+    from src.services.pos_items import ItemKinds
+
+    try:
+        return ItemKinds.current()
+    except Exception:  # noqa: BLE001 - no Loyverse reachable: the default names
+        return ItemKinds()
+
+
+def _norm_text(value: Any) -> str:
+    return " ".join(str(value or "").lower().split())
+
+
+def _is_gazebo(line: dict) -> bool:
+    return "gazeb" in _norm_text(line.get("category")) or "gazeb" in _norm_text(line.get("name"))
+
+
+def _online_sold_today(d: date) -> int | None:
+    """From this morning's inventory run: "Successfully processed 12 items (9 online tickets, 3 groups)"."""
+    import re as _re
+
+    run = loyverse_last_run()
+    if not run or run.get("outcome") != "success" or not str(run.get("at") or "").startswith(d.isoformat()):
+        return None
+    m = _re.search(r"\((\d+) online tickets?", str(run.get("message") or ""))
+    return int(m.group(1)) if m else None
+
+
+def live_day(d: date, cards: list[dict] | None = None) -> dict:
+    """The day as the terminals see it (6 Nov 2026): public heads in, online
+    tickets admitted (and sold this morning), groups arrived against booked,
+    the cars in the queue (open tickets, a re-entry pass is not a car in the
+    queue), the re-entry passes, gazebos sold on site. Read from the bridge's
+    tables; nothing polls Loyverse."""
+    from src.models.pos_accounts import account_clause
+
+    kinds = _kinds()
+    since, until = _day_bounds(d)
+    out: dict[str, Any] = {
+        "as_of": _iso(_now_naive()),
+        "public_heads": 0,
+        "online": {"admitted": 0, "sold": _online_sold_today(d)},
+        "groups": {
+            "booked": sum(int(c.get("people_booked") or 0) for c in (cards or []) if c.get("status") in ACTIVE_STATUSES),
+            "arrived": sum(int(c.get("arrived_count") or 0) for c in (cards or []) if c.get("status") in ACTIVE_STATUSES),
+        },
+        "queue": [],
+        "passes": {"open": 0, "used": 0, "voided": 0, "expired": 0, "list": []},
+        "gazebos_on_site": 0,
+        "available": True,
+    }
+    try:
+        clause, scope = account_clause()
+        closed = query(
+            f"""
+            SELECT h.ticket_id, h.event_type, h.observed_at, h.receipt_json FROM open_tickets_history h
+            WHERE h.event_type = 'closed' AND h.observed_at BETWEEN %s AND %s{clause.replace('account_id', 'h.account_id')}
+            ORDER BY h.observed_at, h.id
+            """,
+            (since, until, *scope),
+        )
+        import json as _json
+
+        latest: dict[str, dict] = {}
+        for r in closed:
+            latest[str(r["ticket_id"])] = r
+        online_names = {_norm_text(n) for n in getattr(kinds, "head_categories", [])}
+        groups_name = _norm_text(getattr(kinds, "groups_category", ""))
+        for r in latest.values():
+            receipt = r.get("receipt_json")
+            if isinstance(receipt, (str, bytes)):
+                try:
+                    receipt = _json.loads(receipt)
+                except ValueError:
+                    receipt = {}
+            items = (receipt or {}).get("items") or []
+            if kinds.reentry_heads(items) > 0 and kinds.headcount(items) == 0:
+                continue  # a re-entry pass being used, not an entry
+            for line in items:
+                if not isinstance(line, dict) or line.get("voided"):
+                    continue
+                qty = kinds.quantity(line)
+                cat = _norm_text(line.get("category"))
+                if str(line.get("sku") or "") in kinds.head_skus:
+                    out["public_heads"] += int(round(qty))
+                elif cat and cat in online_names and cat != groups_name:
+                    out["online"]["admitted"] += int(round(qty))
+                elif _is_gazebo(line):
+                    out["gazebos_on_site"] += int(round(qty))
+        open_rows = query(
+            f"""
+            SELECT c.ticket_id, c.receipt_json, c.plate, c.opened_at, c.last_modified_at FROM open_tickets_current c
+            WHERE c.status = 'open'{clause.replace('account_id', 'c.account_id')}
+            ORDER BY c.opened_at, c.id
+            """,
+            tuple(scope),
+        )
+        for r in open_rows:
+            receipt = r.get("receipt_json")
+            if isinstance(receipt, (str, bytes)):
+                try:
+                    receipt = _json.loads(receipt)
+                except ValueError:
+                    receipt = {}
+            items = (receipt or {}).get("items") or []
+            if kinds.reentry_heads(items) > 0 and kinds.headcount(items) == 0:
+                continue
+            kind = "public"
+            for line in items:
+                if isinstance(line, dict) and _norm_text(line.get("category")) == groups_name and groups_name:
+                    kind = "group"
+                    break
+                if isinstance(line, dict) and _norm_text(line.get("category")) in online_names:
+                    kind = "online"
+            out["queue"].append(
+                {
+                    "ticket_id": str(r["ticket_id"]),
+                    "plate": r.get("plate") or (receipt or {}).get("name"),
+                    "heads": kinds.headcount(items),
+                    "kind": kind,
+                    "opened_at": _iso(r.get("opened_at")),
+                }
+            )
+    except Exception as exc:  # noqa: BLE001 - the terminal tables are another feature's
+        logger.warning(f"Live day counters unavailable: {exc}")
+        out["available"] = False
+    try:
+        from src.services.pos_reentry import ReentryService
+
+        report = ReentryService().report(since, min(until, _now_naive()) if d == get_today() else until)
+        for row in report or []:
+            status = str(row.get("status") or "open")
+            if status in out["passes"]:
+                out["passes"][status] += 1
+            out["passes"]["list"].append(
+                {"plate": row.get("plate"), "heads": int(row.get("heads") or 0), "issued_at": _iso(row.get("issued_at")), "status": status}
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Re-entry passes unavailable: {exc}")
+    return out
+
+
+def vehicle_report(booking: dict, d: date) -> list[dict]:
+    """The cars that came in under a group's ticket on the day: time, plate,
+    the person at the wheel as captured at the gate, heads, how it was read."""
+    from src.models.pos_staff import PosEmployeeEvent
+
+    since, until = _day_bounds(d)
+    barcode = str(booking.get("barcode") or "")
+    name = _norm_text(booking.get("group_name"))
+    rows = []
+    try:
+        events = PosEmployeeEvent.since(since, ["group_entry"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Group entries unavailable: {exc}")
+        return []
+    for e in events:
+        when = e.get("occurred_at")
+        if when and when > until:
+            continue
+        detail = e.get("detail") or {}
+        if isinstance(detail, str):
+            try:
+                import json as _json
+
+                detail = _json.loads(detail)
+            except ValueError:
+                detail = {}
+        group = str(detail.get("group") or detail.get("barcode") or "")
+        if not (group and (group == barcode or _norm_text(group) == name)):
+            continue
+        rows.append(
+            {
+                "at": _iso(when),
+                "plate": detail.get("plate"),
+                "person": detail.get("person") or " ".join(str(x) for x in (detail.get("names"), detail.get("surname")) if x) or None,
+                "heads": int(detail.get("heads") or 0),
+                "source": detail.get("source"),
+                "manual": bool(detail.get("manual")),
+                "device": e.get("device_name") or e.get("device_id"),
+            }
+        )
+    return rows
+
+
 def today(d: date | None = None, *, for_manager: bool = False) -> dict:
     """Everything the Today page shows: the day's groups and tiles for everyone;
     for the admin also the season, this month, money outstanding, the next visit
@@ -418,24 +609,13 @@ def today(d: date | None = None, *, for_manager: bool = False) -> dict:
         "kinds": day.get("kinds") or [],
         "tiles": tiles,
         "groups": cards,
-        "next_visit_day": next_visit_day(d) if (day["is_closed"] or not active) else None,
+        # The snapshot of the day (owner, 6 Nov 2026): the terminals' numbers and
+        # what comes next. Season, month and money moved off this page.
+        "live": live_day(d, cards),
+        "next_visit_day": next_visit_day(d),
         "seven_day_strip": seven_day_strip(d),
     }
     if not for_manager:
-        now = get_today()
-        snap = work.snapshot(now)
+        # The day's own money stays with the day table (balance at the gate); nothing season-wide here.
         tiles["owed_at_gate"] = {"total": round(float(owed), 2), "paid": round(float(paid), 2)}
-        out["season"] = season_block(now)
-        out["month"] = month_block(d)
-        out["money"] = money_block(now)
-        out["next_visit_days"] = next_visit_days(now)
-        try:
-            from src.models import mail_skipped
-            from src.services.inbound import _cfg
-
-            days = int(_cfg().get("skipped_days", 7))
-            tiles["skipped_mail"] = {"count": mail_skipped.count_recent(days), "days": days}
-        except Exception:  # noqa: BLE001 - never block Today on the log
-            tiles["skipped_mail"] = {"count": 0, "days": 7}
-        out["work_counts"] = snap["counts"]
     return out

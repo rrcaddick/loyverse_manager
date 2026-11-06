@@ -31,3 +31,21 @@ def get_today_page():
     user = current_user()
     for_manager = user is None or user.get("role") != "admin"
     return ok(today_service.today(d, for_manager=for_manager))
+
+
+@bp.get("/today/groups/<int:booking_id>/vehicles")
+@allow_manager
+def group_vehicles(booking_id: int):
+    """The cars that came in under a group's ticket on the day (6 Nov 2026)."""
+    from src.models import booking as booking_model
+
+    booking = booking_model.get(booking_id)
+    if booking is None:
+        raise ApiError("not_found", "Booking not found", 404)
+    raw = request.args.get("date")
+    try:
+        d = date.fromisoformat(raw[:10]) if raw else booking["visit_date"]
+    except ValueError:
+        raise ApiError("validation_error", "Invalid date", 422, {"date": "Use YYYY-MM-DD"})
+    rows = today_service.vehicle_report(booking, d)
+    return ok({"booking": {"id": int(booking["id"]), "reference": booking["reference"], "group_name": booking["group_name"], "barcode": booking.get("barcode")}, "date": d.isoformat(), "items": rows, "total": len(rows), "heads": sum(int(r["heads"]) for r in rows)})

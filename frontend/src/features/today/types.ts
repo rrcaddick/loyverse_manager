@@ -1,10 +1,10 @@
 /**
- * GET /today?date= (docs/handoff/work-today.md). Manager calls lose the
- * money tile and the dashboard blocks, so those are optional.
+ * GET /today?date= (docs/handoff/work-today.md). The snapshot of one day
+ * (owner, 6 Nov 2026): the groups, the terminals' live numbers, what comes
+ * next. Nothing season-wide lives here.
  */
 
 import type { ArrivalSource } from "@/features/bookings/types";
-import type { WorkCounts } from "@/features/work/types";
 import type { BookingStatus, DayKind } from "@/types/api";
 
 export interface TodayTiles {
@@ -75,6 +75,35 @@ export interface MoneyBlock {
   balances_count: number;
 }
 
+/** A car waiting at the gate: an open ticket that is not a re-entry pass. */
+export interface QueueCar {
+  ticket_id: string;
+  plate: string | null;
+  heads: number;
+  kind: "public" | "online" | "group";
+  opened_at: string | null;
+}
+
+export interface ReentryPass {
+  plate: string | null;
+  heads: number;
+  issued_at: string | null;
+  status: "open" | "used" | "voided" | "expired";
+}
+
+/** The day as the terminals see it (6 Nov 2026). */
+export interface TodayLive {
+  as_of: string | null;
+  public_heads: number;
+  online: { admitted: number; sold: number | null };
+  groups: { booked: number; arrived: number };
+  queue: QueueCar[];
+  passes: { open: number; used: number; voided: number; expired: number; list: ReentryPass[] };
+  gazebos_on_site: number;
+  /** False when the terminal tables could not be read. */
+  available: boolean;
+}
+
 export interface TodayResponse {
   date: string;
   /** "Saturday 7 November" */
@@ -94,12 +123,7 @@ export interface TodayResponse {
   /** Only when the day is closed or has no groups. */
   next_visit_day: NextVisitDay | null;
   seven_day_strip: StripDay[];
-  /** Admin only. */
-  season?: SeasonBlock;
-  month?: MonthBlock;
-  money?: MoneyBlock;
-  next_visit_days?: NextVisitDay[];
-  work_counts?: WorkCounts;
+  live: TodayLive;
 }
 
 /**

@@ -78,3 +78,32 @@ export function mergeDayRows(rows: DayGroupRow[], day: DayView | undefined): Day
 export function sortDayRows(rows: DayGroupRow[]): DayGroupRow[] {
   return [...rows].sort((a, b) => b.people_booked - a.people_booked || a.group_name.localeCompare(b.group_name));
 }
+
+
+export interface VehicleReportRow {
+  at: string | null;
+  plate: string | null;
+  person: string | null;
+  heads: number;
+  source: string | null;
+  manual: boolean;
+  device: string | null;
+}
+
+export interface VehicleReport {
+  booking: { id: number; reference: string; group_name: string; barcode: string | null };
+  date: string;
+  items: VehicleReportRow[];
+  total: number;
+  heads: number;
+}
+
+/** The cars that came in under a group's ticket on the day (6 Nov 2026). */
+export function useVehicleReport(bookingId: number | null, date: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["today", "vehicles", bookingId ?? -1, date ?? ""],
+    queryFn: () => api.get<VehicleReport>(`/today/groups/${bookingId}/vehicles`, { params: { date } }),
+    enabled: enabled && bookingId !== null,
+    refetchInterval: 30_000,
+  });
+}

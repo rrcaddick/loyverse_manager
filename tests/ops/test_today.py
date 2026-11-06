@@ -110,10 +110,11 @@ def test_today_tiles_maths(visit_day):
     assert page["tiles"]["people"] == {"total": 150, "confirmed": 100}
     # owed = (100 × 95 − 2000) + 50 × 95 ; paid = 2000
     assert page["tiles"]["owed_at_gate"] == {"total": 12250.0, "paid": 2000.0}
-    assert set(page["season"]) == {"from", "to", "bookings", "confirmed_people", "pending_people", "completed", "visit_days_ahead"}
-    assert set(page["month"]) == {"label", "from", "to", "groups", "confirmed_people", "pending_people"}
-    assert set(page["money"]) == {"deposits", "deposits_count", "balances", "balances_count"}
-    assert isinstance(page["next_visit_days"], list) and page["kind"] is not None and "weekend" in page["kinds"]
+    # The snapshot of the day (6 Nov 2026): the terminals' numbers and what comes next; nothing season-wide.
+    assert {"public_heads", "online", "groups", "queue", "passes", "gazebos_on_site", "available"} <= set(page["live"])
+    assert page["live"]["groups"]["booked"] >= 0 and "next_visit_day" in page
+    assert "season" not in page and "month" not in page and "money" not in page and "next_visit_days" not in page
+    assert page["kind"] is not None and "weekend" in page["kinds"]
     assert [g["reference"] for g in page["groups"]] == [
         visit_day["confirmed"]["reference"], visit_day["tentative"]["reference"]
     ]
@@ -129,7 +130,7 @@ def test_today_tiles_maths(visit_day):
         "date": d.isoformat(), "groups": 2, "people": 150, "confirmed_people": 100, "is_closed": False
     }
     assert "up_next" not in page and "system" not in page
-    assert "work_counts" in page
+    assert "work_counts" not in page
 
     # arrivals recorded on the confirmed group: balance is now against the final amount
     execute("UPDATE bookings SET arrived_count = 80, arrived_source = 'loyverse' WHERE id = %s", (visit_day["confirmed"]["id"],))

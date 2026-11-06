@@ -8,7 +8,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Banknote, Check, ExternalLink, MoreHorizontal, TicketX } from "lucide-react";
+import { Banknote, Check, ExternalLink, MoreHorizontal, TicketX, Car, FileText, UserX } from "lucide-react";
 import { type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -21,8 +21,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useBooking } from "@/features/bookings/api";
 import { RecordPaymentDialog } from "@/features/bookings/components/record-payment-dialog";
 import { useGroupTypeLabel } from "@/features/bookings/lib";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { api, errorMessage } from "@/lib/api";
+import { toast } from "sonner";
+import { VehicleReportDialog } from "./vehicle-report-dialog";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
-import { formatMoney, formatNumber } from "@/lib/format";
+import { formatMoney, formatNumber, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { invalidateDayWorld } from "../api";
@@ -39,11 +43,15 @@ export interface DayTableProps {
   canOpenBooking: boolean;
   emptyState?: ReactNode;
   className?: string;
+  /** The day the rows belong to (the vehicle report and No show need it); today by default. */
+  date?: string;
 }
 
-export function DayTable({ rows, loading = false, compact = false, showMoney, canOpenBooking, emptyState, className }: DayTableProps) {
+export function DayTable({ rows, loading = false, compact = false, showMoney, canOpenBooking, emptyState, className, date = todayIso() }: DayTableProps) {
   const groupType = useGroupTypeLabel();
   const payment = useSubjectDialog<DayGroupRow>();
+  const vehicles = useSubjectDialog<DayGroupRow>();
+  const noShow = useSubjectDialog<DayGroupRow>();
   const rowHeight = compact ? "h-row-lg" : "h-row-queue";
   const columns = showMoney ? 6 : 5;
 
@@ -167,6 +175,10 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
                         align="end"
                         className="w-56"
                       >
+                        <DropdownMenuItem onSelect={() => vehicles.show(row)}>
+                          <Car />
+                          Vehicle report
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => payment.show(row)}>
                           <Banknote />
                           Record gate payment
@@ -174,6 +186,18 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
                         {canOpenBooking ? (
                           <>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <Link to={`/bookings/${row.id}?tab=documents`}>
+                                <FileText />
+                                Final invoice
+                              </Link>
+                            </DropdownMenuItem>
+                            {row.status === "confirmed" && (row.arrived_count ?? 0) === 0 && date <= todayIso() ? (
+                              <DropdownMenuItem variant="destructive" onSelect={() => noShow.show(row)}>
+                                <UserX />
+                                No show
+                              </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem asChild>
                               <Link to={`/bookings/${row.id}`}>
                                 <ExternalLink />
@@ -192,6 +216,8 @@ export function DayTable({ rows, loading = false, compact = false, showMoney, ca
         </TableBody>
       </Table>
       {payment.subject ? <GatePaymentDialog row={payment.subject} open={payment.open} onOpenChange={payment.onOpenChange} /> : null}
+      <VehicleReportDialog bookingId={vehicles.subject?.id ?? null} date={date} title={vehicles.subject ? `${vehicles.subject.reference} ${vehicles.subject.group_name}` : ""} open={vehicles.open} onOpenChange={vehicles.onOpenChange} />
+      {noShow.subject ? <NoShowDialog row={noShow.subject} open={noShow.open} onOpenChange={noShow.onOpenChange} /> : null}
     </TooltipProvider>
   );
 }
@@ -210,6 +236,32 @@ function GatePaymentDialog({ row, open, onOpenChange }: { row: DayGroupRow; open
       }}
       mode="gate"
       booking={{ id: row.id, reference: row.reference, group_name: row.group_name, finance: detail.data?.finance ?? null }}
+    />
+  );
+}
+
+
+/** A confirmed group that never arrived: No show, from the day table (6 Nov 2026). */
+function NoShowDialog({ row, open, onOpenChange }: { row: DayGroupRow; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const qc = useQueryClient();
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Mark ${row.reference} as a no show?`}
+      description={`${row.group_name} booked ${row.people_booked} and nothing was sold against the ticket. The booking closes as a no show; the deposit stays recorded.`}
+      confirmLabel="Mark no show"
+      destructive
+      onConfirm={async () => {
+        try {
+          await api.post(`/bookings/${row.id}/status`, { status: "no_show", reason: "No arrivals counted at the gate" });
+          toast.success(`${row.reference} marked as a no show`);
+          invalidateDayWorld(qc);
+          onOpenChange(false);
+        } catch (err) {
+          toast.error(errorMessage(err));
+        }
+      }}
     />
   );
 }

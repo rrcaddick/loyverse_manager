@@ -724,3 +724,18 @@ request to extend: Work › Deposit extensions (`work._extension_rows`, view
 `extensions`) lists one row per booking with "Extend deposit date" (the hold
 popover, which revives the booking) and "Keep expired" (marks the person's
 conversation handled, `party_done`).
+
+## Today as the day's snapshot (6 Nov 2026)
+
+`today.today(d)` no longer carries the season, month, money or Work blocks;
+it carries `live` (`today.live_day`): public heads in, online tickets
+admitted (and sold this morning from the inventory run's log line), groups
+arrived against booked, the cars in the queue (open tickets on the live
+account, a pure re-entry pass is not a car), the re-entry passes
+(`ReentryService.report`) and gazebos sold on site, all read from the
+bridge's tables, never from Loyverse. `GET /today/groups/:id/vehicles?date=`
+(`today.vehicle_report`) lists the cars that came in under a group's ticket
+from the `group_entry` events: time, plate, the person, heads, how the ID was
+read (never the ID number). The page is the same for admin and manager; the
+admin's day table keeps the gate balance column. Season and money will have
+a Reports page of their own.
