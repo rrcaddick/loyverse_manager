@@ -103,10 +103,10 @@ def extend_hold(booking_id: int):
     booking = booking_model.get(booking_id)
     if booking is None:
         raise ApiError("not_found", "Booking not found", 404)
-    if booking["status"] != "proforma_sent":
+    if booking["status"] not in ("proforma_sent", "lapsed"):
         raise ApiError(
             "invalid_state",
-            f"Only a pending booking has an expiry (this one is {booking['status']})",
+            f"Only a pending or expired booking has an expiry (this one is {booking['status']})",
             409,
         )
     if new_hold > booking["visit_date"]:

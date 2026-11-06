@@ -8,7 +8,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query";
-import type { PriceTier, SeasonDay, Settings, SettingsResponse, SettingsSection } from "@/types/api";
+import type {
+  SendingPreview, PriceTier, SeasonDay, Settings, SettingsResponse, SettingsSection } from "@/types/api";
 
 export function useSettings(options: { enabled?: boolean } = {}) {
   return useQuery({
@@ -65,4 +66,15 @@ export function depositFor(people: number, price: number, minPeople: number, per
   const byMin = minPeople * price;
   const byPercent = Math.round((people * percent) / 100) * price;
   return Math.min(total, Math.max(byMin, byPercent));
+}
+
+
+/** What the next sending pass would expire and send, rule by rule (6 Nov 2026). */
+export function useSendingPreview(enabled = true) {
+  return useQuery({
+    queryKey: ["settings", "sending-preview"],
+    queryFn: () => api.get<SendingPreview>("/settings/sending/preview"),
+    enabled,
+    staleTime: 30_000,
+  });
 }

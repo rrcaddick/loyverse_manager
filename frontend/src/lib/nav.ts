@@ -28,6 +28,7 @@ import {
   Ticket,
   Users,
   type LucideIcon,
+  CalendarClock,
 } from "lucide-react";
 
 import type { Role } from "@/types/api";
@@ -70,6 +71,7 @@ export const WORK_CHILDREN: NavChild[] = [
   { title: "Send tickets", view: "send_tickets", icon: Ticket },
   { title: "Reminders", view: "reminders", icon: Bell },
   { title: "Expiring", view: "holds", icon: Hourglass },
+  { title: "Deposit extensions", view: "extensions", icon: CalendarClock },
   { title: "Stale", view: "stale", icon: AlertCircle, muted: true },
 ];
 

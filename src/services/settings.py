@@ -66,6 +66,21 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "statement_suffix": "S",
         "deposit_statement_label": "Deposit receipt and statement",
     },
+    # Sending rules (6 Nov 2026): every send is a button until a row here says
+    # Automatic. The master switch keeps the whole thing off until it is flipped;
+    # the pass only sends on prod. Triggers are fixed per template.
+    "sending": {
+        "enabled": False,
+        "rules": {
+            "expiry": {"mode": "manual"},
+            "reminder_still_interested": {"mode": "manual"},
+            "reminder_deposit_reminder": {"mode": "manual"},
+            "reminder_final_details": {"mode": "manual"},
+            "payment_confirmation": {"mode": "manual"},
+            "ticket": {"mode": "manual", "days_before": 10},
+            "final_invoice": {"mode": "manual"},
+        },
+    },
     "reminders": {
         "still_interested_days": 7,
         "deposit_reminder_days_before": 14,

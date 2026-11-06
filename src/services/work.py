@@ -60,9 +60,10 @@ VIEWS = (
     "send_tickets",
     "reminders",
     "holds",
+    "extensions",
     "stale",
 )
-LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds")
+LIVE_VIEWS = ("reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds", "extensions")
 HOLD_WINDOW_DAYS = 3
 
 TIER_HOLD_PAST = 1
@@ -672,6 +673,55 @@ def _hold_rows(today: date, lapse_days_before: int) -> list[dict]:
     return out
 
 
+# ------------------------------------------------------- deposit extensions ---
+
+
+def _extension_rows(today: date) -> list[dict]:
+    """Expired bookings whose customer wrote back (6 Nov 2026): the reply to
+    the expiry notice is a deposit extension request. One row per booking,
+    the newest message; Extend deposit date brings the booking back to
+    Pending, Keep expired marks the conversation handled."""
+    rows = query(
+        f"""
+        SELECT {BOOKING_COLS}, b.lapsed_at, b.deposit_due, b.deposit_waived,
+               m.id AS message_id, m.sent_at, m.snippet, m.from_name, m.gmail_thrid
+        FROM bookings b
+        JOIN email_messages m ON m.booking_id = b.id AND m.direction = 'inbound' AND m.is_auto_generated = 0
+             AND b.lapsed_at IS NOT NULL AND m.sent_at > b.lapsed_at
+        LEFT JOIN email_threads t ON t.gmail_thrid = m.gmail_thrid
+        WHERE b.status = 'lapsed' AND (t.status IS NULL OR t.status = 'open')
+        ORDER BY m.sent_at DESC, m.id DESC
+        """
+    )
+    seen: set[int] = set()
+    out = []
+    for r in rows:
+        bid = int(r["booking_id"])
+        if bid in seen:
+            continue
+        seen.add(bid)
+        waiting = _days_since(r.get("sent_at"), today)
+        deposit = Decimal(str(r["deposit_due"] or 0))
+        bits = [f"Expired {_day(r['lapsed_at'])}", f"wrote back {_rel(waiting)}"]
+        if r.get("snippet"):
+            bits.append(str(r["snippet"])[:70])
+        out.append(
+            _row(
+                "extension",
+                f"extension:{bid}",
+                booking=_chip(r),
+                title=r["group_name"],
+                context=" · ".join(bits),
+                amount=deposit if deposit > 0 and not r.get("deposit_waived") else None,
+                age_days=waiting,
+                primary=_act("Extend deposit date", "extend_hold", booking_id=bid, hold_expires_on=None),
+                secondary=[_act("Keep expired", "party_done", party_key=f"b:{bid}"), _open(bid)],
+                sort_key=_key(TIER_REPLY, _as_date(r.get("sent_at")) or today, bid),
+            )
+        )
+    return out
+
+
 # --------------------------------------------------------------- arrivals ---
 
 
@@ -707,6 +757,7 @@ def snapshot(today: date | None = None) -> dict:
         "send_tickets": _ticket_rows(today),
         "reminders": _reminder_rows(today),
         "holds": _hold_rows(today, int(cfg["lapse_days_before"])),
+        "extensions": _extension_rows(today),
         "stale": _stale_rows(today),
     }
     views = {view: _view_sorted(view, rows) for view, rows in views.items()}

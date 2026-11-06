@@ -74,7 +74,9 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "completed": frozenset(),
     # Reopening brings a closed booking back as a request.
     "cancelled": frozenset({"requested"}),
-    "lapsed": frozenset({"requested"}),
+    # An expired booking comes back: as Pending when the deposit date is
+    # extended, as Confirmed when the deposit arrives after all (6 Nov 2026).
+    "lapsed": frozenset({"requested", "proforma_sent", "confirmed"}),
     "no_show": frozenset(),
     "declined": frozenset({"requested"}),
 }
@@ -858,6 +860,18 @@ def update_booking(booking_id: int, data: Mapping[str, Any], actor: int | None) 
             )
     logger.info(f"Updated booking {current['reference']}: {', '.join(diff)}")
     _mirror_primary_contact(booking_id)
+    if "hold_expires_on" in (plain_diff or {}) and current["status"] == "lapsed":
+        new_hold = changed.get("hold_expires_on")
+        if new_hold and new_hold >= get_today():
+            # The deposit date was extended: the booking is Pending again, the reminders re-arm (6 Nov 2026).
+            set_status(booking_id, "proforma_sent", actor, reason=f"Deposit date extended to {new_hold:%d %b %Y}")
+            try:
+                from src.services import reminders as reminder_service
+
+                reminder_service.reschedule_lapse(booking_id, new_hold)
+                reminder_service.recompute_reminders()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Reminders not re-armed for booking {booking_id}: {exc}")
     if "group_name" in (plain_diff or {}):
         try:
             from src.services import groups
@@ -876,12 +890,15 @@ def set_status(booking_id: int, status: str, actor: int | None, reason: str | No
     fields: dict[str, Any] = {"status": status}
     stamp_col = STATUS_STAMPS.get(status)
     reverting = booking["status"] == "confirmed" and status == "proforma_sent"
-    if stamp_col and not (reverting and booking.get(stamp_col)):
+    reviving = booking["status"] == "lapsed" and status in ("proforma_sent", "confirmed")
+    if stamp_col and not ((reverting or reviving) and booking.get(stamp_col)):
         fields[stamp_col] = now_local()
     if status == "requested" and booking["status"] in ("cancelled", "lapsed", "declined"):  # reopen
         fields["cancelled_at"] = None
         fields["lapsed_at"] = None
         fields["declined_at"] = None
+    if reviving:  # back from Expired: the expiry stamp goes, the proforma date stays
+        fields["lapsed_at"] = None
     if booking["status"] == "requested" and status == "proforma_sent":  # the approval
         fields["accepted_at"] = now_local()
     if reverting:  # the deposit is no longer covered: the confirmation is undone
@@ -952,11 +969,11 @@ def record_payment(
             {"bank_transaction_id": "Already matched"},
         ) from exc
 
-    if booking["status"] in TENTATIVE_STATUSES:
+    if booking["status"] in TENTATIVE_STATUSES or booking["status"] == "lapsed":
         paid_total = payment_model.sum_for_booking(booking_id)
         deposit_due = ZERO if booking["deposit_waived"] else Decimal(str(booking["deposit_due"]))
         if paid_total > 0 and paid_total >= deposit_due:
-            set_status(booking_id, "confirmed", actor, reason="Deposit received")
+            set_status(booking_id, "confirmed", actor, reason="Deposit received after expiry" if booking["status"] == "lapsed" else "Deposit received")
 
     return serialize_row(payment_model.get(payment_id))
 

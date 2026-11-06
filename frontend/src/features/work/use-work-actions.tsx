@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
+import { usePartyDone } from "@/features/mail/api";
 import { useSubjectDialog } from "@/hooks/use-subject-dialog";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -38,6 +39,7 @@ export interface WorkActions {
 export function useWorkActions(): WorkActions {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const partyDone = usePartyDone();
   const dismiss = useDismissReminders();
   const extend = useExtendHold();
   const bookingAction = useWorkBookingAction();
@@ -99,6 +101,9 @@ export function useWorkActions(): WorkActions {
         );
         return;
       }
+      case "party_done":
+        void guarded(row, () => partyDone.mutateAsync({ partyKey: action.party_key })).then(() => done(row, "Kept as expired", row.booking ? `${row.booking.reference} · ${row.booking.group_name}` : undefined));
+        return;
       case "extend_hold": {
         const date = input?.date;
         if (!date) return;

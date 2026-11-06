@@ -57,11 +57,13 @@ case "${1:-web}" in
     : "${MAIL_SYNC_CRON:=* * * * *}"
     : "${BANK_POLL_CRON:=*/5 * * * *}"
     : "${REMINDERS_CRON:=30 6 * * *}"
+    : "${SENDING_CRON:=15 7 * * *}"
     : "${BACKUP_CRON:=15 2 * * *}"
     run_supercronic \
       "${MAIL_SYNC_CRON} cd /app && python -m scripts.sync_mail" \
       "${BANK_POLL_CRON} cd /app && python -m scripts.poll_bank" \
       "${REMINDERS_CRON} cd /app && python -m scripts.recompute_reminders" \
+      "${SENDING_CRON} cd /app && python -m scripts.sending_pass" \
       "${BACKUP_CRON} cd /app && bash scripts/backup_db.sh"
     ;;
 
@@ -83,6 +85,10 @@ case "${1:-web}" in
   hide-quicket-event)  exec python -m scripts.hide_quicket_event ;;
   sync-mail)           exec python -m scripts.sync_mail ;;
   poll-bank)           exec python -m scripts.poll_bank ;;
+  sending-pass)
+    exec python -m scripts.sending_pass "$@"
+    ;;
+
   recompute-reminders) exec python -m scripts.recompute_reminders ;;
   backup)              exec bash scripts/backup_db.sh ;;
   import-sheet)        shift; exec python -m scripts.import_sheet "$@" ;;

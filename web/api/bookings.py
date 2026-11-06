@@ -723,11 +723,46 @@ def act_send_reminder(booking: dict, data: dict, actor: int | None) -> dict:
 
 
 def act_send_expiry(booking: dict, data: dict, actor: int | None) -> dict:
-    _require_status(booking, TENTATIVE_STATUSES, "The expiry notice")
+    """The expiry notice. On a pending booking it also marks it Expired; on a
+    booking the daily pass already expired it only sends (6 Nov 2026)."""
+    _require_status(booking, TENTATIVE_STATUSES + ("lapsed",), "The expiry notice")
     result = _send("expiry", booking, actor)
-    booking_service.set_status(booking["id"], "lapsed", actor, reason=data.get("reason") or "Hold expired")
+    if booking["status"] != "lapsed":
+        booking_service.set_status(booking["id"], "lapsed", actor, reason=data.get("reason") or "Hold expired")
     booking_service.mark_reminder_sent(booking["id"], "lapse")
     return result
+
+
+def run_automatic_sends(today=None, send: bool = True) -> dict:
+    """The daily pass: expire what has expired, then perform every automatic
+    rule's sends through the same actions as the buttons. ``send=False`` only
+    reports. Called inside a request context (the Ops page) or a test request
+    context (``scripts/sending_pass.py``)."""
+    from src.services import sending
+
+    expired = sending.expire_holds(today)
+    out: dict = {"expired": expired, "sent": [], "failed": [], "skipped": [], "enabled": False}
+    cfg = sending.config()
+    out["enabled"] = cfg["enabled"]
+    for c in sending.plan(today, cfg):
+        mode = sending.mode_of(c["rule"], cfg)
+        if mode != "automatic" or not cfg["enabled"]:
+            out["skipped"].append({**c, "why": "manual" if mode != "automatic" else "sending switched off"})
+            continue
+        if not c.get("email"):
+            out["skipped"].append({**c, "why": "no email address"})
+            continue
+        if not send:
+            out["sent"].append({**c, "dry_run": True})
+            continue
+        try:
+            booking = _booking_or_404(int(c["booking_id"]))
+            result = ACTIONS[c["action"]](booking, dict(c["data"]), None)
+            out["sent"].append({**c, "email_message_id": result.get("email_message_id") if isinstance(result, dict) else None})
+        except Exception as exc:  # noqa: BLE001 - one send must not stop the pass
+            logger.error(f"Automatic {c['rule']} for {c['reference']} failed: {exc}", exc_info=True)
+            out["failed"].append({**c, "error": str(exc)})
+    return out
 
 
 def act_send_answers(booking: dict, data: dict, actor: int | None) -> dict:

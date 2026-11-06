@@ -154,6 +154,14 @@ overrides are explicit flags with a reason and survive recalculation. Document n
 are one counter per booking (`FY1703` proforma, `INV1703` invoice) taken atomically
 from `settings.documents.next_number`.
 
+Expiry is automatic (`scripts/sending_pass.py`, daily on the worker): a pending
+booking past its deposit date becomes Expired; a new deposit date or a late
+deposit brings it back. Settings › Sending rules (`settings.sending`,
+`src/services/sending.py`) can make any send automatic; the pass performs it
+through the same button action, only with the master switch on and only on
+prod. A customer's reply on an expired booking is a Work › Deposit extensions
+item. See `docs/booking-system.md` (6 Nov 2026).
+
 Outside `ENV=prod`, `src/services/mail_send.py` rewrites every recipient to
 `DEV_MAIL_RECIPIENT` and prefixes the subject. Never bypass this.
 

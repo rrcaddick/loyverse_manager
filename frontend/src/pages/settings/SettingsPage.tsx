@@ -67,6 +67,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
       { value: "documents", label: "Documents", roles: ADMIN, kind: "settings", component: lazy(() => import("./DocumentsTab")) },
       { value: "email", label: "Email", roles: ADMIN, kind: "settings", component: lazy(() => import("./EmailTab")) },
       { value: "reminders", label: "Reminders", roles: ADMIN, kind: "settings", component: lazy(() => import("./RemindersTab")) },
+      { value: "sending", label: "Sending rules", roles: ADMIN, kind: "settings", component: lazy(() => import("./SendingTab")) },
       { value: "templates", label: "Templates", roles: ADMIN, kind: "page", component: lazy(() => import("./TemplatesSection")) },
       { value: "inbound", label: "Inbound mail", roles: ADMIN, kind: "settings", component: lazy(() => import("./InboundTab")) },
     ],

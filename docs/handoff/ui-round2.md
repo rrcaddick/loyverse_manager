@@ -383,3 +383,26 @@ form is free text and a different person may book.
 - **Work › Assign mail**: an extra "All n" verb; `AssignMessageAction` carries
   `booking_id` or `booking_ids`. The thread payload on a booking's conversation
   carries `bookings`, shown as "Also on FY…" under the thread header.
+
+## Owner's pass of 6 Nov 2026 (parts 1–4)
+
+- **Group page** `/groups/:id` (`pages/groups/GroupPage.tsx`): header, the
+  numbers, Aliases as a plain table (radio = the name, From, Bookings, remove;
+  Add alias top right opens a small dialog), Bookings (the accordion table),
+  People. The Overview's Group card carries Open group, the group question
+  when unlinked, and the history strip. The History tab is history only.
+- **Overview** (`record/overview-tab.tsx`): `next-steps-card.tsx` (the dated
+  pipeline with the verb on its line; Rebook and Cancel top right),
+  `details-sheet.tsx` (visit, visitors, price as facts; the list's
+  `PaymentBar`; the rest small; reference, barcode, source footer),
+  `side-cards.tsx` (Last message with waiting-on-you/them; Notes collapsed to
+  Add note). The Contacts and Record cards are gone; the menu keeps No show
+  and Back to request.
+- **History** (`record/history-parts.tsx`): `SummaryNumbers` plus a line of
+  habits; `VisitsTable` rows open to the visit's timeline, money, reminders,
+  changes, questions and Open FY….
+- **Settings › Sending rules** (`SendingTab.tsx`): the master switch, one row
+  per send with its trigger, Mode and what the next pass would send
+  (`useSendingPreview`).
+- **Work › Deposit extensions** (view `extensions`, kind `extension`): Extend
+  deposit date (the hold popover), Keep expired (`party_done`).

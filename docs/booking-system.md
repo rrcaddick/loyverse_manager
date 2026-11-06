@@ -688,3 +688,39 @@ visit date is one party and attaches to all (`email+same day`); different
 days stay a question. `POST /inbound/messages/:id/assign` takes `booking_id`,
 `booking_ids` or `all`; Work › Assign mail offers "All n". Attaching from a
 conversation, a sent reply and detaching keep the link table in step.
+
+## Automatic expiry, sending rules and deposit extension requests (6 Nov 2026)
+
+**Expiry is automatic.** `sending.expire_holds` (the daily pass,
+`scripts/sending_pass.py`, worker cron `SENDING_CRON`, default 07:15 after the
+reminder recompute) marks every pending booking whose `hold_expires_on` has
+passed with the deposit unpaid as `lapsed` (reason "Deposit not received by
+…"). Nothing is sent by that step. The header menu no longer offers Mark
+expired; it keeps No show and Back to request.
+
+**Sending rules** (`settings.sending`, Settings › Sending rules). Every send
+stays a button; a rule set to Automatic is performed by the pass through the
+same action in `web/api/bookings.ACTIONS` (`run_automatic_sends`), so the
+outbound row, the activity line and the reminder bookkeeping are identical to
+a click. Rules: expiry notice, the three reminders, payment confirmation,
+vehicle ticket by email (`days_before`), final invoice; triggers are fixed per
+template (`sending.RULES`). Guardrails: `sending.enabled` is the master switch
+(off by default), the pass sends only when `ENV=prod` (or `--force`), and
+`GET /settings/sending/preview` shows what the next pass would expire and send
+so a row is switched with eyes open. `act_send_expiry` accepts an already
+expired booking (it only sends and marks the lapse reminder sent).
+
+**Coming back from Expired.** `TRANSITIONS["lapsed"]` is `requested`,
+`proforma_sent`, `confirmed`. A new `hold_expires_on` on an expired booking
+(`update_booking`, the Work hold endpoint) revives it to Pending with the
+reason "Deposit date extended to …", keeps the original proforma date, clears
+`lapsed_at` and re-arms the reminders. A payment that covers the deposit on an
+expired booking confirms it ("Deposit received after expiry"); the bank poll
+now matches expired bookings too (`bank.ACTIVE_STATUSES`).
+
+**Deposit extension requests.** A customer's reply on an expired booking after
+`lapsed_at` (normally to the expiry notice, which attaches by thread) is a
+request to extend: Work › Deposit extensions (`work._extension_rows`, view
+`extensions`) lists one row per booking with "Extend deposit date" (the hold
+popover, which revives the booking) and "Keep expired" (marks the person's
+conversation handled, `party_done`).

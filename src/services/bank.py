@@ -88,7 +88,8 @@ MIN_RULE_PATTERN = 4
 RULE_STOP_AFTER = frozenset({"FROM", "TO", "REF", "FOR"})
 MAX_RULE_WORDS = 5
 
-ACTIVE_STATUSES = ("proforma_sent", "confirmed", "completed")
+# lapsed: a deposit that arrives after expiry still belongs to its booking and confirms it (6 Nov 2026)
+ACTIVE_STATUSES = ("proforma_sent", "confirmed", "completed", "lapsed")
 
 REFERENCE_RE = re.compile(r"(?:FY|INV)[\s-]?(\d{3,5})", re.IGNORECASE)
 BARE_NUMBER_RE = re.compile(r"(?<!\d)(\d{4})(?!\d)")

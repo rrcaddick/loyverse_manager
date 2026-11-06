@@ -23,6 +23,14 @@ def get_settings():
     )
 
 
+@bp.get("/sending/preview")
+def sending_preview():
+    """What the next sending pass would expire and send, rule by rule (6 Nov 2026)."""
+    from src.services import sending
+
+    return ok(sending.preview())
+
+
 @bp.put("/price-tiers")
 @require_role("admin")
 def put_price_tiers():

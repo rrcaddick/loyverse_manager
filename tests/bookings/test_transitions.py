@@ -55,7 +55,6 @@ def test_allowed(current, new):
         ("completed", "requested"),
         ("no_show", "requested"),
         ("cancelled", "confirmed"),
-        ("lapsed", "proforma_sent"),
     ],
 )
 def test_disallowed(current, new):

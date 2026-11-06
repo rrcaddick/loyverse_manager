@@ -174,12 +174,42 @@ export interface FormSettings {
   intro: string;
 }
 
+export type SendingMode = "manual" | "automatic";
+
+export interface SendingRule {
+  mode: SendingMode;
+  /** The vehicle ticket's "this many days before the visit". */
+  days_before?: number;
+}
+
+/** Settings › Sending rules (6 Nov 2026): every send is a button until its row says Automatic. */
+export interface SendingSettings {
+  enabled: boolean;
+  rules: Record<string, SendingRule>;
+}
+
+export interface SendingPreviewCandidate {
+  booking_id: number;
+  reference: string;
+  group_name: string;
+  email: string | null;
+  reason: string;
+}
+
+export interface SendingPreview {
+  enabled: boolean;
+  today: string;
+  would_expire: { booking_id: number; reference: string; group_name: string; hold_expires_on: string | null }[];
+  rules: { key: string; label: string; trigger: string; mode: SendingMode; parameter: string | null; days_before: number | null; would_send: SendingPreviewCandidate[] }[];
+}
+
 export interface Settings {
   season: SeasonSettings;
   pricing: PricingSettings;
   deposit: DepositSettings;
   documents: DocumentsSettings;
   reminders: RemindersSettings;
+  sending: SendingSettings;
   capacity: CapacitySettings;
   day_kinds: DayKindsSettings;
   inbound: InboundSettings;

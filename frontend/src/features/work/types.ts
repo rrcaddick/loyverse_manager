@@ -8,16 +8,16 @@
 
 import type { BookingStatus } from "@/types/api";
 
-export type WorkView = "reply" | "new_requests" | "enquiries" | "allocate" | "pops" | "send_tickets" | "reminders" | "holds" | "stale";
+export type WorkView = "reply" | "new_requests" | "enquiries" | "allocate" | "pops" | "send_tickets" | "reminders" | "holds" | "extensions" | "stale";
 
 /** Pipeline order; the nav accordion and the page's default follow it. */
-export const WORK_VIEWS: WorkView[] = ["reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds", "stale"];
+export const WORK_VIEWS: WorkView[] = ["reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds", "extensions", "stale"];
 
 export function isWorkView(value: string | null | undefined): value is WorkView {
   return !!value && (WORK_VIEWS as string[]).includes(value);
 }
 
-export type WorkKind = "reply" | "new_request" | "ticket" | "reminder" | "hold" | "enquiry" | "allocate" | "pop";
+export type WorkKind = "reply" | "new_request" | "ticket" | "reminder" | "hold" | "enquiry" | "allocate" | "pop" | "extension";
 
 export interface WorkBookingRef {
   id: number;
@@ -76,6 +76,12 @@ export interface ExtendHoldAction extends ActionBase {
   hold_expires_on: string | null;
 }
 
+/** Mark the person's conversation handled (Keep expired on a deposit extension request). */
+export interface PartyDoneAction extends ActionBase {
+  action: "party_done";
+  party_key: string;
+}
+
 export interface SetStatusAction extends ActionBase {
   action: "set_status";
   booking_id: number;
@@ -106,6 +112,7 @@ export type WorkAction =
   | SendReminderAction
   | DismissRemindersAction
   | ExtendHoldAction
+  | PartyDoneAction
   | SetStatusAction;
 
 export type WorkActionName = WorkAction["action"];
@@ -135,6 +142,7 @@ export interface WorkCounts {
   send_tickets: number;
   reminders: number;
   holds: number;
+  extensions: number;
   stale: number;
   /** The live views (stale excluded) — the sidebar badge. */
   total: number;

@@ -10,7 +10,7 @@
  * its card.
  */
 
-import { AlertCircle, Archive, Bell, Hourglass, Inbox, Mail, MessageSquareText, Receipt, RefreshCw, Split, Ticket, type LucideIcon } from "lucide-react";
+import { AlertCircle, Archive, Bell, Hourglass, Inbox, Mail, MessageSquareText, Receipt, RefreshCw, Split, Ticket, type LucideIcon, CalendarClock } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 
@@ -89,6 +89,12 @@ const VIEWS: Record<WorkView, ViewMeta> = {
     icon: Hourglass,
     what: "Unpaid bookings about to expire",
     empty: { title: "Nothing expiring.", hint: "Unpaid bookings that expire within three days appear here.", link: { to: "/bookings?tab=pending", label: "Pending bookings" } },
+  },
+  extensions: {
+    label: "Deposit extensions",
+    icon: CalendarClock,
+    what: "Expired bookings whose customer wrote back",
+    empty: { title: "No extension requests.", hint: "When a customer answers the expiry notice, the booking waits here for a new deposit date.", link: { to: "/bookings?tab=lapsed", label: "Expired bookings" } },
   },
   stale: {
     label: "Stale",
