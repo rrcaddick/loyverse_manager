@@ -409,6 +409,11 @@ export interface HistoryVisit {
   arrived: number | null;
   turnout_pct: number | null;
   requested_on: string | null;
+  proforma_sent_on: string | null;
+  confirmed_on: string | null;
+  ticket_sent_on: string | null;
+  final_invoice_sent_on: string | null;
+  hold_expires_on: string | null;
   lead_days: number | null;
   proforma_days: number | null;
   deposit_paid_on: string | null;
