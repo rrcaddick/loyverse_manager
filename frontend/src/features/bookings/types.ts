@@ -343,6 +343,14 @@ export interface GroupDetail {
   bookings: number;
 }
 
+/** GET /groups/:id — the group's own page (6 Nov 2026). */
+export interface GroupPage extends GroupDetail {
+  visits: HistoryVisit[];
+  summary: HistorySummary | null;
+  /** Everyone seen on the group's bookings, most recent first. */
+  contacts: { email: string | null; name: string | null; mobile: string | null; bookings: number; last_visit_date: string | null }[];
+}
+
 /** The group a booking belongs to: the thing that comes back (2 Nov 2026). */
 export interface GroupRef {
   id: number;

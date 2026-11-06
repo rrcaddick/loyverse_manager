@@ -47,7 +47,11 @@ def _group(group_id: int) -> dict:
 
 @bp.get("/<int:group_id>")
 def get_group(group_id: int):
-    return ok(_group(group_id))
+    """The group page: aliases, bookings with their metrics, the summary, the people."""
+    page = group_service.group_page(group_id)
+    if page is None:
+        raise ApiError("not_found", "Group not found", 404)
+    return ok(page)
 
 
 @bp.post("/<int:group_id>/aliases")

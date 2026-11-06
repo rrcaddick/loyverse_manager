@@ -171,7 +171,7 @@ function Record({ booking }: { booking: BookingDetail }) {
         </div>
       ) : (
         <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-card-gap overflow-y-auto px-1 pb-2 scrollbar-thin">
-          {tab === "overview" ? <OverviewTab booking={booking} onContacts={() => setTab("contacts")} onHistory={() => setTab("history")} /> : null}
+          {tab === "overview" ? <OverviewTab booking={booking} onHistory={() => setTab("history")} /> : null}
           {tab === "attention" ? <AttentionTab booking={booking} unanswered={unanswered} onPayments={() => setTab("payments")} onContacts={() => setTab("contacts")} onConversation={() => setTab("conversation")} /> : null}
           {tab === "payments" ? <PaymentsTab booking={booking} /> : null}
           {tab === "documents" ? <DocumentsTab booking={booking} /> : null}

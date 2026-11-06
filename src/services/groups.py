@@ -725,6 +725,35 @@ def history_for(booking: Mapping[str, Any], today: date | None = None) -> dict:
     }
 
 
+def group_page(group_id: int, today: date | None = None) -> dict | None:
+    """The group's own page: aliases, every booking with its metrics, the
+    summary across the past ones, and the people seen on its bookings."""
+    detail = group_detail(group_id)
+    if detail is None:
+        return None
+    rows = group_model.bookings(int(group_id))
+    visits = [visit_metrics(r, None, today) for r in rows]
+    contacts: dict[str, dict] = {}
+    for r in rows:
+        for email, name, mobile in [(r.get("contact_email"), r.get("contact_name"), r.get("contact_mobile"))] + [
+            (c.get("email"), c.get("name"), c.get("mobile")) for c in query("SELECT email, name, mobile FROM booking_contacts WHERE booking_id = %s", (int(r["id"]),))
+        ]:
+            key = (email or "").strip().lower() or (mt.normalise_za_mobile(mobile) or "") or (name or "").strip().lower()
+            if not key:
+                continue
+            c = contacts.setdefault(key, {"email": (email or "").strip().lower() or None, "name": name, "mobile": mt.normalise_za_mobile(mobile), "bookings": 0, "last_visit_date": None})
+            c["name"] = c["name"] or name
+            c["mobile"] = c["mobile"] or mt.normalise_za_mobile(mobile)
+            c["bookings"] += 1
+            v = r.get("visit_date")
+            if v and (c["last_visit_date"] is None or v > c["last_visit_date"]):
+                c["last_visit_date"] = v
+    people = sorted(contacts.values(), key=lambda c: (c["last_visit_date"] or date.min, c["bookings"]), reverse=True)
+    for c in people:
+        c["last_visit_date"] = c["last_visit_date"].isoformat() if c["last_visit_date"] else None
+    return {**detail, "visits": visits, "summary": summarise(visits), "contacts": people}
+
+
 def serialize_group_row(row: Mapping[str, Any]) -> dict:
     out = serialize_row(dict(row)) or {}
     out["bookings"] = int(out.get("bookings") or 0)

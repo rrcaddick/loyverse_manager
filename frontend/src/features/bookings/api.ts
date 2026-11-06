@@ -26,6 +26,7 @@ import type {
   BookingContact,
   DocumentKind,
   GroupDetail,
+  GroupPage,
   GroupSearchRow,
   InboxMessage,
   PaymentSearchParams,
@@ -175,33 +176,48 @@ export function useSetGroup(id: number) {
   return useDetailMutation<{ group_id: number } | { new: true }>(id, (input) => api.post<BookingDetail>(`/bookings/${id}/group`, input));
 }
 
+export const groupKeys = {
+  all: ["groups"] as const,
+  detail: (id: number) => ["groups", id] as const,
+};
+
+/** The group's own page: aliases, bookings with their metrics, the summary, the people (6 Nov 2026). */
+export function useGroup(id: number | null) {
+  return useQuery({
+    queryKey: groupKeys.detail(id ?? -1),
+    queryFn: () => api.get<GroupPage>(`/groups/${id}`),
+    enabled: id !== null && Number.isFinite(id),
+  });
+}
+
 /**
- * The group's spellings (3 Nov 2026): add one, make one the name, drop one.
- * Each returns the group; the booking detail is refetched so History follows.
+ * The group's aliases (3 Nov 2026): add one, make one the name, drop one.
+ * Each returns the group; the group page and any booking record refetch.
  */
-function useGroupAliasMutation<TVariables>(bookingId: number, fn: (v: TVariables) => Promise<GroupDetail>, successMessage?: string) {
+function useGroupAliasMutation<TVariables>(groupId: number, fn: (v: TVariables) => Promise<GroupDetail>, bookingId?: number | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    meta: successMessage ? { successMessage } : { silent: true },
+    meta: { silent: true },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+      void qc.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
+      void qc.invalidateQueries({ queryKey: ["groups", "search"] });
       void qc.invalidateQueries({ queryKey: ["bookings", "list"] });
-      void qc.invalidateQueries({ queryKey: ["groups"] });
+      if (bookingId) void qc.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
     },
   });
 }
 
-export function useAddGroupAlias(bookingId: number, groupId: number) {
-  return useGroupAliasMutation<string>(bookingId, (name) => api.post<GroupDetail>(`/groups/${groupId}/aliases`, { name }));
+export function useAddGroupAlias(groupId: number, bookingId?: number | null) {
+  return useGroupAliasMutation<string>(groupId, (name) => api.post<GroupDetail>(`/groups/${groupId}/aliases`, { name }), bookingId);
 }
 
-export function useUseGroupAlias(bookingId: number, groupId: number) {
-  return useGroupAliasMutation<number>(bookingId, (aliasId) => api.post<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}/use`, {}));
+export function useUseGroupAlias(groupId: number, bookingId?: number | null) {
+  return useGroupAliasMutation<number>(groupId, (aliasId) => api.post<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}/use`, {}), bookingId);
 }
 
-export function useDeleteGroupAlias(bookingId: number, groupId: number) {
-  return useGroupAliasMutation<number>(bookingId, (aliasId) => api.delete<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}`));
+export function useDeleteGroupAlias(groupId: number, bookingId?: number | null) {
+  return useGroupAliasMutation<number>(groupId, (aliasId) => api.delete<GroupDetail>(`/groups/${groupId}/aliases/${aliasId}`), bookingId);
 }
 
 /** The group picker behind Change group: name, alias, a booking's name, reference or contact. */

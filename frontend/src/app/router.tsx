@@ -162,6 +162,11 @@ export const router = createBrowserRouter([
           { path: "gate", element: <RedirectTo to="/today" /> },
           { path: "bank", element: <RedirectTo to="/bookings" /> },
           { path: "payments", element: <RedirectTo to="/bookings" /> },
+          {
+            path: "groups/:id",
+            lazy: page(() => import("@/pages/groups/GroupPage")),
+            handle: { crumb: "Group" },
+          },
           { path: "users", lazy: page(() => import("@/pages/users/UsersPage")), handle: { crumb: "Users" } },
           { path: "system", element: <RedirectTo to="/settings/system" /> },
           { path: "ops", element: <RedirectTo to="/settings/system" /> },

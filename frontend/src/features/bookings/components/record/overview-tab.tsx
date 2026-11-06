@@ -6,17 +6,16 @@
  * internal note, the hold and the collapsed record footer keep their places.
  */
 
-import { CalendarDays, History, Mail, Pencil, RotateCcw, UserCheck, Users } from "lucide-react";
+import { CalendarDays, Mail, Pencil, RotateCcw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { siWhatsapp } from "simple-icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { Section } from "@/components/section";
-import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api";
-import { formatDate, formatDateLong, formatDateShort, formatMoney, formatNumber, formatPhone, todayIso } from "@/lib/format";
+import { formatDate, formatDateLong, formatDateShort, formatMoney, formatNumber, pluralise, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { ACTION_LABELS, availability, type ActionId } from "../../actions";
@@ -24,22 +23,20 @@ import { useSetGroup } from "../../api";
 import { groupQuestion } from "../../attention";
 import { isPastBooking, suggestionLabel, summaryLines, whyText } from "../../groups";
 import { isTentative, relativeTo, sourceLabel, useGroupTypeLabel, useTierLabel } from "../../lib";
-import { CONTACT_ROLE_LABELS, primaryContact } from "../../contacts";
 import { nextStep } from "../../next-step";
-import type { BookingContact, BookingDetail } from "../../types";
+import type { BookingDetail } from "../../types";
 import { useBookingActions } from "../../use-booking-actions";
 import { QuestionsCard } from "../questions-card";
 import { HoldCard, InternalNoteCard, RecordCard, RemindersCard } from "../rail";
 import { Gated } from "../record-header";
 
-export function OverviewTab({ booking, onContacts, onHistory }: { booking: BookingDetail; onContacts: () => void; onHistory: () => void }) {
+export function OverviewTab({ booking, onHistory }: { booking: BookingDetail; onHistory: () => void }) {
   return (
     <div className="flex flex-col gap-card-gap">
       <QuickActionsRow booking={booking} />
       <div className="grid gap-card-gap xl:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)]">
         <div className="flex min-w-0 flex-col gap-card-gap">
-          <ContactsCard booking={booking} onManage={onContacts} />
-          <HistoryCard booking={booking} onOpen={onHistory} />
+          <GroupCard booking={booking} onHistory={onHistory} />
           {isTentative(booking.status) ? <HoldCard booking={booking} /> : booking.reminders.length > 0 ? <RemindersCard booking={booking} /> : null}
           <RecordCard booking={booking} />
         </div>
@@ -231,14 +228,16 @@ function QuickActionsRow({ booking }: { booking: BookingDetail }) {
   );
 }
 
-// ----------------------------------------------------------------- history
+// ------------------------------------------------------------------- group
 
-/** What this group did before, in two or three sentences; the History tab has the rows. */
-function HistoryCard({ booking, onOpen }: { booking: BookingDetail; onOpen: () => void }) {
+/** The group this booking belongs to, what it did before in a few words, and the way to the group page. */
+function GroupCard({ booking, onHistory }: { booking: BookingDetail; onHistory: () => void }) {
   const setGroup = useSetGroup(booking.id);
+  const groupType = useGroupTypeLabel();
   const question = groupQuestion(booking);
   const lines = summaryLines(booking.history.summary);
   const upcoming = booking.history.visits.filter((v) => v.relation === "upcoming");
+  const g = booking.group;
   async function answer(input: { group_id: number } | { new: true }) {
     try {
       await setGroup.mutateAsync(input);
@@ -251,17 +250,25 @@ function HistoryCard({ booking, onOpen }: { booking: BookingDetail; onOpen: () =
     <Section
       title={
         <span className="inline-flex items-center gap-2">
-          <History aria-hidden="true" className="size-4 text-muted-foreground" />
-          History
+          <Users aria-hidden="true" className="size-4 text-muted-foreground" />
+          Group
         </span>
       }
       actions={
-        <Button variant="ghost" size="sm" onClick={onOpen}>
-          Open
-        </Button>
+        g ? (
+          <Button asChild variant="ghost" size="sm">
+            <Link to={`/groups/${g.id}`}>Open group</Link>
+          </Button>
+        ) : undefined
       }
     >
       <div className="flex flex-col gap-3 text-body">
+        {g ? (
+          <p className="text-foreground">
+            <span className="font-medium">{g.name}</span>
+            <span className="text-muted-foreground">{[g.area, g.group_type ? groupType(g.group_type) : null, pluralise(g.bookings, "booking")].filter(Boolean).map((part) => ` · ${part}`)}</span>
+          </p>
+        ) : null}
         {question ? (
           <>
             <p className="text-foreground">
@@ -277,10 +284,17 @@ function HistoryCard({ booking, onOpen }: { booking: BookingDetail; onOpen: () =
               </Button>
             </div>
           </>
-        ) : !booking.group ? (
-          <p className="text-muted-foreground">Not linked to a group yet.</p>
+        ) : !g ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-muted-foreground">Not linked to a group yet.</span>
+            <Button size="sm" variant="outline" disabled={setGroup.isPending} onClick={() => answer({ new: true })}>
+              New group
+            </Button>
+          </div>
         ) : lines.length > 0 ? (
-          <p className="text-foreground">{lines.slice(0, 4).join(" ")}</p>
+          <button type="button" onClick={onHistory} className="text-left text-foreground underline-offset-3 hover:underline">
+            {lines.slice(0, 3).join(" ")}
+          </button>
         ) : (
           <p className="text-muted-foreground">
             First booking for this group.
@@ -289,62 +303,5 @@ function HistoryCard({ booking, onOpen }: { booking: BookingDetail; onOpen: () =
         )}
       </div>
     </Section>
-  );
-}
-
-// ---------------------------------------------------------------- contacts
-
-
-function ContactsCard({ booking, onManage }: { booking: BookingDetail; onManage: () => void }) {
-  const primary = primaryContact(booking);
-  const others = booking.contacts.filter((c) => c.role !== "primary");
-  const onSite = booking.contacts.find((c) => c.on_site);
-  return (
-    <Section
-      title={
-        <span className="inline-flex items-center gap-2">
-          <Users aria-hidden="true" className="size-4 text-muted-foreground" />
-          Contacts
-        </span>
-      }
-      actions={
-        <Button variant="ghost" size="sm" onClick={onManage}>
-          Manage
-        </Button>
-      }
-    >
-      <div className="flex flex-col gap-3 text-body">
-        <ContactLine contact={primary} />
-        {others.slice(0, 4).map((c) => (
-          <ContactLine key={c.id} contact={c} />
-        ))}
-        {others.length > 4 ? <span className="text-sm text-muted-foreground">+ {others.length - 4} more</span> : null}
-        {!onSite ? <span className="text-sm text-muted-foreground">Nobody marked as on site on the day yet.</span> : null}
-      </div>
-    </Section>
-  );
-}
-
-function ContactLine({ contact }: { contact: BookingContact }) {
-  return (
-    <div className="grid min-w-0 gap-0.5">
-      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="truncate font-medium text-foreground">{contact.name || contact.email}</span>
-        <span className="text-sm text-muted-foreground">{CONTACT_ROLE_LABELS[contact.role]}</span>
-        {contact.on_site ? <StatusPill tone="green" label="On the day" size="sm" icon={UserCheck} /> : null}
-      </span>
-      <span className="flex min-w-0 flex-wrap gap-x-3 text-sm text-muted-foreground">
-        {contact.email ? (
-          <Link to="?tab=conversation" className="truncate underline-offset-3 hover:underline" title="Open the conversation">
-            {contact.email}
-          </Link>
-        ) : null}
-        {contact.mobile ? (
-          <a href={`tel:+${contact.mobile}`} className="tabular underline-offset-3 hover:underline">
-            {formatPhone(contact.mobile)}
-          </a>
-        ) : null}
-      </span>
-    </div>
   );
 }
