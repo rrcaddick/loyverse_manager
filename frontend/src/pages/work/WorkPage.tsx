@@ -10,7 +10,7 @@
  * its card.
  */
 
-import { AlertCircle, Archive, Bell, Hourglass, Inbox, Mail, MessageSquareText, Receipt, RefreshCw, Split, Ticket, type LucideIcon, CalendarClock } from "lucide-react";
+import { AlertCircle, Archive, Bell, CalendarClock, Hourglass, Mail, Receipt, RefreshCw, Split, Ticket, type LucideIcon } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 
@@ -47,18 +47,6 @@ const VIEWS: Record<WorkView, ViewMeta> = {
     icon: Mail,
     what: "The customer wrote last",
     empty: { title: "Nothing to reply to.", hint: "Mail is checked every minute; a customer's message on a booking lands here." },
-  },
-  new_requests: {
-    label: "Requests",
-    icon: Inbox,
-    what: "Requests to review",
-    empty: { title: "No requests to review.", hint: "Requests from the public form wait here until they are accepted or declined.", link: { to: "/bookings?tab=requests", label: "Open requests" } },
-  },
-  enquiries: {
-    label: "Enquiries",
-    icon: MessageSquareText,
-    what: "Enquiries to answer",
-    empty: { title: "No enquiries waiting.", hint: "Mail that matches no booking and got no answer becomes an enquiry.", link: { to: "/enquiries", label: "Open Enquiries" } },
   },
   allocate: {
     label: "Assign mail",

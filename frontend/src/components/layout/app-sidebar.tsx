@@ -48,6 +48,7 @@ export function AppSidebar() {
   const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed" && !isMobile;
   const counts = useNavCounts();
+  const location = useLocation();
   const onWork = pathname === "/work" || pathname.startsWith("/work/");
   // Open on Work, otherwise remember the last toggle (the render-time sync
   // pattern from the React docs, no effect needed).
@@ -130,14 +131,19 @@ export function AppSidebar() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <SidebarMenuSub className="mr-1 ml-4 gap-0 py-0.5 pr-0">
+              {item.children.every((child) => (counts.workViews[child.view] ?? 0) === 0) && !currentView ? (
+                <li className="px-2 py-1 text-sm text-muted-foreground">All clear</li>
+              ) : null}
               {item.children.map((child) => {
                 const n = counts.workViews[child.view] ?? 0;
-                if (child.muted && n === 0) return null;
-                const childActive = currentView === child.view;
+                const to = child.to ?? `/work?view=${child.view}`;
+                const childActive = child.to ? location.pathname + location.search === child.to || (child.to === "/enquiries" && location.pathname.startsWith("/enquiries")) : currentView === child.view;
+                // A to-do list: a view with nothing in it steps aside (Work itself never does).
+                if (n === 0 && !childActive) return null;
                 return (
                   <SidebarMenuSubItem key={child.view}>
                     <SidebarMenuSubButton asChild isActive={childActive} className={cn("h-7 pr-1 text-sm", child.muted && "text-muted-foreground")}>
-                      <NavLink to={`/work?view=${child.view}`} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
+                      <NavLink to={to} aria-current={childActive ? "page" : undefined} onClick={() => isMobile && setOpenMobile(false)}>
                         <child.icon aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate">{child.title}</span>
                         {n > 0 ? <CountBadge count={n} tone={child.muted ? "muted" : "highlight"} aria-hidden="true" className="ml-auto shrink-0" /> : null}

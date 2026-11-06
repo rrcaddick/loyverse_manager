@@ -7,7 +7,7 @@
  *   Work       /work         admin   an accordion: the Work views with their counts (no total on Work itself)
  *   Calendar   /calendar     admin + manager
  *   Bookings   /bookings     admin
- *   Enquiries  /enquiries    admin   count: open enquiries
+ *   (Enquiries live under Work since 6 Nov 2026; the page stays at /enquiries)
  *   Settings   /settings     admin + manager (Users and System live inside; Mail, Bank and Gate are gone)
  */
 
@@ -37,11 +37,13 @@ export type NavCountKey = "work" | "enquiries";
 
 export interface NavChild {
   title: string;
-  /** Work view key; the link is /work?view=<key>. */
+  /** Work view key: the link is /work?view=<key> and the count is that view's. */
   view: string;
   icon: LucideIcon;
   /** Shown muted and last (stale). */
   muted?: boolean;
+  /** A child that is its own page (Requests → the Bookings tab, Enquiries → their page); the count still comes from Work (6 Nov 2026). */
+  to?: string;
 }
 
 export interface NavItem {
@@ -63,8 +65,8 @@ export interface NavItem {
 
 /** The Work views in the order Linda works them; counts come from /work/counts. */
 export const WORK_CHILDREN: NavChild[] = [
-  { title: "Requests", view: "new_requests", icon: Inbox },
-  { title: "Enquiries", view: "enquiries", icon: MessageSquareText },
+  { title: "Requests", view: "new_requests", icon: Inbox, to: "/bookings?tab=requests" },
+  { title: "Enquiries", view: "enquiries", icon: MessageSquareText, to: "/enquiries" },
   { title: "Reply", view: "reply", icon: Mail },
   { title: "Verify payments", view: "pops", icon: Receipt },
   { title: "Assign mail", view: "allocate", icon: Split },
@@ -80,7 +82,6 @@ export const NAV_MAIN: NavItem[] = [
   { title: "Work", to: "/work", icon: ListChecks, roles: ["admin"], also: ["/queue"], key: "w", children: WORK_CHILDREN },
   { title: "Calendar", to: "/calendar", icon: CalendarDays, roles: ["admin", "manager"], key: "c" },
   { title: "Bookings", to: "/bookings", icon: BookOpenText, roles: ["admin"], key: "b" },
-  { title: "Enquiries", to: "/enquiries", icon: MessageSquareText, roles: ["admin"], count: "enquiries", key: "e" },
 ];
 
 export const NAV_BOTTOM: NavItem[] = [

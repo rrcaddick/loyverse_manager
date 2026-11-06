@@ -8,10 +8,11 @@
 
 import type { BookingStatus } from "@/types/api";
 
-export type WorkView = "reply" | "new_requests" | "enquiries" | "allocate" | "pops" | "send_tickets" | "reminders" | "holds" | "extensions" | "stale";
+/** Requests and Enquiries have their own pages since 6 Nov 2026; Work still counts them for the nav. */
+export type WorkView = "reply" | "allocate" | "pops" | "send_tickets" | "reminders" | "holds" | "extensions" | "stale";
 
 /** Pipeline order; the nav accordion and the page's default follow it. */
-export const WORK_VIEWS: WorkView[] = ["reply", "new_requests", "enquiries", "allocate", "pops", "send_tickets", "reminders", "holds", "extensions", "stale"];
+export const WORK_VIEWS: WorkView[] = ["reply", "allocate", "pops", "send_tickets", "reminders", "holds", "extensions", "stale"];
 
 export function isWorkView(value: string | null | undefined): value is WorkView {
   return !!value && (WORK_VIEWS as string[]).includes(value);
