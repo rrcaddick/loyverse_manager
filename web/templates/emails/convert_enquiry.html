@@ -1,0 +1,12 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import button %}
+{% block body %}
+<h1>Let's get your visit booked</h1>
+<p>Hello,</p>
+<p>Thank you for your enquiry about a group visit to {{ company.trading_name }}. To send you a proforma and hold a date, we need a few details: your group, the date you have in mind, how many people are coming and a contact number. The quickest way is our booking request form; it takes a couple of minutes.</p>
+{% if form_url %}
+{{ button("Complete the booking request", form_url) }}
+<p class="small muted">Or copy this link into your browser: <a href="{{ form_url }}">{{ form_url }}</a></p>
+{% endif %}
+<p>The form is linked to this conversation, so your request lands with the rest of our correspondence. We review every request before confirming the date.</p>
+{% endblock %}

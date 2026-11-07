@@ -1,0 +1,103 @@
+{
+  "status": 200,
+  "headers": {
+    "Server": "IIS",
+    "parent_trace_id": "ebd25250-4bb8-4cfe-88a7-ce1a8714a930",
+    "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+    "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+    "content-type": "application/json;charset=UTF-8",
+    "X-Pool-Used": "login_stress_jboss",
+    "Strict-Transport-Security": "max-age=31536000",
+    "x-ratelimit-limit": "170",
+    "x-ratelimit-reset": "60",
+    "X-TARGET-HOST": "apigateway.p.onlineapps.fnbsp.co.za",
+    "expires": "0",
+    "pragma": "no-cache",
+    "x-xss-protection": "0",
+    "x-content-type-options": "nosniff",
+    "X-Node-Used": "Forward Proxy:0",
+    "x-frame-options": "DENY",
+    "X-UA-Compatible": "IE=EDGE",
+    "X-Powered-By": "Sun One",
+    "x-ratelimit-remaining": "161",
+    "referrer-policy": "no-referrer",
+    "content-length": "912"
+  },
+  "body": {
+    "entry": [
+      {
+        "entryId": "20260930000001",
+        "bookingDate": {
+          "Date": "2026-09-30"
+        },
+        "valueDate": {
+          "Date": "2026-09-30"
+        },
+        "entryDetails": {
+          "transactionDetails": {
+            "remittanceInfo": {
+              "unstructured": "UNDEFINED.572820"
+            },
+            "reference": {
+              "endToEndId": "UNDEFINED.572820"
+            }
+          }
+        },
+        "amount": {
+          "amount": "1000.00",
+          "currency": "ZAR"
+        },
+        "creditDebitIndicator": "CREDIT",
+        "availability": {
+          "amount": "101446820.38",
+          "currency": "ZAR",
+          "creditDebitIndicator": "CREDIT"
+        }
+      },
+      {
+        "entryId": "20260930000002",
+        "bookingDate": {
+          "Date": "2026-09-30"
+        },
+        "valueDate": {
+          "Date": "2026-09-30"
+        },
+        "entryDetails": {
+          "transactionDetails": {
+            "remittanceInfo": {
+              "unstructured": "UNDEFINED.791555"
+            },
+            "reference": {
+              "endToEndId": "UNDEFINED.791555"
+            }
+          }
+        },
+        "amount": {
+          "amount": "1000.00",
+          "currency": "ZAR"
+        },
+        "creditDebitIndicator": "CREDIT",
+        "availability": {
+          "amount": "101447820.38",
+          "currency": "ZAR",
+          "creditDebitIndicator": "CREDIT"
+        }
+      }
+    ],
+    "groupHeader": {
+      "pagination": {
+        "lastPageIndicator": true,
+        "lastItemKey": "20260930000002"
+      }
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/transaction-history/retrieve/v2/63002461513",
+    "params": {
+      "fromDate": "2025-01-01",
+      "toDate": "2026-10-06",
+      "lastItemKey": "20260907000001"
+    }
+  }
+}

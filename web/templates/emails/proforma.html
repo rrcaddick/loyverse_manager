@@ -1,0 +1,33 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary, bank_details %}
+{% block body %}
+<h1>Your proforma for {{ booking.visit_date_long }}</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>Thank you for your enquiry. Proforma <span class="strong">{{ document.number }}</span> for {{ booking.group_name }}'s visit to {{ company.trading_name }} is attached.</p>
+{% if finance.deposit_waived %}
+{{ summary([
+  ("Payable on the day", finance.due_display, true),
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
+  ("Total", finance.total_display),
+], "Proforma " ~ document.number) }}
+<p>No deposit is needed for this booking. Reply to confirm you would like to go ahead and we will reserve the date; the full amount is payable on the day.</p>
+{% else %}
+{{ summary([
+  ("Deposit due", finance.deposit_outstanding_display, true),
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor") ~ " at " ~ finance.price_display ~ " each"),
+  ("Total", finance.total_display),
+  ("Balance on the day", finance.balance_on_day_display),
+], "Proforma " ~ document.number) }}
+<h2>To secure your date</h2>
+<ol class="steps">
+  <li>Pay the deposit of <span class="strong">{{ finance.deposit_outstanding_display }}</span> by EFT to the account below{% if hold_expires_on %}, by <span class="strong">{{ hold_expires_on_long }}</span>{% endif %}.</li>
+  <li>Use <span class="strong">{{ booking.reference }}</span> as your payment reference so we can match it to your booking.</li>
+  <li>Email the proof of payment to <a href="mailto:{{ company.pop_email }}">{{ company.pop_email }}</a>. We then confirm the date and send your statement and vehicle ticket.</li>
+</ol>
+{{ bank_details(company, booking.reference) }}
+<p>The balance of {{ finance.balance_on_day_display }} is payable on the day of your visit, for the people who actually arrive.{% if hold_expires_on %} We are holding {{ booking.visit_date_long }} for you until {{ hold_expires_on_long }}.{% endif %}</p>
+{% endif %}
+<p class="small muted">If your group size or date changes, let us know and we will send an updated proforma.</p>
+{% endblock %}

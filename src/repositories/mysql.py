@@ -2,7 +2,7 @@ from contextlib import contextmanager
 
 import pymysql
 
-from config.settings import MYSQL_DB, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_USER
+from config.settings import MYSQL_DB, MYSQL_HOST, MYSQL_PASSWORD, MYSQL_PORT, MYSQL_USER
 
 
 @contextmanager
@@ -13,6 +13,7 @@ def get_db_connection():
     """
     connection = pymysql.connect(
         host=MYSQL_HOST,
+        port=MYSQL_PORT,
         user=MYSQL_USER,
         password=MYSQL_PASSWORD,
         database=MYSQL_DB,
