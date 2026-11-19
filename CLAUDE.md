@@ -109,7 +109,8 @@ and service signatures; update it when you change them.
 4. Group tickets by purchaser email → build Loyverse items → create each item, upload the
    product image, then set inventory levels for the order variants.
 5. Also create Loyverse items for any `group_bookings` rows with today's `visit_date`.
-6. Email a success/failure/no-event summary to `NOTIFICATION_RECIPIENTS`.
+6. Email `NOTIFICATION_RECIPIENTS` only when the job fails (a success or a day with
+   nothing to load is logged, not mailed; 19 Nov 2026).
 
 ### Loyverse variant encoding (important, non-obvious)
 

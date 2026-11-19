@@ -52,27 +52,6 @@ class NoticifationService:
             print(f"Failed to send email: {str(e)}")
             return False
 
-    def send_inventory_update_success(
-        self, recipients: list[str], date: date, order_count: int
-    ) -> None:
-        """Send inventory update success notification."""
-        subject = f"Inventory Update Success - {date}"
-        message = (
-            f"Inventory update completed successfully for {date}\n"
-            f"Processed {order_count} orders\n"
-        )
-        self.send_notification(recipients, subject, message)
-
-    def send_inventory_clear_success(self, recipients: list[str], date: date) -> None:
-        """Send inventory clear success notification."""
-        subject = f"Inventory Clear Success - {date}"
-        message = (
-            "Inventory clearing completed successfully; "
-            "Cleared items from categories: groups and online_ticket; "
-            "Reset gazebo inventory levels to default"
-        )
-        self.send_notification(recipients, subject, message)
-
     def send_inventory_failure_notification(
         self,
         recipients: list[str],
@@ -88,12 +67,6 @@ class NoticifationService:
             f"Error message: {str(error)}\n"
             f"Traceback:\n{traceback.format_exc()}"
         )
-        self.send_notification(recipients, subject, message)
-
-    def send_no_event_notification(self, recipients: list[str], date: date) -> None:
-        """Send notification when no event is scheduled."""
-        subject = f"Inventory Update Status - {date}"
-        message = "No event scheduled for today. Process completed successfully."
         self.send_notification(recipients, subject, message)
 
     def send_quicket_event_hide_failure(
