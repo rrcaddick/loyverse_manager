@@ -87,9 +87,17 @@ class ChatwootClient(BaseClient):
 
         resp = super().post(endpoint, payload)
 
-        # Return the contact from payload if wrapped
-        if isinstance(resp, dict) and resp.get("payload"):
-            return resp["payload"]
+        # Chatwoot answers POST /contacts with {"payload": {"contact": {...},
+        # "contact_inbox": ...}} (current versions) or with the contact itself
+        # (older ones). Hand back the contact either way: returning the wrapper
+        # left the id out, and the first ticket to a new number failed with
+        # "Contact ID should not be None" while the contact was created all the
+        # same, so the second attempt found it by search (19 Nov 2026).
+        wrapped = resp.get("payload") if isinstance(resp, dict) else None
+        if isinstance(wrapped, dict) and isinstance(wrapped.get("contact"), dict):
+            return wrapped["contact"]
+        if isinstance(wrapped, dict) and wrapped.get("id") is not None:
+            return wrapped
         return resp
 
     def get_or_create_contact(
