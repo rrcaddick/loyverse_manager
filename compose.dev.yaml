@@ -32,6 +32,15 @@ services:
       - ./web:/app/web:ro
       - ./config:/app/config:ro
       - ./scripts:/app/scripts:ro
+  migrate:
+    # The migration runner must see the repo's migration files, not the image's:
+    # the image is rebuilt rarely here, and a renumbered file in a stale image
+    # fails on changes the database already has (19 Nov 2026).
+    volumes:
+      - ./migrations:/app/migrations:ro
+      - ./scripts:/app/scripts:ro
+      - ./config:/app/config:ro
+      - ./src:/app/src:ro
   scheduler:
     environment:
       ENV: dev
