@@ -52,6 +52,26 @@ class ChatwootService:
         # Store inbox_id if provided, otherwise can be passed per-method
         self.default_inbox_id = CHATWOOT_INBOX_ID
 
+    # Meta's error codes, in words the page can show.
+    META_ERRORS = {
+        "131026": "Not on WhatsApp",
+        "131047": "Customer has not written in 24 hours",
+        "131049": "Not delivered (Meta limit)",
+        "130472": "Customer has opted out",
+        "131053": "Image could not be fetched",
+    }
+
+    def ticket_status(self, conversation_id, message_id):
+        """The last delivery word on a sent ticket: ``{"status", "error"}`` or None."""
+        result = self.client.message_status(conversation_id, message_id)
+        if not result:
+            return None
+        error = result.get("error")
+        if error:
+            code = str(error).split(":")[0].strip()
+            result["error"] = self.META_ERRORS.get(code, str(error)[:120])
+        return result
+
     def send_group_vehicle_ticket_jpeg(
         self,
         to_number: str,
