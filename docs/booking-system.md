@@ -1,0 +1,741 @@
+# Booking system — build contract
+
+This document is the single source of truth for the group-booking rebuild on
+`feat/booking`. Every agent working on the branch codes against it. If you
+need something that is not here, add it here first, then build it.
+
+## 1. Goal
+
+Replace the Gmail + Google Sheet + Excel macro workflow for group bookings with
+one application: enquiry form → proforma → deposit (matched from the bank) →
+invoice → vehicle ticket → visit day (Loyverse count, final invoice, gate
+payment) → close. Email is the channel for all finance documents; WhatsApp is
+only for the vehicle ticket (already built). Nothing sends automatically: every
+outbound message is a button click, and every send is logged on the booking.
+
+Users: `admin` (Ray, Linda) sees everything; `manager` (Marcelino) sees the
+calendar and the day view (arrivals, gate payments) only.
+
+## 2. Stack
+
+- Backend: Flask JSON API under `/api/v1`, PyMySQL, plain SQL in models.
+  WeasyPrint for PDFs. Gmail over IMAP (imapclient) and SMTP (smtplib).
+  FNB transaction-history API (port of `~/repos/python/fnb/fnb_client.py`).
+  Anthropic SDK for the "create booking from this email" extraction.
+- Frontend: `frontend/` — Vite + React 19 + TypeScript, Tailwind v4, shadcn/ui
+  (Radix), TanStack Query + Table, react-hook-form + zod, Lucide, sonner.
+  Built into `web/static/app/` and served by Flask as an SPA.
+- Scheduler: supercronic (existing) gains: mail sync every minute, bank poll
+  every 5 minutes, reminders recompute daily, nightly DB backup.
+
+## 3. Conventions
+
+- Python ≥3.12, 4-space, double quotes, 88 cols, type hints on new code.
+- Dates: `src.utils.date.get_today()`; never `date.today()`; never at module scope.
+- Money: `Decimal` in Python, `DECIMAL(12,2)` in MySQL, numbers with 2dp in JSON.
+- Logging: `setup_logger(name)`.
+- SQL lives in `src/models/*`; decisions in `src/services/*`; HTTP in
+  `src/clients/*`; routes in `web/api/*` do validation + orchestration only.
+- `src/models/base.py` provides `query(sql, params) -> list[dict]`,
+  `query_one`, `execute(sql, params) -> lastrowid/rowcount`, `transaction()`.
+- Every state change on a booking writes a `booking_events` row.
+- Secrets only in `config/settings.py` (from `.env`). Document new vars in
+  `.env.example`.
+- Outbound mail safety: when `ENV != "prod"`, `MailSender` rewrites every
+  recipient to `DEV_MAIL_RECIPIENT` and prefixes the subject with
+  `[DEV → original@address]`. Never bypass this.
+
+## 4. Data model (migration `migrations/015-booking-system.sql`; the booking migrations follow the bridge's 007–014 since the 30 Oct 2026 merge)
+
+All tables `utf8mb4_unicode_ci`, InnoDB, `created_at`/`updated_at` TIMESTAMPs.
+
+### users
+`id, email (unique), full_name, role ENUM('admin','manager'), password_hash,
+must_change_password TINYINT(1), is_active TINYINT(1), last_login_at`.
+
+### app_settings
+`setting_key VARCHAR(64) PK, value JSON, updated_by, updated_at`. The settings
+service (`src/services/settings.py`, lead) merges stored values over typed
+defaults and exposes `get_settings() -> Settings` (dataclass) and
+`update_settings(section, data, user_id)`. Sections and defaults:
+
+```
+season:     start "2026-10-31", end "2027-04-30",
+            closed_weekdays [0,1] (Mon,Tue), avoid_weekdays [2],
+            no_discount_start "12-13", no_discount_end "01-11"   (MM-DD)
+pricing:    public_weekend_price 115.00, peak_price 130.00, vat_rate 15
+deposit:    min_people 40, percent 30
+documents:  next_number 1703, proforma_prefix "FY", invoice_prefix "INV",
+            company_name "The Farmyard Park (Pty) Ltd",
+            address "Protea Road, Klapmuts, 7625", company_reg "2020/752714/07",
+            vat_no "4780 308 575", bank_name "FNB", bank_account_name "The Farmyard Park",
+            bank_account_type "Current Account", bank_account_number "62871182764",
+            pop_email "<bookings mailbox>"
+reminders:  still_interested_days 7, deposit_reminder_days_before 14,
+            final_details_days_before 3, lapse_days_before 7
+capacity:   daily_warning_people 1000
+email:      sender_name "The Farmyard Park", signature_name "Linda Caddick",
+            signature_title "Director", signature_company "The Farmyard Park (Pty) Ltd",
+            phone "081 461 4246", website "www.farmyardpark.co.za",
+            bounce_back_enabled true, review_window_days 14
+form:       group_types [school, creche, church, nonprofit, family, corporate, pensioners, other]
+            (code → label + default tier code), max_questions 5
+```
+
+### price_tiers
+`id, code (unique), label, day_type ENUM('weekday','weekend'), price DECIMAL(12,2),
+min_group_size INT, notes, sort_order, is_active`. Seeded from the 2026/27 price
+policy (see §9).
+
+### season_days
+`day DATE PK, kind ENUM('closed','peak','open'), label`. Seeded: closed
+2026-12-24, 2026-12-31, 2027-03-26; peak 2026-12-25, 2026-12-26, 2027-01-01..03.
+
+### bookings
+```
+id, reference VARCHAR(16) UNIQUE   -- "FY1703", assigned on creation
+doc_number INT UNIQUE               -- 1703; proforma FY1703, invoice INV1703
+status ENUM('enquiry','proforma_sent','confirmed','completed','cancelled','lapsed','no_show')
+group_name, group_type VARCHAR(32), area, contact_name, contact_email, contact_mobile (E164 digits, no +)
+visit_date DATE, alternative_date DATE NULL
+people_booked INT (visitors; the public field is `visitors`)
+(adults/children columns remain but are unused: a booking counts visitors only; school parents
+pay at the gate through Loyverse and are not part of the booking)
+price_tier_code VARCHAR(32) NULL      -- the rate (children_weekday | group_weekday | group_weekend | public_weekend | peak)
+tier_price DECIMAL(12,2) NULL         -- the rate's price when the booking was priced
+price_per_person DECIMAL(12,2)        -- the net: tier_price − discount_per_person
+discount_per_person DECIMAL(12,2), discount_reason VARCHAR(255) NULL   -- never negative; a reason while > 0
+minimum_waived_by INT NULL            -- the other booking that let a small weekday group have the group rate
+deposit_due DECIMAL(12,2), deposit_overridden TINYINT(1), deposit_waived TINYINT(1),
+deposit_override_reason VARCHAR(255) NULL
+arrived_count INT NULL, arrived_source ENUM('loyverse') NULL   -- Loyverse is the only count (scripts/poll_arrivals.py)
+barcode VARCHAR(64) UNIQUE          -- EAN-13, src/services/barcode.py
+source ENUM('form','email','import','manual')
+enquiry_date DATE, hold_expires_on DATE NULL
+customer_notes TEXT NULL, internal_notes TEXT NULL
+email_thread_id BIGINT NULL         -- Gmail X-GM-THRID of the primary thread
+proforma_sent_at, invoice_sent_at, final_invoice_sent_at, ticket_sent_at (WhatsApp),
+ticket_emailed_at, confirmed_at, completed_at, cancelled_at, lapsed_at  (DATETIME NULL)
+created_by INT NULL
+```
+Migration 024 (30 Oct 2026) dropped `arrival_time`, `vehicles`, `gazebos`,
+`arrived_at`, `price_overridden`, `price_override_reason` and
+`legacy_sheet_row`; gazebos return later as invoice line items.
+
+### email_messages.participant_names (migration 025)
+JSON, address → display name as written in the From, To and Cc headers, so a
+contact learned from a copied address gets a name (`mail_ingest.parse_message`
+keeps them; the migration and the live pipeline pass them to
+`booking_contact.upsert`; `migration.learn_contact_names(mailbox=True)`
+backfills, and for an address no stored header names it reads the name off
+the newest message that address sent us, read-only).
+
+Two matching guards (31 Oct 2026): a contact name that is just the group name
+(a sheet row without one) adds nothing on top of the group match
+(`matching.score`), and a development copy of our own mail, subject prefixed
+`[DEV → …]` by `mail_send` outside prod, is classed automated and never
+stored or matched (`inbound.DEV_COPY_PREFIX`; the migration skips it too).
+The sheet importer treats a non-date in the date column ("Fully booked",
+"Est. pub 500") as a note on the day above, not the end of that day.
+
+### booking_legacy_rows
+`booking_id` (PK, FK), `sheet_row JSON`, `imported_at`. The original sheet row
+behind an imported booking, kept whole and never read by the app.
+Computed in the service, never stored: `total_amount = people_booked × price`,
+`paid_total = Σ payments`, `balance_due`, `final_amount = arrived_count × price`.
+
+### booking_questions
+`id, booking_id, question TEXT, answer TEXT NULL, answered_at, answered_by, sort_order`.
+
+### booking_events
+`id, booking_id, kind VARCHAR(40), summary VARCHAR(255), data JSON NULL,
+actor_user_id INT NULL, created_at`. Kinds: created, updated, status_changed,
+override, note, document_issued, email_sent, email_received, email_failed,
+payment_recorded, payment_matched, payment_deleted, payment_unmatched, ticket_sent,
+arrivals_recorded, reminder_dismissed.
+
+### documents
+`id, booking_id, kind ENUM('proforma','invoice','final_invoice'), number VARCHAR(20),
+version INT, file_path VARCHAR(255), total DECIMAL, paid DECIMAL, due DECIMAL,
+snapshot JSON, issued_at, issued_by, email_message_id INT NULL`.
+Files live under `data/documents/<booking_id>/<number>-v<version>.pdf`
+(`DATA_DIR` setting, a docker volume).
+
+### payments
+`id, booking_id, kind ENUM('eft','cash','card','other'), amount DECIMAL(12,2),
+paid_on DATE, reference VARCHAR(120), bank_transaction_id INT NULL UNIQUE,
+note, recorded_by, created_at`.
+
+### bank_transactions
+`id, fingerprint VARCHAR(64) UNIQUE, account_number, entry_id, booking_date,
+value_date, description, end_to_end_id, amount DECIMAL(12,2), credit_debit,
+balance_after DECIMAL(14,2), raw JSON, first_seen_at,
+match_status ENUM('unmatched','suggested','matched','ignored'),
+matched_booking_id INT NULL, matched_at, matched_by, match_method VARCHAR(30),
+suggestions JSON NULL, ignore_reason`.
+
+### bank_poll_log
+`id, started_at, finished_at, window_from, window_to, entries, new_entries, status, error`.
+
+### email_messages
+```
+id, gmail_msgid BIGINT UNIQUE, gmail_thrid BIGINT, gmail_uid INT, folder VARCHAR(40)
+message_id_header VARCHAR(255), in_reply_to VARCHAR(255), references_header TEXT
+direction ENUM('inbound','outbound'), kind VARCHAR(40) NULL   -- outbound kinds, see §7
+from_name, from_email, to_emails JSON, cc_emails JSON, subject, sent_at DATETIME
+snippet VARCHAR(255), body_text MEDIUMTEXT, body_html MEDIUMTEXT, has_attachments
+booking_id INT NULL, match_method VARCHAR(30) NULL
+review_status ENUM('none','pending','resolved','not_booking') DEFAULT 'none'
+resolved_by, resolved_at, is_auto_generated TINYINT(1), bounce_back_sent_at
+send_status ENUM('sent','failed') NULL, send_error TEXT NULL, sent_by INT NULL
+attachments_meta JSON NULL
+```
+### email_attachments
+`id, email_message_id, filename, content_type, size_bytes, file_path`.
+### bounce_backs
+`sender_email PK, last_sent_at`.
+### mail_sync_state
+`folder PK, uidvalidity, last_uid, last_synced_at`.
+### booking_reminders
+`id, booking_id, kind ENUM('still_interested','deposit_reminder','final_details','lapse'),
+due_on DATE, status ENUM('due','sent','dismissed'), dismissed_by, dismissed_at,
+UNIQUE(booking_id, kind)`.
+### form_submissions
+`id, booking_id, payload JSON, ip, user_agent, turnstile_ok, created_at`.
+### import_runs
+`id, kind, started_at, finished_at, summary JSON, status`.
+
+`group_bookings` (legacy) is migrated into `bookings` by the migration and no
+longer written. `GroupBooking` becomes a read adapter over `bookings` so the
+existing ticket PDF, WhatsApp send and morning sync keep working. The morning
+sync takes **confirmed** bookings only.
+
+## 5. Status machine and rules
+
+```
+enquiry ──send proforma──▶ proforma_sent ──deposit matched/recorded or waived+confirm──▶ confirmed
+   │                             │                                                      │
+   ├──cancel──▶ cancelled        ├──hold expires──▶ lapsed (button, suggested by queue)  ├──visit day: arrivals recorded──▶ completed
+   └──(any)                      └──cancel──▶ cancelled                                 └──no arrivals after date──▶ no_show
+```
+- **Requests (migration 019, Oct 26):** the public form creates `requested`
+  (not on the calendar). `POST /bookings/:id/accept` applies edits, moves it to
+  `enquiry` and sends the proforma in the same step; `POST …/decline` →
+  `declined`. `requested → enquiry | proforma_sent | declined | cancelled`;
+  `declined → requested | enquiry`. Bookings list bucket `requests`.
+- **Inbound mail, enquiries, contacts, proof of payment, payment search:** see
+  `docs/handoff/migration-and-inbound.md` (tables `booking_contacts`,
+  `enquiries`, `mail_skipped`, `pop_candidates`; `email_messages.inbound_outcome`
+  …; `documents.kind` gains `pop|attachment`; settings section `inbound`;
+  endpoints `/enquiries/*`, `/inbound/*`, `/bookings/:id/{accept,decline,
+  contacts,payment-search,pops}`).
+- `confirm` happens when `paid_total ≥ deposit_due`, or deposit waived + admin
+  clicks Confirm. Admin can also Confirm manually with a reason.
+- Reopen: cancelled/lapsed → enquiry (admin).
+- `hold_expires_on = visit_date − reminders.lapse_days_before`, editable. In the
+  UI this is the booking's **expiry** (31 Oct 2026): "Expires Thu 4 Mar", "Booking
+  expires today", "Extend expiry", and the status `lapsed` reads **Expired**; the
+  `expiry` email is the expiry notice. The word is never used for the visit date
+  passing. Column and status codes are unchanged.
+- **Rates (30 Oct 2026, `pricing.decide_tier`):** three group rates plus the
+  public and peak prices, all in `price_tiers`. Children's groups (a `children`
+  flag on the group type: school, crèche, aftercare, youth club) pay
+  `children_weekday` on a term-time weekday; every other group pays
+  `group_weekday` on a term-time weekday and `group_weekend` on a weekend or a
+  school-holiday weekday (`season.school_holidays`, inclusive ISO ranges).
+  Public holidays are `public_weekend` for everyone; peak days (`season_days`
+  kind `peak`) are `peak`. Under `pricing.group_minimum` (40) the public rate
+  applies: a hard rule on weekends and school holidays, and on a term-time
+  weekday waived when another live booking is on the day
+  (`bookings.minimum_waived_by`). Group types are information otherwise.
+- **Discounts:** an agreed price below the rate is `discount_per_person` with a
+  `discount_reason`; `price_per_person = tier_price − discount`. A discount is
+  never negative (a higher price means a different rate), needs a reason while
+  it is more than zero, and survives recalculation in rands. Documents show the
+  rate line and a discount line. `GET /bookings/quote` returns the rate decision
+  for a date, kind of group and headcount (the Edit dialog's live line).
+- Deposit: `max(min_people × price, round(people × percent/100) × price)` on the
+  net price, capped at `total_amount`; 0 when waived. Deposit overrides are
+  explicit flags with a reason and are preserved on recalculation.
+- The rate recalculates when people, date or kind of group change, or when
+  `price_tier_code` is set explicitly; the discount stays.
+- **Arrivals** are read from what the terminals already sent (the bridge
+  line's tables, on this branch since the 30 Oct merge): heads admitted under
+  the booking's barcode on the closed receipts in `open_tickets_history` plus
+  heads converted onto the group in `pos_group_conversions`
+  (`PosGroupPaymentService.status`). `arrivals.refresh_rows` runs when a page
+  reads a booking visiting today (`day_detail`, `get_booking_detail`) and
+  `refresh_for_barcodes` is nudged by a closed ticket (`/open_tickets/events`)
+  and a paid group payment (`/api/pos/events`), so `arrived_count` (source
+  `loyverse`) is current the moment a car is through; the first arrival
+  completes a confirmed booking. Nothing polls Loyverse; there is no manual
+  count. `refresh_day` is the Ops job.
+- Document numbers: `doc_number` is taken from `documents.next_number` at booking
+  creation inside a transaction and the setting is incremented. Imported rows
+  keep their sheet number when present.
+
+## 6. API (`/api/v1`, JSON)
+
+Errors: `{"error": {"code": "validation_error", "message": "...", "fields": {"visit_date": "..."}}}`
+with 400/401/403/404/409/422/500. Lists: `{"items": [...], "total": n, "page": p, "page_size": s}`.
+Auth is the Flask session cookie. All non-GET requests must send `X-CSRF-Token`
+(value from `GET /auth/session`). Public/bridge endpoints are exempt.
+
+Helpers in `web/api/__init__.py` (lead): `api_bp`, `ok(data, status=200)`,
+`fail(code, message, status, fields=None)`, `require_role(*roles)`,
+`current_user()`, `parse_json(schema)`; `ApiError` exception → JSON.
+
+| Area | Endpoints | Owner |
+| --- | --- | --- |
+| auth | `GET /auth/session`, `POST /auth/login {email,password}`, `POST /auth/logout`, `POST /auth/change-password` | lead |
+| users | `GET /users`, `POST /users`, `PATCH /users/:id`, `POST /users/:id/reset-password` → temp password | lead |
+| settings | `GET /settings`, `PUT /settings/:section`, `GET/PUT /settings/price-tiers`, `GET/PUT /settings/season-days` | lead |
+| bookings | `GET /bookings?status&from&to&q&page&page_size&sort`, `GET /bookings/counts`, `POST /bookings`, `GET /bookings/:id`, `PATCH /bookings/:id`, `POST /bookings/:id/status {status, reason}`, `POST /bookings/:id/notes {text}`, `POST /bookings/:id/questions {question}`, `POST /bookings/:id/questions/:qid {answer}`, `POST /bookings/:id/payments`, `DELETE /bookings/:id/payments/:pid`, `GET /bookings/quote?group_type&visit_date&people&exclude` (the rate decision), `GET /bookings/:id/events`, `GET /bookings/:id/emails` | bookings agent |
+| booking actions | `POST /bookings/:id/actions/<action>` where action ∈ `send-acknowledgement, issue-proforma, send-proforma, send-invoice, send-final-invoice, send-ticket-email, send-ticket-whatsapp, send-payment-confirmation, send-reminder {kind}, send-expiry, send-answers, confirm {reason}`; `POST /bookings/:id/emails/reply {subject?, body_html, attach_document_ids[]}` | bookings agent (orchestrates services from documents + mail agents) |
+| documents | `GET /documents/:id/pdf`, `GET /bookings/:id/documents`, `POST /bookings/:id/documents/preview {kind}` → PDF bytes | documents agent |
+| calendar | `GET /calendar?from&to` → `{days:[{date, day_type, is_closed, is_avoid, is_peak, label, total_people, confirmed_people, tentative_people, capacity_warning, bookings:[{id,reference,group_name,status,people_booked,group_type}]}]}`; `GET /days/:date` (manager-allowed) → bookings with arrivals/payments summary | bookings agent |
+| inbox | `GET /inbox/messages?view=review|all|unmatched&q&page`, `GET /inbox/messages/:id`, `GET /inbox/threads/:thrid`, `GET /inbox/messages/:id/suggestions`, `POST /inbox/messages/:id/attach {booking_id, whole_thread}`, `POST /inbox/messages/:id/detach`, `POST /inbox/messages/:id/resolve {status}`, `POST /inbox/messages/:id/extract` → draft booking fields, `POST /inbox/messages/:id/bounce-back`, `GET /inbox/attachments/:id` (download), `POST /inbox/sync`, `POST /inbox/compose {to, subject, body_html, booking_id?}` | mail agent |
+| payments | `GET /payments/bank-transactions?status&from&to&q&page`, `GET /payments/bank-transactions/:id`, `POST /payments/bank-transactions/:id/match {booking_id}`, `POST /payments/bank-transactions/:id/unmatch`, `POST /payments/bank-transactions/:id/ignore {reason}`, `POST /payments/sync`, `GET /payments/summary` | payments agent |
+| queue | `GET /queue` → sections (§8), `POST /reminders/:id/dismiss` | ops agent |
+| ops | `POST /ops/run {name}` (existing scripts), `GET /ops/status` (last mail sync, last bank poll, scheduler health) | ops agent |
+| public | `GET /public/form-config`, `POST /public/booking-request` | ops agent |
+| legacy | `/group-bookings/ticket/image/<barcode>` (public, JWT), `/open_tickets/*`, `/api/stock/*`, `/api/groups` unchanged | do not touch |
+
+## 7. Services and interfaces (so agents can build in parallel)
+
+```python
+# src/services/settings.py (lead)
+get_settings() -> Settings            # dataclass with .season .pricing .deposit .documents .reminders .capacity .email .form
+update_settings(section: str, data: dict, user_id: int | None) -> Settings
+next_document_number() -> int         # atomic increment
+
+# src/services/pricing.py (bookings agent)
+day_type(d: date, s: Settings) -> Literal["weekday","weekend"]
+is_closed(d, s) / is_avoid(d, s) / is_peak(d, s) / is_school_holiday(d, s)
+rate_day(d, s) -> "peak" | "public_holiday" | "weekend" | "school_holiday" | "weekday"
+decide_tier(group_type, d, people, s, *, other_group_on_day=False) -> TierDecision(tier_code, rate_day, under_minimum, minimum_waived)
+price_for_tier(tier_code) -> Decimal                          # the table price; unknown → public
+deposit_for(people: int, price: Decimal, s: Settings) -> Decimal
+
+# src/services/booking.py (bookings agent)
+create_booking(data: dict, source: str, actor: int | None) -> Booking   # assigns reference/doc_number/barcode, computes price/deposit
+update_booking(booking_id, data, actor) -> Booking
+set_status(booking_id, status, actor, reason=None) -> Booking
+record_payment(booking_id, kind, amount, paid_on, reference, note, actor, bank_transaction_id=None) -> Payment   # auto-confirms when deposit covered
+booking_finance(booking) -> dict      # total_amount, deposit_due, paid_total, balance_due, final_amount
+add_event(booking_id, kind, summary, data=None, actor=None)
+calendar_days(from_date, to_date) -> list[dict]
+
+# src/services/documents.py (documents agent)
+issue_document(booking_id, kind, actor) -> Document        # renders PDF, stores file, writes event
+render_document_pdf(booking, kind, settings) -> bytes       # no side effects (preview)
+
+# src/services/email_templates.py (documents agent)
+@dataclass RenderedEmail: subject: str; html: str; text: str
+render_email(kind: str, booking: Booking | None, settings: Settings, **ctx) -> RenderedEmail
+#   kinds: acknowledgement, proforma, invoice, final_invoice, ticket, payment_confirmation,
+#          still_interested, deposit_reminder, final_details, expiry, answers, bounce_back, reply(custom body)
+
+# src/services/mail_send.py (mail agent)
+send_email(*, to: list[str], rendered: RenderedEmail, attachments: list[tuple[str, bytes, str]] = (),
+           booking_id: int | None, kind: str, actor: int | None, thread_message_id: str | None = None) -> EmailMessage
+#   builds MIME (text+html alt, attachments), threads via In-Reply-To/References, sends over Gmail SMTP,
+#   stores an outbound email_messages row + booking event; applies the dev recipient rewrite.
+
+# src/services/mail_ingest.py (mail agent)
+sync_mailbox(full: bool = False) -> dict                   # IMAP incremental sync of INBOX + Sent, then match_unlinked()
+match_message(msg) -> tuple[int | None, str | None]         # (booking_id, method): reference > thread > email > phone
+suggest_bookings(msg) -> list[dict]
+
+# src/services/extraction.py (mail agent)
+extract_booking_fields(text: str) -> dict                   # Anthropic; returns the form's field names; empty dict if no key
+
+# src/services/bank.py (payments agent)
+poll_transactions() -> dict                                  # FNB window poll, fingerprint upsert, then match_new()
+match_transaction(tx) -> MatchResult                         # strong (reference), suggested (amount+name), none
+confirm_match(tx_id, booking_id, actor) -> Payment           # creates payment via booking.record_payment
+
+# src/services/arrivals.py (bookings agent)
+arrivals_from_terminals(booking, day=None) -> int         # heads under the barcode on closed receipts + conversions, from the DB
+refresh_booking(booking) / refresh_rows(rows) / refresh_day() # record the count when it changed; ingest nudges via refresh_for_barcodes
+
+# src/services/reminders.py (ops agent)
+recompute_reminders() -> int                                 # fills booking_reminders from settings + booking state
+build_queue() -> dict                                        # §8
+
+# src/services/tickets.py (bookings agent) — wraps existing pdf.generate_ticket_pdf and the Chatwoot send
+```
+
+Outbound email kinds and what they carry:
+
+| kind | when | attachments |
+| --- | --- | --- |
+| acknowledgement | after a form submission is reviewed, or on demand | none |
+| proforma | proforma issued | proforma PDF |
+| invoice | deposit received | invoice PDF (shows deposit, balance) |
+| final_invoice | after arrivals recorded | final invoice PDF |
+| ticket | vehicle ticket by email | ticket PDF |
+| payment_confirmation | payment recorded/matched | none (or invoice) |
+| still_interested | follow-up on unpaid proforma | proforma PDF |
+| deposit_reminder | deposit due before visit | proforma PDF |
+| final_details | days before visit | ticket PDF if not yet emailed |
+| expiry | hold lapsed | none |
+| answers | reply to the customer's questions | none |
+| bounce_back | unknown sender, form link | none |
+| reply | free-text reply from the thread view | optional documents |
+
+Wording: professional, warm, concise; British English; "The Farmyard Park";
+signature from settings.email. All HTML emails share one responsive layout
+(`web/templates/emails/base.html`, table-based, inline CSS via css_inline),
+logo at top, document summary card, clear call to action, footer with
+address, VAT no and the bookings address.
+
+## 8. Action queue (`GET /queue`)
+
+Sections, each `{key, title, count, items:[...]}`:
+`needs_reply` (bookings whose latest message is inbound and newer than the last
+outbound), `unmatched_emails` (review_status pending), `new_requests`
+(status enquiry, no proforma), `payments_to_confirm` (bank transactions
+suggested), `unmatched_credits` (unmatched credits in the last 30 days),
+`reminders_due` (grouped by kind), `tickets_to_send` (confirmed, no ticket),
+`visits_this_week`, `arrivals_to_record` (confirmed, visit_date ≤ today, no
+arrivals), `lapsing` (hold_expires_on ≤ today + 3, unpaid).
+
+## 9. Seeds (migration)
+
+Price tiers 2026/27 since migration 024 (code, price): `children_weekday` 70,
+`group_weekday` 95, `group_weekend` 95, `public_weekend` 115, `peak` 130. The
+older tiers (school parents, adult small/large, pensioners, church, non-profit
+kids/adults) were mapped onto these and deleted; `scripts/reprice_bookings.py`
+re-derives every booking's rate under the rules and keeps the agreed price as
+a discount. Group types: school, creche, aftercare, youth_club (children),
+church, nonprofit, family, corporate, pensioners, other.
+
+Users seeded by `scripts/create_user.py`, not the migration.
+
+## 10. Frontend
+
+Routes (role in brackets): `/login`, `/change-password`, `/` queue [admin],
+`/calendar` [admin, manager], `/day/:date` [admin, manager], `/bookings`
+[admin], `/bookings/:id` [admin], `/inbox` [admin], `/inbox/:messageId` [admin],
+`/payments` [admin], `/settings/*` [admin], `/users` [admin], `/ops` [admin],
+`/request` + `/request/sent` [public].
+
+Design system (lead, `frontend/src/styles/tokens.css` + shadcn theme): ink and
+paper neutrals derived from the monochrome logo, one accent (deep oak green)
+for primary and confirmed, amber for tentative/pending, red for danger, light
+and dark themes from one token set, Inter for UI, tabular numerals for money
+and counts, 4px spacing grid, 8px radius, no drop-shadow soup. Calendar heat
+scale: a single-hue sequential ramp with the dataviz skill's validator.
+
+## 11. File ownership during the parallel build
+
+| Owner | Paths |
+| --- | --- |
+| lead | `config/`, `migrations/`, `web/app.py`, `web/api/__init__.py`, `web/api/auth.py`, `web/api/users.py`, `web/api/settings.py`, `src/models/base.py`, `src/models/user.py`, `src/services/settings.py`, `src/services/users.py`, `frontend/` scaffold, `Dockerfile`, `compose*.yaml`, `docker/`, `docs/`, `requirements/` |
+| bookings agent | `src/models/booking.py`, `src/models/booking_event.py`, `src/models/booking_question.py`, `src/models/payment.py` (model only), `src/services/pricing.py`, `src/services/booking.py`, `src/services/arrivals.py`, `src/services/tickets.py`, `src/utils/holidays.py`, `web/api/bookings.py`, `web/api/calendar.py`, `src/models/group_booking.py` (adapter), `scripts/add_inventory.py` (confirmed filter only) |
+| documents agent | `src/models/document.py`, `src/services/documents.py`, `src/services/email_templates.py`, `web/templates/documents/*`, `web/templates/emails/*`, `web/api/documents.py`, `web/static/brand/*` |
+| mail agent | `src/clients/gmail.py`, `src/models/email_message.py`, `src/services/mail_send.py`, `src/services/mail_ingest.py`, `src/services/extraction.py`, `web/api/inbox.py`, `scripts/sync_mail.py`, `scripts/import_mail.py` |
+| payments agent | `src/clients/fnb.py`, `src/models/bank_transaction.py`, `src/services/bank.py`, `web/api/payments.py`, `scripts/poll_bank.py` |
+| ops agent | `src/services/reminders.py`, `web/api/queue.py`, `web/api/ops.py`, `web/api/public.py`, `scripts/import_sheet.py`, `scripts/create_user.py`, `scripts/backup_db.sh`, `scripts/recompute_reminders.py`, `src/services/public_form.py` (validation, turnstile, rate limit) |
+
+Do not edit another owner's files; if you need a change there, write it in
+`docs/handoff/<your-name>.md` and the lead integrates. Never touch
+`web/routes/open_tickets.py`, `web/routes/stock.py`, `web/routes/bridge_auth.py`,
+`src/models/open_ticket.py` (the bridge session owns them on another branch).
+
+## 15. Redesign additions (October 2026)
+
+The redesign (`docs/redesign-spec.md`) added these surfaces; their exact JSON
+shapes live in the handoff notes named here, which are authoritative.
+
+| Area | Endpoints | Handoff |
+| --- | --- | --- |
+| Today and Work | `GET /today?date=` (manager-allowed, money and work stripped), `GET /work?view=`, `GET /work/counts`, `POST /work/reminders/dismiss`, `POST /work/holds/:id/extend`, `PUT /users/me/preferences` | `docs/handoff/work-today.md` |
+| Conversations | `GET /inbox/conversations?view=needs_reply|unmatched|waiting|done|all`, `GET /inbox/conversations/:thrid`, `POST …/done|reopen|not-booking|attach|detach|notes|reply`, `GET …/suggestions`, `GET /bookings/:id/conversation`, `GET /inbox/messages/:id/original`, `GET /inbox/templates` | `docs/handoff/mail-v2.md` |
+| Bank | `GET /payments/bank-transactions?view=needs_attention|matched|all` (suggestions carry a confidence sentence), `POST …/ignore {reason, create_rule}`, `GET/POST/DELETE /payments/ignore-rules`, unmatch reverts `confirmed → proforma_sent` | `docs/handoff/backend-v2-misc.md` |
+| Bookings | `GET /bookings/counts` buckets, `?bucket=`, billing fields | `docs/handoff/backend-v2-misc.md` |
+| Public form | `visitors`, `arrival_time` slots, `POST /public/booking-request` → `{id, token}`, `GET /public/requests/:id?token=`, acknowledgement toggle | `docs/handoff/backend-v2-misc.md` |
+| Gate | `GET /gate` (manager-allowed) | `docs/handoff/backend-v2-misc.md` |
+
+Schema: migrations 008 (email_threads, quote-split columns, `booking_reminders.stale`,
+`users.theme`) and 009 (`users.preferences`, `bookings.billing_address`,
+`bookings.customer_vat_number`, `bank_ignore_rules`). Documents: the deposit-stage
+document is a **Statement** (`FY1703-S`, not a tax invoice); the final document is the
+only **Tax invoice** (`INV1703`). A booking counts **visitors** only.
+
+
+### Contacts: on the day (29 Oct 2026)
+
+`booking_contacts.on_site` (migration 020) marks the one contact who is on
+site and in charge on the day. `PATCH /api/v1/bookings/:id/contacts/:cid`
+takes `{name?, mobile?, on_site?}`; setting `on_site: true` clears it on the
+booking's other contacts; returns `{items}`. `GET /api/v1/bookings/:id` now
+also carries `contacts` (the booking_contacts rows, primary first) and
+`pops` (the pending proof-of-payment candidates) for the record's tabs.
+
+A booking has exactly one `primary` row (31 Oct 2026,
+`booking_contact.adopt_email_on_primary`): when the booking's address changes,
+a learned row holding the new address is promoted, and the old address stays
+as a `learned` contact so its mail still matches; an address-less primary row
+simply takes the address.
+
+### Ticket send, contact edits, cash deposits (29 Oct 2026, evening)
+
+`POST /api/v1/bookings/:id/actions/send-ticket` sends the vehicle ticket by
+email (when there is an address) and on WhatsApp to every primary contact's
+mobile; the result carries `email`, `whatsapp {sent, failed}` and `errors`.
+`PATCH …/contacts/:cid` accepts `{name?, email?, mobile?, role?: primary|cc,
+on_site?}`; the mobile is normalised; editing the booking's own contact
+updates `contact_name`/`contact_email`/`contact_mobile`; a new mobile on a
+primary contact resends the ticket to it when `ticket_sent_at` is set, and
+the response carries that result as `whatsapp`. `payments.kind` gains
+`cash_deposit` (migration 022). `GET …/payment-search` returns only credits
+not on any booking and no larger than the outstanding balance plus R 1 000.
+
+
+
+### Day kinds and capacity (31 Oct 2026)
+
+`settings.day_kinds = {kinds: [{code, label, colour, on, dates?}], peak_days:
+["MM-DD"], ramadan: {start, end}}` (highest priority first; built-in codes
+`peak`, `public_holiday`, `ramadan_eve`, `eid`, `weekend`, `school_holiday`,
+`closed`; `src/services/day_kinds.py`: `kinds_for`, `primary_kind`, `legend`,
+`ramadan_windows`, tabular Islamic calendar `hijri_to_date`).
+`settings.capacity = {capacity: 1500, over_threshold: 1200}` (`booking.capacity_of`,
+`booking.over_threshold`; the old `daily_warning_people` is read as the
+threshold when present). `GET /calendar` → `{from, to, days, capacity,
+over_threshold, day_kinds}`; each day carries `kind` (`{code, label, colour}`
+or null), `kinds` (codes) and `over`; `GET /days/:date` and `GET /today`
+carry `kind` and `kinds`. `GET /today` (admin) also carries `season`,
+`month`, `money`, `next_visit_days`; `up_next`, `needs_you` and `system` are
+gone. `pricing.is_peak` counts `peak_days` as well as `season_days` rows.
+
+### Work views (31 Oct 2026)
+`work.VIEWS = (reply, new_requests, enquiries, allocate, pops, send_tickets,
+reminders, holds, stale)`; `confirm_money`, `arrivals` and `up_next` are gone,
+as are `merge_up_next` and `needs_you`. `GET /work` defaults to `view=reply`;
+`counts` carries the views and `total` (no `up_next`). Rows keep their shape;
+the UI shows `primary` only.
+
+### Closed days (31 Oct 2026, evening)
+`pricing.is_closed(d, s, season_days)` is true only for an explicit
+`season_days` row of kind `closed` or a day outside the season; no weekday is
+closed by rule and the public form refuses only explicit closures
+(`season.closed_weekdays` / `avoid_weekdays` are no longer read; the public
+form config returns them empty). `closed` is not a day kind: stored entries are
+dropped on read. The calendar hatches a closed day and says CLOSED.
+
+
+### Request and Pending (2 Nov 2026)
+
+Statuses: `requested` (Request) → `proforma_sent` (**Pending**: the proforma has
+gone out, the deposit is awaited) → `confirmed` → `completed`; exits `declined`
+(from a request), `cancelled`, `lapsed` (Expired), `no_show`. The `enquiry`
+status is gone (still in the DB enum, never written). `TRANSITIONS`:
+requested → proforma_sent | declined | cancelled; cancelled, lapsed and declined
+reopen to requested. `set_status` stamps `accepted_at` on requested →
+proforma_sent and clears the exit stamps on a reopen. `accept_request` applies
+edits and requires an email address; the API's send-proforma action is the
+approval (it moves a request to pending). `ACTIVE_STATUSES` and the calendar
+exclude requests; the Bookings buckets are requests / pending (proforma_sent) /
+confirmed / lapsed / past / all (all includes requests). Work › Requests is
+`status = 'requested'` only.
+
+`POST /bookings` takes `send_proforma: true` (Create booking: needs
+`contact_email`, sends the proforma at once) or not (Save: a request, nothing
+sent). The public form requires `area`; so does Add booking.
+
+**Send form** (`POST /bookings/:id/actions/send-form`, requests only): emails
+the `convert_enquiry` template with `form_url = BOOKING_FORM_URL?complete=<token>`
+(`public_form.request_complete_token`, HS256, 30 days, purpose
+`request-complete`). `GET /public/booking-request/prefill?token=` returns the
+saved fields (`prefill_for_request`); `POST /public/booking-request` with
+`complete_token` updates that request instead of creating one (409 when it is
+no longer a request). The front end keeps the token in sessionStorage with the
+draft (`fy.request.complete-token`).
+
+**Refunds and checked sheet deposits** (migration 026): `payments.kind` gains
+`refund` (a negative amount, optional `bank_transaction_id` of the debit);
+`paid_total` is still Σ amount. `payments.verified_at/verified_by`: a deposit
+recorded from the old sheet (`reference = 'Imported from booking sheet'`, no bank
+link) is a Needs attention item (Find payment absorbs it; Keep marks it checked
+via `POST /bookings/:id/payments/:pid/verify`, event `payment_verified`) and a
+Work › Verify payments row (`work._sheet_deposit_rows`, id `pop:sheet:<id>`).
+
+**Area in matching**: `BookingFacts.area`; `matching.score` gives the area the
+group's weight when the group name has no distinctive words, else `SCORE_AREA`
+(30) as corroboration; `area_query` is a Gmail search in the migration planner;
+`inbound.open_bookings` selects `b.area`; `klapmuts`, `farmyard`, `park` are
+generic words.
+
+### A mail that names two bookings (2 Nov 2026)
+`matching.references_in` reads the office's pair shorthand ("FY1735/34" →
+1735 and 1734). `inbound.match_open_booking` attaches on one reference and
+holds a mail that names two bookings for assignment (both as candidates, Work
+› Assign mail). The legacy `mail_ingest.apply_match` (Sent and other folders)
+leaves such a mail, and any conversation already held for assignment, alone
+instead of pulling the whole thread onto the first booking. Also fixed the same
+day: `inbound.attach_to_booking` had lost its `sender` since 30 Oct (every
+matched inbound mail failed to attach), and `documents.kind` had lost `pop`
+and `attachment` (migration 027), so proof-of-payment inspection failed.
+
+## Groups and history (2 Nov 2026)
+
+A **group** is the thing that comes back; a booking is one visit. Migration 028
+adds `booking_groups` (name, group_type, area, notes), `booking_group_aliases`
+(every spelling a group has been booked under) and `bookings.group_id` (NULL
+while a person has to say which group) plus `bookings.previous_visit_name`, the
+public form's optional "Have you visited us before? Under what name?". A
+group's contacts are the contacts of its bookings, so linking a booking teaches
+the group. (`GROUPS` is a reserved word in MySQL 8, hence the table name.)
+
+**Suggest, don't guess** (`src/services/groups.py`). `assign_on_create` runs for
+every new booking (`booking.create_booking`) and again when a saved request is
+completed through the form. It scores the booking against every group's profile
+(`load_profiles`: names and aliases, areas, addresses, numbers, non-generic
+email domains, document numbers): an address 100, a number 90, a quoted
+reference 95, the customer's own previous name 65, the name 60 (35 in part), the
+area +25, a shared email domain +45. Confident at 90, suggested at 40. One
+confident, clearly best group links the booking and says so (`group_linked`
+event with the signals as its method); nothing above 40 makes a new group
+quietly; anything else is left for a person. A known address under an unrelated
+name (one teacher, a school and a church) is capped at 65 ("different name"):
+suggested, never linked. `name_tokens` drops the generic words and numbers, so
+"Sunshine Primary Grade 3" and "Sunshine Primary Grade 4" are the same key.
+
+The detail carries `group` (id, name, area, kind, aliases, bookings), `history`
+(`visits`: the group's other bookings with metrics; `summary`) and, while
+unlinked, `group_suggestions` (best first, each with `why`, `confident`, the
+last booking). `POST /bookings/:id/group` takes `{"group_id": n}` (Yes) or
+`{"new": true}` (New group, also "not that group"); `link_booking` learns the
+booking's spelling as an alias and fills a blank area or kind, and removes a
+group left empty. `GET /groups?q=` searches names, aliases, booking names,
+references and contacts for the Change group picker. `POST /bookings` accepts
+`group_id` (Rebook); a renamed booking adds its new name as an alias.
+
+**History metrics** (`visit_metrics`, per other booking): booked
+(`people_booked`) against arrived (`arrived_count`) and the turnout; the days
+from the request to the proforma and from the proforma to the first payment,
+and whether that was within the hold; lead time; the money in, refunds and
+whether the balance was settled before, on or after the day (or never in
+full); reminders sent; changes to the date or numbers after the proforma; how
+it ended and how many days before the visit; the questions asked. `summarise`
+reads the past: visits, cancellations by kind, first year, the last visit,
+average turnout, average days to the deposit and how many were on time, median
+lead time, the typical month, sizes by year, whether the same person booked.
+Backfilling older seasons (booked from the proforma, arrived from the invoice)
+is a later import; the metrics already read those columns.
+
+**UI.** The record's History tab (four numbers, the group with its other
+spellings and the summary in words, one row per other booking, the questions
+they asked before; Change group), a History card on the Overview, the header's
+"Visit n" link, Needs attention's "Same group as FY1473 Mondale High, October
+2026?" with Yes and New group (counted in the badge), Rebook on a past booking
+(Add booking pre-filled, group carried), the activity line for `group_linked`,
+and the form's question on the group step. `scripts/cluster_groups.py` is the
+pass that grouped this season's bookings (only Oasis FY1735/FY1734 merged; the
+two shared-address pairs stayed apart as different groups); the review is in
+`data/migration/groups-2026-11-02.txt`.
+
+## The name is the selected spelling, the form knows our groups, a conversation on several bookings (3 Nov 2026)
+
+**Spellings.** Migration 029: `booking_group_aliases` carries `is_selected`,
+`source` (booked, typed, import) and the `booking_id` that used the spelling;
+`booking_groups.name` is a cache of the selected alias. Linking a booking
+records its name as an alias credited to it. `GET /groups/:id`,
+`POST /groups/:id/aliases` (add a spelling), `POST .../aliases/:aid/use`
+(make it the name), `DELETE .../aliases/:aid` (never the selected one). The
+History tab's Group section lists them with origin and booking counts. A
+booking keeps its own `group_name` whatever the group is called: aliases only
+drive display and matching, so a wrong one is simply deleted. There is no
+organisation level above groups: NAC Bellville and NAC Paarl are separate
+groups, and so is each Potters House congregation.
+
+**Matching.** `groups.name_tokens` expands NAC, OAC and SS, keeps "Old" and
+"New" when they qualify "Apostolic" (the two churches in one suburb never
+match each other), and `_overlap` reads a misspelling as its word (Apostilic).
+
+**The form.** Steps are contact → visit → group. `GET /public/groups/suggest`
+(`public_form.suggest_groups`, sixty lookups a minute per address) returns
+`mine` (groups this address or number booked for) and `matches`
+(organisations whose selected or other spelling starts with the typed word,
+three letters on, six at most); families and person-named groups never appear
+and nothing but names and areas comes back. The group step opens with "Did
+you mean" and offers matches as they type. A pick fills the name and area and
+travels as `group_id`; "None of these" as `group_choice: none`. On creation
+`groups.apply_customer_answer` links the pick (method `customer`) unless the
+customer's address or number sits on another group that could also be this one
+(then it stays a question), and makes a new group on "none" (`customer-new`).
+The visited-before question is gone from the form (the column stays). The
+office's Add booking lists the groups we know as the name is typed (`GET
+/groups?q=` now also matches contact addresses and numbers and carries the
+last booking's contact); a pick fills the kind, the area and last time's
+contact where empty and creates the booking in that group.
+
+**Shared conversations.** Migration 030: `email_thread_bookings(gmail_thrid,
+booking_id, method)`; `email_threads.booking_id` and
+`email_messages.booking_id` stay the conversation's home. A booking's
+conversation, thread list and unanswered count include linked threads
+(`messages_for_booking_threads`, `email_thread.list_for_booking`,
+`booking._unanswered_count`, `booking_conversation`); thread payloads from the
+booking conversation carry `bookings`. `inbound.attach_to_bookings` links the
+thread to every booking, learns contacts and writes `email_received` on each,
+inspects proofs of payment once on the home booking. Rules: a mail that names
+several references attaches to all of them when the sender is a contact on
+each (`reference+contact`), one person on several open bookings that share the
+visit date is one party and attaches to all (`email+same day`); different
+days stay a question. `POST /inbound/messages/:id/assign` takes `booking_id`,
+`booking_ids` or `all`; Work › Assign mail offers "All n". Attaching from a
+conversation, a sent reply and detaching keep the link table in step.
+
+## Automatic expiry, sending rules and deposit extension requests (6 Nov 2026)
+
+**Expiry is automatic.** `sending.expire_holds` (the daily pass,
+`scripts/sending_pass.py`, worker cron `SENDING_CRON`, default 07:15 after the
+reminder recompute) marks every pending booking whose `hold_expires_on` has
+passed with the deposit unpaid as `lapsed` (reason "Deposit not received by
+…"). Nothing is sent by that step. The header menu no longer offers Mark
+expired; it keeps No show and Back to request.
+
+**Sending rules** (`settings.sending`, Settings › Sending rules). Every send
+stays a button; a rule set to Automatic is performed by the pass through the
+same action in `web/api/bookings.ACTIONS` (`run_automatic_sends`), so the
+outbound row, the activity line and the reminder bookkeeping are identical to
+a click. Rules: expiry notice, the three reminders, payment confirmation,
+vehicle ticket by email (`days_before`), final invoice; triggers are fixed per
+template (`sending.RULES`). Guardrails: `sending.enabled` is the master switch
+(off by default), the pass sends only when `ENV=prod` (or `--force`), and
+`GET /settings/sending/preview` shows what the next pass would expire and send
+so a row is switched with eyes open. `act_send_expiry` accepts an already
+expired booking (it only sends and marks the lapse reminder sent).
+
+**Coming back from Expired.** `TRANSITIONS["lapsed"]` is `requested`,
+`proforma_sent`, `confirmed`. A new `hold_expires_on` on an expired booking
+(`update_booking`, the Work hold endpoint) revives it to Pending with the
+reason "Deposit date extended to …", keeps the original proforma date, clears
+`lapsed_at` and re-arms the reminders. A payment that covers the deposit on an
+expired booking confirms it ("Deposit received after expiry"); the bank poll
+now matches expired bookings too (`bank.ACTIVE_STATUSES`).
+
+**Deposit extension requests.** A customer's reply on an expired booking after
+`lapsed_at` (normally to the expiry notice, which attaches by thread) is a
+request to extend: Work › Deposit extensions (`work._extension_rows`, view
+`extensions`) lists one row per booking with "Extend deposit date" (the hold
+popover, which revives the booking) and "Keep expired" (marks the person's
+conversation handled, `party_done`).
+
+## Today as the day's snapshot (6 Nov 2026)
+
+`today.today(d)` no longer carries the season, month, money or Work blocks;
+it carries `live` (`today.live_day`): public heads in, online tickets
+admitted (and sold this morning from the inventory run's log line), groups
+arrived against booked, the cars in the queue (open tickets on the live
+account, a pure re-entry pass is not a car), the re-entry passes
+(`ReentryService.report`) and gazebos sold on site, all read from the
+bridge's tables, never from Loyverse. `GET /today/groups/:id/vehicles?date=`
+(`today.vehicle_report`) lists the cars that came in under a group's ticket
+from the `group_entry` events: time, plate, the person, heads, how the ID was
+read (never the ID number). The page is the same for admin and manager; the
+admin's day table keeps the gate balance column. Season and money will have
+a Reports page of their own.

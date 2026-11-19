@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from src.models.open_ticket import OpenTicket
+from src.services import arrivals
 from web.routes.bridge_auth import require_bridge_token
 
 open_tickets_bp = Blueprint("open_tickets", __name__)
@@ -17,6 +18,7 @@ def open_ticket_events():
     payload = request.get_json(force=True)
     events = payload.get("events", [])
 
+    closed_barcodes: list[str] = []
     for evt in events:
         observed_at = datetime.fromtimestamp(evt["observed_at"] / 1000)
         status = TERMINAL_EVENTS.get(evt.get("event"))
@@ -27,6 +29,8 @@ def open_ticket_events():
                 status=status,
                 receipt_json=evt.get("receipt"),
             )
+            if status == "closed":
+                closed_barcodes.extend(arrivals.barcodes_in_receipt(evt.get("receipt")))
             continue
         OpenTicket.upsert_open(
             ticket_id=evt["ticket_id"],
@@ -34,6 +38,10 @@ def open_ticket_events():
             receipt_json=evt["receipt"],
             observed_at=observed_at,
         )
+
+    # A closed ticket is a car through the gate: bring the booking's count up to date.
+    if closed_barcodes:
+        arrivals.refresh_for_barcodes(closed_barcodes)
 
     return jsonify({"status": "ok"})
 

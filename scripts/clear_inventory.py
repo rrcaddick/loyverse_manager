@@ -54,12 +54,8 @@ def clear_inventory():
         # Reset inventory
         logger.info("Resetting inventory levels")
         loyverse_service.reset_inventory()
+        # Logged only: a failure is the one thing e-mailed (19 Nov 2026).
         logger.info("Inventory levels reset successfully")
-
-        notification_service.send_inventory_clear_success(
-            recipients=NOTIFICATION_RECIPIENTS,
-            date=get_today(),
-        )
 
     except Exception as e:
         logger.error(f"Error: {type(e).__name__}: {str(e)}")

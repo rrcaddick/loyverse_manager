@@ -157,6 +157,8 @@ def add_inventory():
         # ========================================
         logger.info("Checking for group bookings")
 
+        # Reads the bookings table; returns confirmed/completed bookings only,
+        # so enquiries and unpaid proformas never become Loyverse items.
         group_bookings = GroupBooking.get_by_date(TODAY)
 
         if group_bookings:
@@ -180,24 +182,18 @@ def add_inventory():
             logger.info("No group bookings found for today")
 
         # ========================================
-        # Send Notification
+        # Outcome
         # ========================================
         total_items = online_ticket_count + group_booking_count
 
+        # Only a failure is e-mailed (19 Nov 2026): a success or a day with
+        # nothing to load is logged here and nowhere else.
         if total_items == 0:
-            # Nothing to process today
             logger.info("No tickets or groups to process for today")
-            notification_service.send_no_event_notification(
-                NOTIFICATION_RECIPIENTS, TODAY
-            )
         else:
-            # Send success notification with breakdown
             logger.info(
                 f"Successfully processed {total_items} items "
                 f"({online_ticket_count} online tickets, {group_booking_count} groups)"
-            )
-            notification_service.send_inventory_update_success(
-                NOTIFICATION_RECIPIENTS, TODAY, total_items
             )
 
     except Exception as e:

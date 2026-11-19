@@ -518,6 +518,10 @@ class PosStaffService:
                     PosGroupPaymentService.on_event(device["device_id"], employee_id, employee_name, event_uuid, detail or {}, occurred_at)
                 except Exception as e:  # the audit row is kept; the payment can be replayed from it
                     logger.error(f"mirroring group payment {event_uuid} failed: {e}")
+                else:
+                    from src.services import arrivals
+
+                    arrivals.refresh_for_barcodes([(detail or {}).get("barcode")])
             if inserted and event == "group_conversion":
                 try:
                     from src.services.pos_conversions import PosConversionService
@@ -525,6 +529,13 @@ class PosStaffService:
                     PosConversionService().on_event(device["device_id"], employee_id, employee_name, detail or {}, occurred_at)
                 except Exception as e:  # the audit row is kept; the stage can be replayed from it
                     logger.error(f"mirroring conversion event {event_uuid} failed: {e}")
+                else:
+                    try:
+                        from src.services import arrivals
+
+                        arrivals.refresh_day()  # conversions are keyed by group name, not barcode
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(f"arrivals refresh after conversion {event_uuid} failed: {e}")
             if inserted and alerts_wanted:
                 try:
                     ReductionAlerts.default().consider(

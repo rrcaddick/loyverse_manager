@@ -60,3 +60,8 @@ temp/
 
 # reopmix
 repomix*.md
+# Booking system runtime data (documents, attachments, backups)
+data/
+compose.override.yaml
+# Built React app (produced by the Docker frontend stage or pnpm build)
+web/static/app/

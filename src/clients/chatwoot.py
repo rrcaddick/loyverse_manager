@@ -87,9 +87,17 @@ class ChatwootClient(BaseClient):
 
         resp = super().post(endpoint, payload)
 
-        # Return the contact from payload if wrapped
-        if isinstance(resp, dict) and resp.get("payload"):
-            return resp["payload"]
+        # Chatwoot answers POST /contacts with {"payload": {"contact": {...},
+        # "contact_inbox": ...}} (current versions) or with the contact itself
+        # (older ones). Hand back the contact either way: returning the wrapper
+        # left the id out, and the first ticket to a new number failed with
+        # "Contact ID should not be None" while the contact was created all the
+        # same, so the second attempt found it by search (19 Nov 2026).
+        wrapped = resp.get("payload") if isinstance(resp, dict) else None
+        if isinstance(wrapped, dict) and isinstance(wrapped.get("contact"), dict):
+            return wrapped["contact"]
+        if isinstance(wrapped, dict) and wrapped.get("id") is not None:
+            return wrapped
         return resp
 
     def get_or_create_contact(
@@ -157,6 +165,30 @@ class ChatwootClient(BaseClient):
         return self.create_conversation(contact_id, inbox_id, source_id=source_id)
 
     # Messages ------------------------------------------------------------
+    def get_conversation_messages(self, conversation_id: int) -> List[Dict[str, Any]]:
+        """Endpoint: GET /api/v1/accounts/{account_id}/conversations/{id}/messages (the newest page)."""
+        endpoint = f"/api/v1/accounts/{self.account_id}/conversations/{conversation_id}/messages"
+        resp = super().get(endpoint)
+        if isinstance(resp, dict):
+            payload = resp.get("payload")
+            if isinstance(payload, list):
+                return payload
+        return resp if isinstance(resp, list) else []
+
+    def message_status(self, conversation_id: int, message_id: int) -> Optional[Dict[str, Any]]:
+        """``{"status": sent|delivered|read|failed|progress, "error": text or None}``
+        for one outgoing message, or None when Chatwoot no longer lists it."""
+        for m in self.get_conversation_messages(conversation_id):
+            if int(m.get("id") or 0) != int(message_id):
+                continue
+            attrs = m.get("content_attributes") or {}
+            error = attrs.get("external_error") if isinstance(attrs, dict) else None
+            status = m.get("status")
+            if isinstance(status, int):
+                status = {0: "sent", 1: "delivered", 2: "read", 3: "failed", 4: "progress"}.get(status, str(status))
+            return {"status": str(status or "sent"), "error": str(error) if error else None}
+        return None
+
     def send_message(
         self, conversation_id: int, message: Dict[str, Any]
     ) -> Dict[str, Any]:

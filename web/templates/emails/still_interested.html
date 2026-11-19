@@ -1,0 +1,19 @@
+{% extends "emails/base.html" %}
+{% from "emails/_macros.html" import summary %}
+{% block body %}
+<h1>Still planning to visit?</h1>
+<p>Hi {{ booking.contact_first_name or "there" }},</p>
+<p>A little while ago we sent proforma {{ document.number if document else booking.reference }} for {{ booking.group_name }}'s visit on {{ booking.visit_date_long }}, and we have not heard back. We would love to have you, so we wanted to check whether you would still like to go ahead.</p>
+{{ summary([
+  ("Deposit due", finance.deposit_outstanding_display if not finance.deposit_waived else "Waived", true),
+  ("Visit date", booking.visit_date_long),
+  ("Group size", booking.people_booked|plural("visitor")),
+  ("Reference", booking.reference),
+]) }}
+{% if finance.deposit_waived %}
+<p>No deposit is needed for this booking, so a quick reply is all it takes to confirm the date.</p>
+{% else %}
+<p>If so, the deposit of {{ finance.deposit_outstanding_display }} secures the date; the bank details are on the attached proforma. Please use <span class="strong">{{ booking.reference }}</span> as your payment reference.{% if hold_expires_on %} We can hold the date for you until {{ hold_expires_on_long }}.{% endif %}</p>
+{% endif %}
+<p>If your plans have changed, or you need a different date or group size, just reply and we will sort it out. A quick note either way helps us keep the calendar open for other groups.</p>
+{% endblock %}
